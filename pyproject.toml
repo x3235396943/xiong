@@ -29,6 +29,7 @@ ujson = ">=5.11.0,<6"
 
 [project.scripts]
 start = "dy:main"
+start1 = "dyShare:main"
 
 [tool.pyright]
 # 所有虚拟环境的父目录
