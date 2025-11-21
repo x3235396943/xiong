@@ -31,6 +31,9 @@ ujson = ">=5.11.0,<6"
 start = "dy:main"
 start1 = "dyShare:main"
 
+[tool.pixi.tasks.build-web]
+cmd = "pyinstaller --onefile --noconsole --icon assets\\ICO.png --name web .\\src\\dy\\main.py"
+
 [tool.pyright]
 # 所有虚拟环境的父目录
 venvPath = ".pixi/envs"
