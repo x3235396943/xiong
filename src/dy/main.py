@@ -363,8 +363,7 @@ async def startTask():
 
 
 def main():
-    print(123)
-    # asyncio.run(startTask())
+    asyncio.run(startTask())
 
 
 if __name__ == "__main__":
