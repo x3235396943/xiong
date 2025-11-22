@@ -1,3 +1,3 @@
-from tools import WebConfig
+from tools import DyConfig
 
-config = WebConfig()  # type: ignore
+config = DyConfig()  # type: ignore

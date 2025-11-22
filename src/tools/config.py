@@ -53,14 +53,7 @@ class SearchConfig(Base):
         return v
 
 
-class ApkConfig(SearchConfig):
-    ANDROID_SERIAL: str
-    VERSION: str = "1.7"
-
-    model_config = SettingsConfigDict(extra="ignore", env_file=".env")
-
-
-class WebConfig(SearchConfig):
+class DyConfig(SearchConfig):
     HEADLESS: bool = True
     WINDOW_ID: str
     VERSION: str = "1.0"
