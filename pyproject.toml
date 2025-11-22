@@ -29,7 +29,7 @@ ujson = ">=5.11.0,<6"
 
 [project.scripts]
 start = "dy:main"
-start1 = "dyShare:main"
+dys = "dyShare:main"
 
 [tool.pixi.tasks.build-web]
 cmd = "pyinstaller --onefile --noconsole --icon assets\\ICO.png --name web .\\src\\dy\\main.py"

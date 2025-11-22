@@ -24,7 +24,7 @@
     - 服务器端可以随时使卡密失效，失效后脚本将停止运行
     - 脚本每3分钟验证一次卡密有效性
 """
-from tools.config import KuSettings
+from tools import config
 import json
 import requests
 from selenium import webdriver
@@ -45,8 +45,6 @@ import threading
 from tools import LicenseManager, LicenseException, log
 import concurrent.futures
 
-# type: ignore
-config = KuSettings()
 LINKS_DB_PATH = config.LINKS_DB_PATH
 
 # 并行设置
