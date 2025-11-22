@@ -1,3 +1,3 @@
-from .main import main
+from .main import DouyinCrawler
 
-__all__ = ["main"]
+__all__ = ["DouyinCrawler"]

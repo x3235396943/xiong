@@ -6,59 +6,7 @@ class Base(BaseSettings):
     SIBERIAN_URL: str
     SIBERIAN_KEY: str
     DEVICE_CODE: str
-
-
-class SearchConfig(Base):
-    KEYWORDS: list = []
-    MAX_SCROLL_VIDEO: list = [10, 20]
-    MAX_COMMENT: list = [2, 15]
-    MAX_FOLLOW: list = [1, 3]
-    MAX_COMMENT_LIKE: list = [3, 8]
-    FOLLOW_INTERVAL: list = [12, 60]
-    FOLLOW_L: int = 12
-    COMMENT_LIKE_INTERVAL: list = [12, 60]
-    COMMENT_LIKE_L: int = 12
-    COMMENT_KEYWORDS: list = []
-    LIKE: bool = True
-    FOLLOW: bool = True
-
-    VIDEO_REPLY_ENABLE: bool = True
-    VIDEO_REPLY_INTERVAL: list = [12, 60]
-    VIDEO_REPLY_L: int = 12
-    VIDEO_REPLY: list = []
-    COMMENT_REPLY_ENABLE: bool = True
-    COMMENT_REPLY_INTERVAL: list = [12, 60]
-    COMMENT_REPLY_L: int = 12
-    COMMENT_REPLY: list = []
-
-    @field_validator(
-        "MAX_SCROLL_VIDEO",
-        "VIDEO_REPLY_INTERVAL",
-        "COMMENT_REPLY_INTERVAL",
-        "MAX_COMMENT",
-        "MAX_FOLLOW",
-        "MAX_COMMENT_LIKE",
-        "FOLLOW_INTERVAL",
-        "COMMENT_LIKE_INTERVAL",
-        mode="after",
-    )
-    @classmethod
-    def validate_interval_ranges(cls, v, info):
-        if len(v) != 2:
-            raise ValueError(f"{info.field_name} must have exactly 2 elements")
-        if v[0] > v[1]:
-            raise ValueError(
-                f"{info.field_name} first element must be less than or equal to second element"
-            )
-        return v
-
-
-class DyConfig(SearchConfig):
-    HEADLESS: bool = True
-    WINDOW_ID: str
-    VERSION: str = "1.0"
-
-    model_config = SettingsConfigDict(extra="ignore", env_file=".env")
+    PLATFORM: str
 
 
 class KuSettings(Base):
@@ -140,3 +88,6 @@ class KuSettings(Base):
         return v
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
+
+
+config = KuSettings()  # type: ignore

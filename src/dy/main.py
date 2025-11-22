@@ -18,12 +18,12 @@ from datetime import datetime
 import random
 import sys
 
-from tools import log, log2, verify
-from .var import config
+from tools import log, log2, verify, config
+from tools.base import AbstractCrawler
 from .bit_api import openBrowser
 
 
-class DouyinCrawler:
+class DouyinCrawler(AbstractCrawler):
     driver: WebDriver
 
     async def scroll(self, dom: WebElement):
@@ -352,19 +352,5 @@ async def start():
     print("done")
 
 
-async def startTask():
-    await asyncio.wait(
-        [
-            # asyncio.create_task(verify(config)),
-            asyncio.create_task(start())
-        ],
-        return_when=asyncio.FIRST_COMPLETED,
-    )
-
-
-def main():
-    asyncio.run(startTask())
-
-
 if __name__ == "__main__":
-    main()
+    asyncio.run(start())

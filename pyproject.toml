@@ -28,7 +28,7 @@ aiohttp = ">=3.13.2,<4"
 ujson = ">=5.11.0,<6"
 
 [project.scripts]
-dy = "dy:main"
+start = "dy:main"
 dys = "dyShare:main"
 
 [tool.pixi.tasks.build-web]
