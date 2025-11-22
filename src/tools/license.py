@@ -61,6 +61,8 @@ class LicenseManager:
             response = requests.post(siberian_url, json=data)
             if response.status_code == 200:
                 result = response.json()
+                # 添加调试信息，打印完整的响应内容
+                log.debug(f"卡密验证服务器响应: {result}")
                 if result.get('code') == 200:
                     # log.info("卡密验证成功")
                     return True

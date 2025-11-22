@@ -232,6 +232,27 @@ class BitBrowserManager:
             log.error(f"打开{browser_info}时出错: {e}")
             return None
 
+    def close_browser(self, browser_id_param):
+        """
+        通过API关闭指定ID的浏览器窗口
+
+        Args:
+            browser_id_param (str): 浏览器ID
+        """
+        try:
+            json_data = {"id": str(browser_id_param)}
+            response = requests.post(
+                f"{self.url}/browser/close",
+                data=json.dumps(json_data),
+                headers=self.headers
+            )
+            if response.status_code == 200:
+                debug_log("info", f"成功关闭浏览器 {browser_id_param}")
+            else:
+                log.warning(f"关闭浏览器 {browser_id_param} 失败，状态码: {response.status_code}")
+        except Exception as e:
+            log.error(f"关闭浏览器 {browser_id_param} 时出错: {e}")
+
     def create_driver(self, browser_id_param, browser_number=None):
         """
         创建并返回一个WebDriver实例
@@ -1070,9 +1091,27 @@ def safe_driver_quit(driver, browser_info=""):
     """安全关闭浏览器驱动"""
     if driver:
         try:
-            driver.quit()
+            pass
+            # 不再使用 driver.quit()，而是通过API强制关闭浏览器
         except Exception:
             pass
+
+
+def force_close_browser(browser_manager, browser_id, browser_number=None):
+    """
+    强制关闭浏览器，通过API直接关闭，不依赖Selenium驱动
+    
+    Args:
+        browser_manager: BitBrowserManager实例
+        browser_id: 浏览器ID
+        browser_number: 浏览器编号，用于日志输出
+    """
+    browser_info = get_browser_info(browser_number)
+    try:
+        browser_manager.close_browser(browser_id)
+        debug_log("info", "已通过API强制关闭浏览器", browser_number)
+    except Exception as e:
+        log.error(f"{browser_info} 通过API强制关闭浏览器时出错: {e}")
 
 
 def reset_url_list_index():
@@ -1292,33 +1331,21 @@ def continuous_processing_loop(browser_manager, browser_id,
                             "session not created" in error_msg or
                             "invalid argument" in error_msg):
                         log.warning(
-                            f"{browser_info} 浏览器会话失效或连接断开，尝试在新标签页中打开链接并关闭旧标签页...")
-                        # 尝试在新标签页中打开链接并关闭所有旧标签页
-                        if open_new_tab_and_close_others(driver, url, browser_number):
-                            log.info(f"{browser_info} 成功在新标签页中打开链接并关闭旧标签页")
+                            f"{browser_info} 浏览器会话失效或连接断开，尝试强制关闭浏览器并重新打开...")
+                        # 强制关闭浏览器进程
+                        force_close_browser(browser_manager, browser_id, browser_number)
+                        # 等待一段时间确保浏览器完全关闭
+                        safe_sleep(3)
+                        # 重新创建浏览器驱动
+                        driver = browser_manager.create_driver(browser_id, browser_number)
+                        if driver is not None:
+                            log.info(f"{browser_info} 成功重新打开浏览器")
                             # 重置retry_count，继续当前链接的处理
                             retry_count = 0
                             continue
                         else:
-                            # 如果在新标签页中打开失败，则尝试关闭浏览器进程并重新打开浏览器
-                            log.warning(
-                                f"{browser_info} 在新标签页中打开链接失败，尝试关闭浏览器进程并重新打开浏览器...")
-                            try:
-                                safe_driver_quit(driver)
-                                # 等待一段时间确保浏览器完全关闭
-                                safe_sleep(3)
-                                # 重新创建浏览器驱动
-                                driver = browser_manager.create_driver(browser_id, browser_number)
-                                if driver is not None:
-                                    log.info(f"{browser_info} 成功重新打开浏览器")
-                                    # 重置retry_count，继续当前链接的处理
-                                    retry_count = 0
-                                    continue
-                                else:
-                                    log.error(f"{browser_info} 重新创建浏览器驱动失败")
-                            except Exception as restart_error:
-                                log.error(f"{browser_info} 重新打开浏览器时发生异常: {restart_error}")
-
+                            log.error(f"{browser_info} 重新创建浏览器驱动失败")
+                            
                             # 如果重新打开浏览器也失败，则使用最后的备选方案
                             log.warning(f"{browser_info} 重新打开浏览器失败，使用最后的备选方案...")
                             driver = None
@@ -1328,7 +1355,10 @@ def continuous_processing_loop(browser_manager, browser_id,
                     # 处理一般异常，尝试重新打开浏览器
                     if retry_count >= max_retries:
                         log.warning(f"{browser_info} 尝试重新打开浏览器以恢复控制...")
+                        # 尝试正常关闭驱动
                         safe_driver_quit(driver)
+                        # 如果正常关闭失败，强制关闭浏览器
+                        force_close_browser(browser_manager, browser_id, browser_number)
                         driver = None
                         safe_sleep(5)
                         break  # 重新创建浏览器后重试
@@ -1348,6 +1378,8 @@ def continuous_processing_loop(browser_manager, browser_id,
         output_json(0, "", "exit", browser_id)
         # 关闭浏览器
         safe_driver_quit(driver)
+        # 强制关闭浏览器确保完全退出
+        force_close_browser(browser_manager, browser_id, browser_number)
         log.info(f"{browser_info} 浏览器已关闭")
         # 不再重新抛出KeyboardInterrupt，直接返回
         return
@@ -1355,6 +1387,8 @@ def continuous_processing_loop(browser_manager, browser_id,
         # 程序异常退出时也输出一次 exit
         log.error(f"{browser_info} 程序异常退出: {e}")
         output_json(0, "", "exit", browser_id)
+        # 强制关闭浏览器确保完全退出
+        force_close_browser(browser_manager, browser_id, browser_number)
         raise
 
 
