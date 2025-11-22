@@ -18,10 +18,9 @@
        export DEVICE_CODE=设备标识
 
     3. 或者在运行脚本前直接指定环境变量:
-       SIBERIAN_KEY=你的卡密 DEVICE_CODE=设备标识 python 副本.py
+       SIBERIAN_KEY=你的卡密 DEVICE_CODE=设备标识
 
 注意事项:
-    - 当环境变量未设置时，将使用默认的卡密和设备码
     - 服务器端可以随时使卡密失效，失效后脚本将停止运行
     - 脚本每3分钟验证一次卡密有效性
 """
@@ -104,7 +103,9 @@ def parse_search_keywords():
             kws = [str(x).strip() for x in raw if str(x).strip()]
     return kws
 
+
 SEARCH_KEYWORDS = parse_search_keywords()
+
 
 def normalize_text(t):
     try:
@@ -113,6 +114,7 @@ def normalize_text(t):
         return s
     except Exception:
         return str(t)
+
 
 def _extract_comment_text(element):
     selectors = [
@@ -132,6 +134,7 @@ def _extract_comment_text(element):
         return element.text
     except Exception:
         return ""
+
 
 def output_json(code, msg="", data_type="", browser_id="", url_index=None):
     """
@@ -335,7 +338,7 @@ def open_comment_section(driver, wait_time=10, browser_number=None):
     browser_info = get_browser_info(browser_number)
     debug_log("info", "尝试打开评论区", browser_number)
     check_stop_signal()
-        
+
     # 使用智能等待查找评论按钮
     wait = WebDriverWait(driver, wait_time)
     try:
@@ -343,7 +346,7 @@ def open_comment_section(driver, wait_time=10, browser_number=None):
             EC.element_to_be_clickable((By.XPATH, '//*[contains(@class, "fN2jqmuV")]/div[2]'))
         )
     except:
-        debug_log("warning","评论区按钮未找到，尝试刷新页面...",browser_number)
+        debug_log("warning", "评论区按钮未找到，尝试刷新页面...", browser_number)
         driver.refresh()
         # 等待页面刷新完成
         human_like_delay(5, 7, browser_number)
@@ -364,12 +367,62 @@ def open_comment_section(driver, wait_time=10, browser_number=None):
     return True
 
 
+def open_new_tab_and_close_others(driver, url, browser_number=None):
+    """
+    在新标签页中打开链接并关闭所有旧标签页
+
+    Args:
+        driver: WebDriver实例
+        url: 要打开的URL
+        browser_number: 浏览器编号，用于日志输出
+    """
+    browser_info = get_browser_info(browser_number)
+    try:
+        # 获取当前所有窗口句柄
+        original_windows = driver.window_handles.copy()
+
+        # 在新标签页中打开链接
+        debug_log("info", f"在新标签页中打开链接: {url}", browser_number)
+        driver.execute_script(f"window.open('{url}', '_blank');")
+
+        # 等待新标签页打开
+        WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > len(original_windows))
+
+        # 获取所有窗口句柄（包括新打开的）
+        all_windows = driver.window_handles
+
+        # 切换到新打开的标签页（最后一个）
+        new_window = all_windows[-1]
+        driver.switch_to.window(new_window)
+
+        # 关闭所有旧的标签页
+        for window in original_windows:
+            try:
+                driver.switch_to.window(window)
+                driver.close()
+                debug_log("info", "已关闭旧标签页", browser_number)
+            except Exception as e:
+                log.error(f"{browser_info} 关闭旧标签页时出错: {e}")
+
+        # 切换回新标签页
+        driver.switch_to.window(new_window)
+        debug_log("info", "已切换到新标签页并关闭所有旧标签页", browser_number)
+
+        # 等待页面加载
+        human_like_delay(2, 4, browser_number)
+
+        return True
+    except Exception as e:
+        log.error(f"{browser_info} 在新标签页中打开链接并关闭旧标签页时出错: {e}")
+        return False
+
+
 def switch_to_new_tab(driver, url, wait_time=10, browser_number=None):
     """在新标签页中打开链接并切换到新标签页"""
     browser_info = get_browser_info(browser_number)
     debug_log("info", f"尝试在新标签页中打开链接: {url}", browser_number)
     check_stop_signal()
-        
+
     # 保存当前窗口句柄
     current_window = driver.current_window_handle
 
@@ -711,7 +764,7 @@ def run_automation(driver, url, wait_time=10,
 
         while True:
             check_stop_signal()
-                
+
             try:
                 li.check_license_validity()
 
@@ -749,7 +802,9 @@ def run_automation(driver, url, wait_time=10,
 
                 # 检查是否达到目标关注数量或点赞数量
                 if video_followed_count >= target_follow_count and video_liked_count >= target_like_count:
-                    debug_log("info", f"已达到目标关注数量 {target_follow_count} 和点赞数量 {target_like_count}，切换到下一个链接", browser_number)
+                    debug_log("info",
+                              f"已达到目标关注数量 {target_follow_count} 和点赞数量 {target_like_count}，切换到下一个链接",
+                              browser_number)
                     break
 
                 # 检查是否还能找到下一条评论
@@ -1140,7 +1195,7 @@ def continuous_processing_loop(browser_manager, browser_id,
                                wait_time, like_probability, visit_profile_probability, profile_follow_probability,
                                min_follows_per_video, max_follows_per_video,
                                min_likes_per_video, max_likes_per_video,
-                browser_number, db_path=LINKS_DB_PATH):
+                               browser_number, db_path=LINKS_DB_PATH):
     """持续处理循环"""
     browser_info = get_browser_info(browser_number)
     debug_log("info", "启动持续处理循环", browser_number)
@@ -1229,14 +1284,46 @@ def continuous_processing_loop(browser_manager, browser_id,
                     import traceback
                     log.error(f"{browser_info} 详细错误堆栈: {traceback.format_exc()}")
 
-                    # 处理浏览器相关异常
-                    if "invalid session id" in str(e) or "session not created" in str(e) or "invalid argument" in str(
-                            e):
-                        log.warning(f"{browser_info} 浏览器会话失效或参数错误，尝试重新创建浏览器...")
-                        safe_driver_quit(driver)
-                        driver = None
-                        safe_sleep(5)
-                        break  # 重新创建浏览器后重试
+                    # 处理浏览器相关异常，包括渲染器断开连接的情况
+                    error_msg = str(e).lower()
+                    if ("disconnected: unable to receive message from renderer" in error_msg or
+                            "disconnected: not connected to devtools" in error_msg or
+                            "invalid session id" in error_msg or
+                            "session not created" in error_msg or
+                            "invalid argument" in error_msg):
+                        log.warning(
+                            f"{browser_info} 浏览器会话失效或连接断开，尝试在新标签页中打开链接并关闭旧标签页...")
+                        # 尝试在新标签页中打开链接并关闭所有旧标签页
+                        if open_new_tab_and_close_others(driver, url, browser_number):
+                            log.info(f"{browser_info} 成功在新标签页中打开链接并关闭旧标签页")
+                            # 重置retry_count，继续当前链接的处理
+                            retry_count = 0
+                            continue
+                        else:
+                            # 如果在新标签页中打开失败，则尝试关闭浏览器进程并重新打开浏览器
+                            log.warning(
+                                f"{browser_info} 在新标签页中打开链接失败，尝试关闭浏览器进程并重新打开浏览器...")
+                            try:
+                                safe_driver_quit(driver)
+                                # 等待一段时间确保浏览器完全关闭
+                                safe_sleep(3)
+                                # 重新创建浏览器驱动
+                                driver = browser_manager.create_driver(browser_id, browser_number)
+                                if driver is not None:
+                                    log.info(f"{browser_info} 成功重新打开浏览器")
+                                    # 重置retry_count，继续当前链接的处理
+                                    retry_count = 0
+                                    continue
+                                else:
+                                    log.error(f"{browser_info} 重新创建浏览器驱动失败")
+                            except Exception as restart_error:
+                                log.error(f"{browser_info} 重新打开浏览器时发生异常: {restart_error}")
+
+                            # 如果重新打开浏览器也失败，则使用最后的备选方案
+                            log.warning(f"{browser_info} 重新打开浏览器失败，使用最后的备选方案...")
+                            driver = None
+                            safe_sleep(5)
+                            break  # 重新创建浏览器后重试
 
                     # 处理一般异常，尝试重新打开浏览器
                     if retry_count >= max_retries:
@@ -1350,13 +1437,13 @@ def main_database():
                 invalid_count += 1
                 if config.DEBUG:
                     log.warning(f"无效的抖音链接，已跳过: {url}")
-        
+
         # 更新配置中的URLS列表为清洗后的列表
         config.URLS = cleaned_urls
-        
+
         if invalid_count > 0:
             log.warning(f"URLS列表中有 {invalid_count} 个无效链接已跳过")
-        
+
         log.info(f"使用列表模式，共 {len(config.URLS)} 个有效URL")
         # 重置URL列表索引，确保每次启动时从0开始
         reset_url_list_index()
