@@ -24,7 +24,7 @@
     - 服务器端可以随时使卡密失效，失效后脚本将停止运行
     - 脚本每3分钟验证一次卡密有效性
 """
-from tools import config
+
 import json
 import requests
 from selenium import webdriver
@@ -41,12 +41,15 @@ from concurrent.futures import ThreadPoolExecutor
 import sqlite3
 from datetime import datetime
 import threading
-# 从 tools 导入 LicenseManager, LicenseException 和 log
-from tools import LicenseManager, LicenseException, log
+from tools import LicenseManager, LicenseException,log
+from tools.config import KuSettings
 import concurrent.futures
 
-LINKS_DB_PATH = config.LINKS_DB_PATH
+# 将全局变量的初始化移到导入之后，确保config已经完全加载
+config: KuSettings = KuSettings()  # type: ignore
 
+LINKS_DB_PATH = config.LINKS_DB_PATH
+print(LINKS_DB_PATH)
 # 并行设置
 MAX_WORKERS = None  # 自动根据浏览器ID数量调整并行数
 
@@ -1098,7 +1101,7 @@ def safe_driver_quit(driver, browser_info=""):
 def force_close_browser(browser_manager, browser_id, browser_number=None):
     """
     强制关闭浏览器，通过API直接关闭，不依赖Selenium驱动
-    
+
     Args:
         browser_manager: BitBrowserManager实例
         browser_id: 浏览器ID
@@ -1329,34 +1332,27 @@ def continuous_processing_loop(browser_manager, browser_id,
                             "session not created" in error_msg or
                             "invalid argument" in error_msg):
                         log.warning(
-                            f"{browser_info} 浏览器会话失效或连接断开，尝试强制关闭浏览器并重新打开...")
-                        # 强制关闭浏览器进程
-                        force_close_browser(browser_manager, browser_id, browser_number)
-                        # 等待一段时间确保浏览器完全关闭
-                        safe_sleep(3)
-                        # 重新创建浏览器驱动
+                            f"{browser_info} 浏览器会话失效或连接断开，尝试重新连接浏览器...")
+                        # 重新创建浏览器驱动，而不是强制关闭后再创建
                         driver = browser_manager.create_driver(browser_id, browser_number)
                         if driver is not None:
-                            log.info(f"{browser_info} 成功重新打开浏览器")
+                            log.info(f"{browser_info} 成功重新连接浏览器")
                             # 重置retry_count，继续当前链接的处理
                             retry_count = 0
                             continue
                         else:
-                            log.error(f"{browser_info} 重新创建浏览器驱动失败")
-                            
-                            # 如果重新打开浏览器也失败，则使用最后的备选方案
-                            log.warning(f"{browser_info} 重新打开浏览器失败，使用最后的备选方案...")
+                            log.error(f"{browser_info} 重新连接浏览器失败")
+
+                            # 如果重新连接浏览器也失败，则使用最后的备选方案
+                            log.warning(f"{browser_info} 重新连接浏览器失败，使用最后的备选方案...")
                             driver = None
                             safe_sleep(5)
                             break  # 重新创建浏览器后重试
 
-                    # 处理一般异常，尝试重新打开浏览器
+                    # 处理一般异常，尝试重新连接浏览器
                     if retry_count >= max_retries:
-                        log.warning(f"{browser_info} 尝试重新打开浏览器以恢复控制...")
-                        # 尝试正常关闭驱动
-                        safe_driver_quit(driver)
-                        # 如果正常关闭失败，强制关闭浏览器
-                        force_close_browser(browser_manager, browser_id, browser_number)
+                        log.warning(f"{browser_info} 尝试重新连接浏览器以恢复控制...")
+                        # 不再关闭驱动，直接设为None
                         driver = None
                         safe_sleep(5)
                         break  # 重新创建浏览器后重试
@@ -1374,19 +1370,15 @@ def continuous_processing_loop(browser_manager, browser_id,
         log.info(f"{browser_info} 收到停止信号，正在退出...")
         # 程序退出时输出一次 exit
         output_json(0, "", "exit", browser_id)
-        # 关闭浏览器
-        safe_driver_quit(driver)
-        # 强制关闭浏览器确保完全退出
-        force_close_browser(browser_manager, browser_id, browser_number)
-        log.info(f"{browser_info} 浏览器已关闭")
+        # 不再关闭浏览器
+        log.info(f"{browser_info} 浏览器连接已释放")
         # 不再重新抛出KeyboardInterrupt，直接返回
         return
     except Exception as e:
         # 程序异常退出时也输出一次 exit
         log.error(f"{browser_info} 程序异常退出: {e}")
         output_json(0, "", "exit", browser_id)
-        # 强制关闭浏览器确保完全退出
-        force_close_browser(browser_manager, browser_id, browser_number)
+        # 不再关闭浏览器
         raise
 
 
