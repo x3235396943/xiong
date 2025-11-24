@@ -15,12 +15,11 @@ import asyncio
 from asyncio import sleep
 from random import randint
 from datetime import datetime
-import random
 import sys
 
-from ..tools import log, log2, verify, config
+from ..tools import log, log2, config
 from ..tools.base import AbstractCrawler
-from .bit_api import openBrowser
+from src.autoweb.tools.bit_api import openBrowser
 
 
 class DouyinCrawler(AbstractCrawler):
