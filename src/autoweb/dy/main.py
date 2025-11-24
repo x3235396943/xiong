@@ -18,8 +18,8 @@ from datetime import datetime
 import random
 import sys
 
-from tools import log, log2, verify, config
-from tools.base import AbstractCrawler
+from ..tools import log, log2, verify, config
+from ..tools.base import AbstractCrawler
 from .bit_api import openBrowser
 
 
@@ -295,6 +295,8 @@ class DouyinCrawler(AbstractCrawler):
             await sleep(randint(4, 8))
 
     async def start(self):
+        print(123)
+        return
         log2.info(
             {
                 "version": config.VERSION,

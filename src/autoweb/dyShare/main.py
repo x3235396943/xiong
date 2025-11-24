@@ -41,8 +41,9 @@ from concurrent.futures import ThreadPoolExecutor
 import sqlite3
 from datetime import datetime
 import threading
-from tools import LicenseManager, LicenseException,log
-from tools.config import KuSettings
+from ..tools import LicenseManager, LicenseException, log
+from ..tools.config import KuSettings
+from ..tools.base import AbstractCrawler
 import concurrent.futures
 
 # 将全局变量的初始化移到导入之后，确保config已经完全加载
@@ -82,7 +83,7 @@ li = LicenseManager()
 
 def parse_search_keywords():
     raw = config.COMMENT_FILTER_KEYWORDS or []
-    seps = [',', '，', ' ', '\t', ';', '；']
+    seps = [",", "，", " ", "\t", ";", "；"]
     kws = []
     if isinstance(raw, str):
         s = raw.strip()
@@ -98,8 +99,8 @@ def parse_search_keywords():
         if len(raw) == 1 and isinstance(raw[0], str):
             base = raw[0]
             for sep in seps:
-                base = base.replace(sep, ',')
-            kws = [x.strip() for x in base.split(',') if x.strip()]
+                base = base.replace(sep, ",")
+            kws = [x.strip() for x in base.split(",") if x.strip()]
         else:
             kws = [str(x).strip() for x in raw if str(x).strip()]
     return kws
@@ -119,10 +120,10 @@ def normalize_text(t):
 
 def _extract_comment_text(element):
     selectors = [
-        '.C7LroK_h span span span',
+        ".C7LroK_h span span span",
         '[data-e2e="comment-text"]',
-        '.comment-text',
-        'span'
+        ".comment-text",
+        "span",
     ]
     for css in selectors:
         try:
@@ -148,13 +149,7 @@ def output_json(code, msg="", data_type="", browser_id="", url_index=None):
         browser_id: 浏览器ID
         url_index: URL在数据库中的索引（从0开始）
     """
-    result = {
-        "code": code,
-        "data": {
-            "type": data_type,
-            "id": browser_id
-        }
-    }
+    result = {"code": code, "data": {"type": data_type, "id": browser_id}}
     # 只在有错误信息时添加msg字段
     if msg:
         result["msg"] = msg
@@ -182,7 +177,7 @@ class BitBrowserManager:
             headless (bool): 是否以无头模式运行浏览器
         """
         self.url = base_url
-        self.headers = {'Content-Type': 'application/json'}
+        self.headers = {"Content-Type": "application/json"}
         self.headless = headless
 
     def open_browser(self, browser_id_param, browser_number=None):
@@ -201,8 +196,11 @@ class BitBrowserManager:
         debug_log("info", "正在打开...", browser_number, browser_id_param)
         json_data: dict[str, str | list[str] | bool | None] = {
             "id": str(browser_id_param),
-            "args": ["--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding",
-                     "--remote-debugging-port=0"]
+            "args": [
+                "--disable-backgrounding-occluded-windows",
+                "--disable-renderer-backgrounding",
+                "--remote-debugging-port=0",
+            ],
         }
 
         debug_log("info", f"请求参数: {json_data}", browser_number, browser_id_param)
@@ -220,11 +218,16 @@ class BitBrowserManager:
             json_data["windowMode"] = "normal"
 
         try:
-            debug_log("info", f"发送请求到: {self.url}/browser/open", browser_number, browser_id_param)
+            debug_log(
+                "info",
+                f"发送请求到: {self.url}/browser/open",
+                browser_number,
+                browser_id_param,
+            )
             response = requests.post(
                 f"{self.url}/browser/open",
                 data=json.dumps(json_data),
-                headers=self.headers
+                headers=self.headers,
             )
             result = response.json()
             debug_log("info", f"响应: {result}", browser_number, browser_id_param)
@@ -245,12 +248,14 @@ class BitBrowserManager:
             response = requests.post(
                 f"{self.url}/browser/close",
                 data=json.dumps(json_data),
-                headers=self.headers
+                headers=self.headers,
             )
             if response.status_code == 200:
                 debug_log("info", f"成功关闭浏览器 {browser_id_param}")
             else:
-                log.warning(f"关闭浏览器 {browser_id_param} 失败，状态码: {response.status_code}")
+                log.warning(
+                    f"关闭浏览器 {browser_id_param} 失败，状态码: {response.status_code}"
+                )
         except Exception as e:
             log.error(f"关闭浏览器 {browser_id_param} 时出错: {e}")
 
@@ -268,15 +273,20 @@ class BitBrowserManager:
         browser_info = get_browser_info(browser_number, browser_id_param)
         debug_log("info", "开始创建WebDriver实例", browser_number, browser_id_param)
         res = self.open_browser(browser_id_param, browser_number)
-        if not res or 'data' not in res:
+        if not res or "data" not in res:
             log.error(f"{browser_info} 无法打开浏览器")
             if res:
                 log.error(f"{browser_info} 错误响应: {res}")
             return None
 
-        driver_path = res['data']['driver']
-        debugger_address = res['data']['http']
-        debug_log("info", f"驱动路径: {driver_path}, 调试地址: {debugger_address}", browser_number, browser_id_param)
+        driver_path = res["data"]["driver"]
+        debugger_address = res["data"]["http"]
+        debug_log(
+            "info",
+            f"驱动路径: {driver_path}, 调试地址: {debugger_address}",
+            browser_number,
+            browser_id_param,
+        )
 
         # 验证必要参数
         if not driver_path:
@@ -291,15 +301,17 @@ class BitBrowserManager:
         chrome_options.add_experimental_option("debuggerAddress", debugger_address)
 
         # 添加一些稳定性的选项
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--disable-background-timer-throttling')
-        chrome_options.add_argument('--disable-renderer-backgrounding')
-        chrome_options.add_argument('--disable-ipc-flooding-protection')
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-background-timer-throttling")
+        chrome_options.add_argument("--disable-renderer-backgrounding")
+        chrome_options.add_argument("--disable-ipc-flooding-protection")
 
         debug_log("info", "Chrome选项已配置", browser_number, browser_id_param)
-        debug_log("info", f"调试地址: {debugger_address}", browser_number, browser_id_param)
+        debug_log(
+            "info", f"调试地址: {debugger_address}", browser_number, browser_id_param
+        )
         debug_log("info", f"驱动路径: {driver_path}", browser_number, browser_id_param)
 
         # 检查driver_path是否存在
@@ -322,6 +334,7 @@ class BitBrowserManager:
         except Exception as e:
             log.error(f"{browser_info} 创建WebDriver失败: {e}")
             import traceback
+
             log.error(f"{browser_info} 详细错误信息: {traceback.format_exc()}")
             return None
 
@@ -330,12 +343,19 @@ class BitBrowserManager:
         safe_sleep(3)
         if len(driver.window_handles) > 1:
             # 关闭额外的窗口，只保留第一个窗口
-            debug_log("debug", "检测到多个窗口，关闭额外窗口...", browser_number, browser_id_param)
+            debug_log(
+                "debug",
+                "检测到多个窗口，关闭额外窗口...",
+                browser_number,
+                browser_id_param,
+            )
             for handle in driver.window_handles[1:]:
                 driver.switch_to.window(handle)
                 driver.close()
             driver.switch_to.window(driver.window_handles[0])
-            debug_log("debug", "已关闭额外窗口，保留主窗口", browser_number, browser_id_param)
+            debug_log(
+                "debug", "已关闭额外窗口，保留主窗口", browser_number, browser_id_param
+            )
 
         debug_log("info", "WebDriver创建成功", browser_number, browser_id_param)
         return driver
@@ -365,7 +385,9 @@ def open_comment_section(driver, wait_time=10, browser_number=None):
     wait = WebDriverWait(driver, wait_time)
     try:
         comment_button = wait.until(
-            EC.element_to_be_clickable((By.XPATH, '//*[contains(@class, "fN2jqmuV")]/div[2]'))
+            EC.element_to_be_clickable(
+                (By.XPATH, '//*[contains(@class, "fN2jqmuV")]/div[2]')
+            )
         )
     except:
         debug_log("warning", "评论区按钮未找到，尝试刷新页面...", browser_number)
@@ -375,10 +397,14 @@ def open_comment_section(driver, wait_time=10, browser_number=None):
         # 再次尝试查找元素
         try:
             comment_button = wait.until(
-                EC.element_to_be_clickable((By.XPATH, '//*[contains(@class, "fN2jqmuV")]/div[2]'))
+                EC.element_to_be_clickable(
+                    (By.XPATH, '//*[contains(@class, "fN2jqmuV")]/div[2]')
+                )
             )
         except:
-            debug_log("warning", "刷新后仍未找到评论按钮，跳过打开评论区操作", browser_number)
+            debug_log(
+                "warning", "刷新后仍未找到评论按钮，跳过打开评论区操作", browser_number
+            )
             return False
 
     # 模拟人类操作
@@ -408,7 +434,9 @@ def open_new_tab_and_close_others(driver, url, browser_number=None):
         driver.execute_script(f"window.open('{url}', '_blank');")
 
         # 等待新标签页打开
-        WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > len(original_windows))
+        WebDriverWait(driver, 10).until(
+            lambda d: len(d.window_handles) > len(original_windows)
+        )
 
         # 获取所有窗口句柄（包括新打开的）
         all_windows = driver.window_handles
@@ -479,16 +507,26 @@ def extract_douyin_link(text):
     """从文本中提取抖音链接"""
     if isinstance(text, str):
         # 匹配抖音链接的正则表达式
-        pattern = r'https?://v\.douyin\.com/[^\s]+'
+        pattern = r"https?://v\.douyin\.com/[^\s]+"
         match = re.search(pattern, text)
         return match.group(0) if match else None
     return None
 
 
-def process_comment(web_driver, main_window, comment_index, like_count, target_like_count,
-                    wait_time=10, like_probability=0.5, visit_profile_probability=0.3, profile_follow_probability=0.5,
-                    browser_number=None,
-                    browser_id="", enable_follow=True):
+def process_comment(
+    web_driver,
+    main_window,
+    comment_index,
+    like_count,
+    target_like_count,
+    wait_time=10,
+    like_probability=0.5,
+    visit_profile_probability=0.3,
+    profile_follow_probability=0.5,
+    browser_number=None,
+    browser_id="",
+    enable_follow=True,
+):
     """处理单条评论：根据概率和次数决定是否点赞，关注用户"""
     browser_info = get_browser_info(browser_number)
     debug_log("info", f"开始处理第{comment_index + 1}条评论", browser_number)
@@ -496,11 +534,15 @@ def process_comment(web_driver, main_window, comment_index, like_count, target_l
 
     try:
         comments_container = WebDriverWait(web_driver, wait_time).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, '[data-e2e="comment-list"]'))
+            EC.presence_of_element_located(
+                (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+            )
         )
         comment_items = comments_container.find_elements(By.XPATH, "./div")
         if comment_index >= len(comment_items):
-            log.warning(f"{browser_info} 评论索引 {comment_index} 超出范围，共有 {len(comment_items)} 条评论")
+            log.warning(
+                f"{browser_info} 评论索引 {comment_index} 超出范围，共有 {len(comment_items)} 条评论"
+            )
             return False, like_count
         target_comment = comment_items[comment_index]
     except Exception as e:
@@ -522,11 +564,15 @@ def process_comment(web_driver, main_window, comment_index, like_count, target_l
     if keyword_matched:
         try:
             snippet = comment_text[:100]
-            output_json(0, f"关键词:{matched_keyword} 内容:{snippet}", "keyword", browser_id)
+            output_json(
+                0, f"关键词:{matched_keyword} 内容:{snippet}", "keyword", browser_id
+            )
         except Exception:
             pass
 
-    should_like = (like_count < target_like_count) and (keyword_matched or (random.random() < like_probability))
+    should_like = (like_count < target_like_count) and (
+        keyword_matched or (random.random() < like_probability)
+    )
 
     # 点赞操作
     if should_like:
@@ -559,17 +605,23 @@ def process_comment(web_driver, main_window, comment_index, like_count, target_l
     else:
         debug_log("info", f"第{comment_index + 1}条评论未执行点赞操作", browser_number)
 
-    if enable_follow and (keyword_matched or (random.random() < visit_profile_probability)):
+    if enable_follow and (
+        keyword_matched or (random.random() < visit_profile_probability)
+    ):
         try:
             # 先定位评论容器
             comments_container = WebDriverWait(web_driver, wait_time).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, '[data-e2e="comment-list"]'))
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                )
             )
 
             # 使用容器定位方法查找用户头像
             comment_items = comments_container.find_elements(By.XPATH, "./div")
             if comment_index >= len(comment_items):
-                log.warning(f"{browser_info} 评论索引 {comment_index} 超出范围，共有 {len(comment_items)} 条评论")
+                log.warning(
+                    f"{browser_info} 评论索引 {comment_index} 超出范围，共有 {len(comment_items)} 条评论"
+                )
                 return False, like_count
 
             # 获取指定索引的评论项
@@ -585,14 +637,22 @@ def process_comment(web_driver, main_window, comment_index, like_count, target_l
                 avatar = target_comment.find_element(
                     By.CSS_SELECTOR, ".comment-item-avatar"
                 )
-                debug_log("info", f"第{comment_index + 1}条评论未找到带链接的头像，点击头像容器", browser_number)
+                debug_log(
+                    "info",
+                    f"第{comment_index + 1}条评论未找到带链接的头像，点击头像容器",
+                    browser_number,
+                )
 
             # 模拟人类操作
             human_like_delay(0.5, 1.5, browser_number)
 
             # 点击找到的头像元素
             avatar.click()
-            debug_log("info", f"点击第{comment_index + 1}个评论的用户头像进入主页", browser_number)
+            debug_log(
+                "info",
+                f"点击第{comment_index + 1}个评论的用户头像进入主页",
+                browser_number,
+            )
 
             # 等待新页面加载（使用time.sleep避免频繁检查停止信号）
             time.sleep(random.uniform(3, 5))
@@ -612,13 +672,19 @@ def process_comment(web_driver, main_window, comment_index, like_count, target_l
             time.sleep(random.uniform(2, 4))
 
             # 进入主页后根据概率决定是否关注
-            if enable_follow and (keyword_matched or (random.random() < profile_follow_probability)):
+            if enable_follow and (
+                keyword_matched or (random.random() < profile_follow_probability)
+            ):
                 try:
                     # 查找并点击关注按钮
                     follow_button_wait = WebDriverWait(web_driver, wait_time)
                     follow_button = follow_button_wait.until(
                         EC.element_to_be_clickable(
-                            (By.CSS_SELECTOR, '#user_detail_element [data-e2e="user-info-follow-btn"]'))
+                            (
+                                By.CSS_SELECTOR,
+                                '#user_detail_element [data-e2e="user-info-follow-btn"]',
+                            )
+                        )
                     )
 
                     # 模拟人类操作
@@ -629,18 +695,26 @@ def process_comment(web_driver, main_window, comment_index, like_count, target_l
                     debug_log("info", "在用户主页关注该用户", browser_number)
 
                     # 关注后等待，模拟真实用户行为（使用time.sleep避免频繁检查停止信号）
-                    follow_wait_time = random.uniform(config.VISIT_MIN, config.VISIT_MAX)
+                    follow_wait_time = random.uniform(
+                        config.VISIT_MIN, config.VISIT_MAX
+                    )
                     time.sleep(follow_wait_time)
-                    debug_log("info", f"关注后等待{follow_wait_time:.2f}秒", browser_number)
+                    debug_log(
+                        "info", f"关注后等待{follow_wait_time:.2f}秒", browser_number
+                    )
 
                     # 关注成功后更新全局计数器并返回"followed"标识
                     global global_followed_count
                     global_followed_count += 1
-                    debug_log("info", f"全局关注计数器更新: {global_followed_count}", browser_number)
+                    debug_log(
+                        "info",
+                        f"全局关注计数器更新: {global_followed_count}",
+                        browser_number,
+                    )
 
                     # 关闭新窗口并切换回主窗口
                     try:
-                        if 'new_window' in locals() and new_window:
+                        if "new_window" in locals() and new_window:
                             web_driver.close()  # 关闭新窗口
                             debug_log("info", "用户主页窗口已关闭", browser_number)
                         web_driver.switch_to.window(main_window)  # 切换回主窗口
@@ -656,12 +730,16 @@ def process_comment(web_driver, main_window, comment_index, like_count, target_l
                 except Exception as follow_error:
                     # 找不到按钮等异常
                     error_msg = repr(follow_error)
-                    debug_log("error", f"{browser_info} 关注用户失败: {follow_error}", browser_number)
+                    debug_log(
+                        "error",
+                        f"{browser_info} 关注用户失败: {follow_error}",
+                        browser_number,
+                    )
                     output_json(-1, error_msg, "follow", browser_id)
 
             # 关闭新窗口并切换回主窗口
             try:
-                if 'new_window' in locals() and new_window:
+                if "new_window" in locals() and new_window:
                     web_driver.close()  # 关闭新窗口
                     debug_log("info", "用户主页窗口已关闭", browser_number)
                 web_driver.switch_to.window(main_window)  # 切换回主窗口
@@ -685,11 +763,21 @@ def process_comment(web_driver, main_window, comment_index, like_count, target_l
     return True, like_count
 
 
-def run_automation(driver, url, wait_time=10,
-                   like_probability=0.5, visit_profile_probability=0.3, profile_follow_probability=0.5,
-                   min_follows_per_video=5, max_follows_per_video=15,
-                   min_likes_per_video=5, max_likes_per_video=15,
-                   browser_number=None, browser_id="", enable_follow=True):
+def run_automation(
+    driver,
+    url,
+    wait_time=10,
+    like_probability=0.5,
+    visit_profile_probability=0.3,
+    profile_follow_probability=0.5,
+    min_follows_per_video=5,
+    max_follows_per_video=15,
+    min_likes_per_video=5,
+    max_likes_per_video=15,
+    browser_number=None,
+    browser_id="",
+    enable_follow=True,
+):
     """
     运行完整的自动化流程
 
@@ -726,15 +814,25 @@ def run_automation(driver, url, wait_time=10,
     video_followed_count = 0
     # 确保最小值不大于最大值
     if min_follows_per_video > max_follows_per_video:
-        min_follows_per_video, max_follows_per_video = max_follows_per_video, min_follows_per_video
+        min_follows_per_video, max_follows_per_video = (
+            max_follows_per_video,
+            min_follows_per_video,
+        )
     target_follow_count = random.randint(min_follows_per_video, max_follows_per_video)
 
     video_liked_count = 0
     # 确保最小值不大于最大值
     if min_likes_per_video > max_likes_per_video:
-        min_likes_per_video, max_likes_per_video = max_likes_per_video, min_likes_per_video
+        min_likes_per_video, max_likes_per_video = (
+            max_likes_per_video,
+            min_likes_per_video,
+        )
     target_like_count = random.randint(min_likes_per_video, max_likes_per_video)
-    debug_log("info", f"本视频计划关注 {target_follow_count} 个用户，点赞 {target_like_count} 条评论", browser_number)
+    debug_log(
+        "info",
+        f"本视频计划关注 {target_follow_count} 个用户，点赞 {target_like_count} 条评论",
+        browser_number,
+    )
     # 检查卡密是否仍然有效（移到try-except块外面）
     li.check_license_validity()
 
@@ -776,7 +874,9 @@ def run_automation(driver, url, wait_time=10,
         comments_container = None
         try:
             comments_container = WebDriverWait(driver, wait_time).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, '[data-e2e="comment-list"]'))
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                )
             )
         except Exception as e:
             # 这种情况也视为处理失败，因为是打开链接后的关键操作
@@ -791,11 +891,20 @@ def run_automation(driver, url, wait_time=10,
                 li.check_license_validity()
 
                 # 处理单条评论
-                result, video_liked_count = process_comment(driver, main_window, comment_index, video_liked_count,
-                                                            target_like_count,
-                                                            wait_time, like_probability, visit_profile_probability,
-                                                            profile_follow_probability, browser_number, browser_id,
-                                                            enable_follow)  # 传递enable_follow参数
+                result, video_liked_count = process_comment(
+                    driver,
+                    main_window,
+                    comment_index,
+                    video_liked_count,
+                    target_like_count,
+                    wait_time,
+                    like_probability,
+                    visit_profile_probability,
+                    profile_follow_probability,
+                    browser_number,
+                    browser_id,
+                    enable_follow,
+                )  # 传递enable_follow参数
 
                 # 增加处理过的评论计数
                 processed_comment_count += 1
@@ -803,14 +912,19 @@ def run_automation(driver, url, wait_time=10,
                 # 每处理3条评论就滚动一次
                 if processed_comment_count % 3 == 0 or processed_comment_count == 1:
                     scroll_number += 1
-                    debug_log("info", f"已处理{processed_comment_count}条评论，执行滚动操作", browser_number)
+                    debug_log(
+                        "info",
+                        f"已处理{processed_comment_count}条评论，执行滚动操作",
+                        browser_number,
+                    )
                     scroll_comments(driver, scroll_number, browser_number)
 
                     # 滚动后重新定位评论容器
                     try:
-
                         comments_container = WebDriverWait(driver, wait_time).until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, '[data-e2e="comment-list"]'))
+                            EC.presence_of_element_located(
+                                (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                            )
                         )
                     except Exception as e:
                         # 滚动后无法重新定位评论容器，但不视为处理失败
@@ -820,29 +934,50 @@ def run_automation(driver, url, wait_time=10,
                 # 如果成功关注了用户，则增加计数器
                 if result == "followed":
                     video_followed_count += 1
-                    debug_log("info", f"已成功关注用户，当前视频已关注 {video_followed_count} 个用户", browser_number)
+                    debug_log(
+                        "info",
+                        f"已成功关注用户，当前视频已关注 {video_followed_count} 个用户",
+                        browser_number,
+                    )
 
                 # 检查是否达到目标关注数量或点赞数量
-                if video_followed_count >= target_follow_count and video_liked_count >= target_like_count:
-                    debug_log("info",
-                              f"已达到目标关注数量 {target_follow_count} 和点赞数量 {target_like_count}，切换到下一个链接",
-                              browser_number)
+                if (
+                    video_followed_count >= target_follow_count
+                    and video_liked_count >= target_like_count
+                ):
+                    debug_log(
+                        "info",
+                        f"已达到目标关注数量 {target_follow_count} 和点赞数量 {target_like_count}，切换到下一个链接",
+                        browser_number,
+                    )
                     break
 
                 # 检查是否还能找到下一条评论
                 try:
                     if comments_container is not None:
-                        comment_items = comments_container.find_elements(By.XPATH, "./div")
+                        comment_items = comments_container.find_elements(
+                            By.XPATH, "./div"
+                        )
                         if comment_index + 2 >= len(comment_items):
-                            debug_log("info", "可能已滚动到底部或没有更多评论，结束当前链接操作", browser_number)
+                            debug_log(
+                                "info",
+                                "可能已滚动到底部或没有更多评论，结束当前链接操作",
+                                browser_number,
+                            )
                             break
                     else:
-                        log.error(f"{browser_info} 评论容器未正确初始化，结束当前链接操作")
+                        log.error(
+                            f"{browser_info} 评论容器未正确初始化，结束当前链接操作"
+                        )
                         # 评论容器未正确初始化，但不视为处理失败
                         break
                 except Exception as e:
                     log.error(f"{browser_info} 无法获取评论列表: {e}")
-                    debug_log("info", "可能已滚动到底部或没有更多评论，结束当前链接操作", browser_number)
+                    debug_log(
+                        "info",
+                        "可能已滚动到底部或没有更多评论，结束当前链接操作",
+                        browser_number,
+                    )
                     break
 
                 # 增加评论索引
@@ -857,9 +992,15 @@ def run_automation(driver, url, wait_time=10,
                 raise
             except Exception as e:
                 msg = str(e)
-                if "invalid session id" in msg or "Failed to establish a new connection" in msg or "ConnectionResetError" in msg:
+                if (
+                    "invalid session id" in msg
+                    or "Failed to establish a new connection" in msg
+                    or "ConnectionResetError" in msg
+                ):
                     raise
-                log.error(f"{browser_info} 处理第{comment_index + 1}条评论时发生异常: {e}")
+                log.error(
+                    f"{browser_info} 处理第{comment_index + 1}条评论时发生异常: {e}"
+                )
                 comment_index += 1
                 continue
 
@@ -880,10 +1021,20 @@ def run_automation(driver, url, wait_time=10,
         raise  # 重新抛出异常，让上层逻辑处理浏览器重启
 
 
-def process_urls_thread(browser_manager, browser_id, urls, wait_time,
-                        like_probability, visit_profile_probability, profile_follow_probability,
-                        min_follows_per_video, max_follows_per_video,
-                        min_likes_per_video, max_likes_per_video, browser_number):
+def process_urls_thread(
+    browser_manager,
+    browser_id,
+    urls,
+    wait_time,
+    like_probability,
+    visit_profile_probability,
+    profile_follow_probability,
+    min_follows_per_video,
+    max_follows_per_video,
+    min_likes_per_video,
+    max_likes_per_video,
+    browser_number,
+):
     """在线程中处理URL列表"""
     browser_info = get_browser_info(browser_number)
     log.info(f"{browser_info} 开始处理任务")
@@ -895,10 +1046,19 @@ def process_urls_thread(browser_manager, browser_id, urls, wait_time,
         return
 
     try:
-        process_urls(driver, urls,
-                     wait_time, like_probability, visit_profile_probability, profile_follow_probability,
-                     min_follows_per_video, max_follows_per_video,
-                     min_likes_per_video, max_likes_per_video, browser_number)
+        process_urls(
+            driver,
+            urls,
+            wait_time,
+            like_probability,
+            visit_profile_probability,
+            profile_follow_probability,
+            min_follows_per_video,
+            max_follows_per_video,
+            min_likes_per_video,
+            max_likes_per_video,
+            browser_number,
+        )
     except Exception as e:
         log.error(f"{browser_info} 处理URL时发生异常: {e}")
     finally:
@@ -907,10 +1067,19 @@ def process_urls_thread(browser_manager, browser_id, urls, wait_time,
         log.info(f"{browser_info} 浏览器已关闭")
 
 
-def process_urls(driver, urls, wait_time=10,
-                 like_probability=0.5, visit_profile_probability=0.3, profile_follow_probability=0.5,
-                 min_follows_per_video=5, max_follows_per_video=15,
-                 min_likes_per_video=5, max_likes_per_video=15, browser_number=None):
+def process_urls(
+    driver,
+    urls,
+    wait_time=10,
+    like_probability=0.5,
+    visit_profile_probability=0.3,
+    profile_follow_probability=0.5,
+    min_follows_per_video=5,
+    max_follows_per_video=15,
+    min_likes_per_video=5,
+    max_likes_per_video=15,
+    browser_number=None,
+):
     """处理URL列表"""
     browser_info = get_browser_info(browser_number)
     log.info(f"{browser_info} 开始处理URL列表，共 {len(urls)} 个链接")
@@ -926,12 +1095,20 @@ def process_urls(driver, urls, wait_time=10,
                 # 打开第一个链接
                 driver.get(target_url)
 
-            success = run_automation(driver, target_url,
-                                     wait_time, like_probability, visit_profile_probability,
-                                     profile_follow_probability,
-                                     min_follows_per_video, max_follows_per_video,
-                                     min_likes_per_video, max_likes_per_video,
-                                     browser_number, "")
+            success = run_automation(
+                driver,
+                target_url,
+                wait_time,
+                like_probability,
+                visit_profile_probability,
+                profile_follow_probability,
+                min_follows_per_video,
+                max_follows_per_video,
+                min_likes_per_video,
+                max_likes_per_video,
+                browser_number,
+                "",
+            )
             if not success:
                 log.error(f"{browser_info} 处理链接 {target_url} 失败")
         except Exception as e:
@@ -955,7 +1132,9 @@ def scroll_comments(driver, scroll_number=None, browser_number=None):
     scroll_origin = ScrollOrigin.from_element(body)
     ActionChains(driver).scroll_from_origin(scroll_origin, 0, 470).perform()
     if scroll_number is not None:
-        debug_log("info", f"使用ActionChains完成滑动 (第 {scroll_number} 次)", browser_number)
+        debug_log(
+            "info", f"使用ActionChains完成滑动 (第 {scroll_number} 次)", browser_number
+        )
     else:
         debug_log("info", "使用ActionChains完成滑动", browser_number)
     time.sleep(2)
@@ -969,7 +1148,7 @@ def init_database(db_path=LINKS_DB_PATH):
     cursor = conn.cursor()
 
     # 创建链接表，不使用默认的CURRENT_TIMESTAMP，而是在应用层处理时间
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS links (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             url TEXT UNIQUE NOT NULL,
@@ -977,7 +1156,7 @@ def init_database(db_path=LINKS_DB_PATH):
             created_at TEXT DEFAULT '',
             updated_at TEXT DEFAULT ''
         )
-    ''')
+    """)
 
     conn.commit()
     conn.close()
@@ -997,7 +1176,7 @@ def add_links_cli(db_path=LINKS_DB_PATH):
     while True:
         try:
             text = input().strip()
-            if text.lower() == 'quit':
+            if text.lower() == "quit":
                 break
             if text:
                 add_link_to_db(text, db_path)
@@ -1025,10 +1204,10 @@ def add_link_to_db(url, db_path=LINKS_DB_PATH):
 
     try:
         # 使用本地时间
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         cursor.execute(
             "INSERT INTO links (url, status, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            (cleaned_url, 'pending', current_time, current_time)
+            (cleaned_url, "pending", current_time, current_time),
         )
         conn.commit()
         log.info(f"链接已添加到数据库: {cleaned_url}")
@@ -1047,6 +1226,7 @@ _stop_flag = threading.Event()
 
 
 # ==================== 辅助函数：减少重复代码 ====================
+
 
 def check_stop_signal():
     """检查是否收到停止信号，如果收到则抛出异常"""
@@ -1166,15 +1346,11 @@ def get_next_link(db_path=LINKS_DB_PATH):
         cursor = conn.cursor()
 
         # 先获取所有链接的ID和状态，用于计算索引（按创建时间或ID排序）
-        cursor.execute(
-            "SELECT id FROM links ORDER BY id"
-        )
+        cursor.execute("SELECT id FROM links ORDER BY id")
         all_link_ids = [row[0] for row in cursor.fetchall()]
 
         # 获取一个待处理的链接
-        cursor.execute(
-            "SELECT id, url FROM links WHERE status = 'pending' LIMIT 1"
-        )
+        cursor.execute("SELECT id, url FROM links WHERE status = 'pending' LIMIT 1")
         result = cursor.fetchone()
 
         if result:
@@ -1184,10 +1360,10 @@ def get_next_link(db_path=LINKS_DB_PATH):
             url_index = all_link_ids.index(link_id) if link_id in all_link_ids else 0
 
             # 标记为处理中，使用本地时间
-            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             cursor.execute(
                 "UPDATE links SET status = 'processing', updated_at = ? WHERE id = ?",
-                (current_time, link_id)
+                (current_time, link_id),
             )
             conn.commit()
             conn.close()
@@ -1206,10 +1382,10 @@ def mark_link_as_completed(link_id, db_path=LINKS_DB_PATH):
     cursor = conn.cursor()
 
     # 标记为完成状态，使用本地时间
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute(
         "UPDATE links SET status = 'completed', updated_at = ? WHERE id = ?",
-        (current_time, link_id)
+        (current_time, link_id),
     )
     conn.commit()
     conn.close()
@@ -1221,21 +1397,30 @@ def mark_link_as_failed(link_id, db_path=LINKS_DB_PATH):
     cursor = conn.cursor()
 
     # 标记为失败状态，使用本地时间
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute(
         "UPDATE links SET status = 'failed', updated_at = ? WHERE id = ?",
-        (current_time, link_id)
+        (current_time, link_id),
     )
     conn.commit()
     conn.close()
     # log.warning(f"链接 {link_id} 标记为处理失败")
 
 
-def continuous_processing_loop(browser_manager, browser_id,
-                               wait_time, like_probability, visit_profile_probability, profile_follow_probability,
-                               min_follows_per_video, max_follows_per_video,
-                               min_likes_per_video, max_likes_per_video,
-                               browser_number, db_path=LINKS_DB_PATH):
+def continuous_processing_loop(
+    browser_manager,
+    browser_id,
+    wait_time,
+    like_probability,
+    visit_profile_probability,
+    profile_follow_probability,
+    min_follows_per_video,
+    max_follows_per_video,
+    min_likes_per_video,
+    max_likes_per_video,
+    browser_number,
+    db_path=LINKS_DB_PATH,
+):
     """持续处理循环"""
     browser_info = get_browser_info(browser_number)
     debug_log("info", "启动持续处理循环", browser_number)
@@ -1280,7 +1465,11 @@ def continuous_processing_loop(browser_manager, browser_id,
                     break
                 else:
                     # 数据库模式下，等待新链接
-                    debug_log("info", "数据库中没有待处理的链接，等待30秒后重试...", browser_number)
+                    debug_log(
+                        "info",
+                        "数据库中没有待处理的链接，等待30秒后重试...",
+                        browser_number,
+                    )
                     safe_sleep(30)
                     continue
 
@@ -1290,12 +1479,21 @@ def continuous_processing_loop(browser_manager, browser_id,
             while retry_count < max_retries:
                 try:
                     # 处理链接
-                    success = run_automation(driver, url,
-                                             wait_time, like_probability, visit_profile_probability,
-                                             profile_follow_probability,
-                                             min_follows_per_video, max_follows_per_video,
-                                             min_likes_per_video, max_likes_per_video,
-                                             browser_number, browser_id, enable_follow)  # 传递enable_follow参数
+                    success = run_automation(
+                        driver,
+                        url,
+                        wait_time,
+                        like_probability,
+                        visit_profile_probability,
+                        profile_follow_probability,
+                        min_follows_per_video,
+                        max_follows_per_video,
+                        min_likes_per_video,
+                        max_likes_per_video,
+                        browser_number,
+                        browser_id,
+                        enable_follow,
+                    )  # 传递enable_follow参数
 
                     if success:
                         # 只有在数据库模式下才标记为已完成
@@ -1310,7 +1508,11 @@ def continuous_processing_loop(browser_manager, browser_id,
                             mark_link_as_failed(link_id, db_path)
                         # 链接失效，输出错误
                         output_json(1, "链接失效", "url_fail", browser_id, url_index)
-                        debug_log("error", f"{browser_info} 链接处理失败（链接失效）: {url}", browser_number)
+                        debug_log(
+                            "error",
+                            f"{browser_info} 链接处理失败（链接失效）: {url}",
+                            browser_number,
+                        )
                     break  # 处理完成，跳出重试循环
 
                 except LicenseException:
@@ -1318,23 +1520,32 @@ def continuous_processing_loop(browser_manager, browser_id,
                     raise
                 except Exception as e:
                     retry_count += 1
-                    log.error(f"{browser_info} 处理链接 {url} 时发生异常 (第{retry_count}次): {e}")
+                    log.error(
+                        f"{browser_info} 处理链接 {url} 时发生异常 (第{retry_count}次): {e}"
+                    )
 
                     # 记录详细的错误信息
                     import traceback
+
                     log.error(f"{browser_info} 详细错误堆栈: {traceback.format_exc()}")
 
                     # 处理浏览器相关异常，包括渲染器断开连接的情况
                     error_msg = str(e).lower()
-                    if ("disconnected: unable to receive message from renderer" in error_msg or
-                            "disconnected: not connected to devtools" in error_msg or
-                            "invalid session id" in error_msg or
-                            "session not created" in error_msg or
-                            "invalid argument" in error_msg):
+                    if (
+                        "disconnected: unable to receive message from renderer"
+                        in error_msg
+                        or "disconnected: not connected to devtools" in error_msg
+                        or "invalid session id" in error_msg
+                        or "session not created" in error_msg
+                        or "invalid argument" in error_msg
+                    ):
                         log.warning(
-                            f"{browser_info} 浏览器会话失效或连接断开，尝试重新连接浏览器...")
+                            f"{browser_info} 浏览器会话失效或连接断开，尝试重新连接浏览器..."
+                        )
                         # 重新创建浏览器驱动，而不是强制关闭后再创建
-                        driver = browser_manager.create_driver(browser_id, browser_number)
+                        driver = browser_manager.create_driver(
+                            browser_id, browser_number
+                        )
                         if driver is not None:
                             log.info(f"{browser_info} 成功重新连接浏览器")
                             # 重置retry_count，继续当前链接的处理
@@ -1344,7 +1555,9 @@ def continuous_processing_loop(browser_manager, browser_id,
                             log.error(f"{browser_info} 重新连接浏览器失败")
 
                             # 如果重新连接浏览器也失败，则使用最后的备选方案
-                            log.warning(f"{browser_info} 重新连接浏览器失败，使用最后的备选方案...")
+                            log.warning(
+                                f"{browser_info} 重新连接浏览器失败，使用最后的备选方案..."
+                            )
                             driver = None
                             safe_sleep(5)
                             break  # 重新创建浏览器后重试
@@ -1363,7 +1576,11 @@ def continuous_processing_loop(browser_manager, browser_id,
 
             # 处理完一个链接后等待一段时间
             wait_time_between_links = random.uniform(10, 30)
-            debug_log("info", f"等待 {wait_time_between_links:.2f} 秒后处理下一个链接...", browser_number)
+            debug_log(
+                "info",
+                f"等待 {wait_time_between_links:.2f} 秒后处理下一个链接...",
+                browser_number,
+            )
             safe_sleep(wait_time_between_links)
 
     except KeyboardInterrupt:
@@ -1390,19 +1607,43 @@ def print_config_debug():
 
     # 定义需要忽略的方法和内部属性
     ignore_attrs = {
-        'construct', 'copy', 'dict', 'json', 'from_orm', 'model_computed_fields',
-        'model_config', 'model_construct', 'model_copy', 'model_dump', 'model_dump_json',
-        'model_extra', 'model_fields', 'model_fields_set', 'model_json_schema',
-        'model_dump_json', 'model_parametrized_name', 'model_post_init', 'model_rebuild',
-        'model_validate', 'model_validate_json', 'model_validate_strings', 'model_validate_python',
-        'parse_obj', 'parse_raw', 'parse_file', 'parse_obj_or_dict', 'schema', 'schema_json',
-        'update_forward_refs', 'validate'
+        "construct",
+        "copy",
+        "dict",
+        "json",
+        "from_orm",
+        "model_computed_fields",
+        "model_config",
+        "model_construct",
+        "model_copy",
+        "model_dump",
+        "model_dump_json",
+        "model_extra",
+        "model_fields",
+        "model_fields_set",
+        "model_json_schema",
+        "model_dump_json",
+        "model_parametrized_name",
+        "model_post_init",
+        "model_rebuild",
+        "model_validate",
+        "model_validate_json",
+        "model_validate_strings",
+        "model_validate_python",
+        "parse_obj",
+        "parse_raw",
+        "parse_file",
+        "parse_obj_or_dict",
+        "schema",
+        "schema_json",
+        "update_forward_refs",
+        "validate",
     }
 
     # 动态获取KuSettings的所有属性
     for attr_name in dir(config):
         # 跳过私有属性、方法和需要忽略的属性
-        if not attr_name.startswith('_') and attr_name not in ignore_attrs:
+        if not attr_name.startswith("_") and attr_name not in ignore_attrs:
             try:
                 attr_value = getattr(config, attr_name)
                 # 检查是否为方法或函数
@@ -1415,7 +1656,8 @@ def print_config_debug():
                         log.info(f"  {attr_name}: {attr_value}")
                     else:
                         log.info(
-                            f"  {attr_name}: 共 {len(attr_value)} 项 [{', '.join(map(str, attr_value[:3]))}, ...]")
+                            f"  {attr_name}: 共 {len(attr_value)} 项 [{', '.join(map(str, attr_value[:3]))}, ...]"
+                        )
                 else:
                     log.info(f"  {attr_name}: {attr_value}")
             except Exception as e:
@@ -1506,11 +1748,20 @@ def main_database():
                 # 为每个线程使用不同的浏览器ID
                 browser_id = config.BIT_BROWSER_IDS[i % len(config.BIT_BROWSER_IDS)]
 
-                future = executor.submit(continuous_processing_loop, browser_manager, browser_id,
-                                         WAIT_TIME_USED, LIKE_PROBABILITY_USED, VISIT_PROFILE_PROBABILITY_USED,
-                                         PROFILE_FOLLOW_PROBABILITY_USED,
-                                         MIN_FOLLOWS_PER_VIDEO_USED, MAX_FOLLOWS_PER_VIDEO_USED,
-                                         MIN_LIKES_PER_VIDEO_USED, MAX_LIKES_PER_VIDEO_USED, i + 1)
+                future = executor.submit(
+                    continuous_processing_loop,
+                    browser_manager,
+                    browser_id,
+                    WAIT_TIME_USED,
+                    LIKE_PROBABILITY_USED,
+                    VISIT_PROFILE_PROBABILITY_USED,
+                    PROFILE_FOLLOW_PROBABILITY_USED,
+                    MIN_FOLLOWS_PER_VIDEO_USED,
+                    MAX_FOLLOWS_PER_VIDEO_USED,
+                    MIN_LIKES_PER_VIDEO_USED,
+                    MAX_LIKES_PER_VIDEO_USED,
+                    i + 1,
+                )
                 futures.append(future)
 
                 # 等待2.5秒再启动下一个浏览器，避免资源竞争
@@ -1541,6 +1792,7 @@ def main_database():
                         future.cancel()
                     # 直接退出程序
                     import sys
+
                     sys.exit(0)
     except LicenseException:
         # 捕获LicenseException并记录，然后让程序终止
@@ -1559,7 +1811,9 @@ def view_links_in_db(db_path=LINKS_DB_PATH):
 
     try:
         # 查询所有链接
-        cursor.execute("SELECT id, url, status, created_at FROM links ORDER BY created_at")
+        cursor.execute(
+            "SELECT id, url, status, created_at FROM links ORDER BY created_at"
+        )
         links = cursor.fetchall()
 
         # 查询各种状态的链接数量
@@ -1568,10 +1822,10 @@ def view_links_in_db(db_path=LINKS_DB_PATH):
         status_dict = {status: count for status, count in status_counts}
 
         total_count = sum(status_dict.values())
-        pending_count = status_dict.get('pending', 0)
-        processing_count = status_dict.get('processing', 0)
-        failed_count = status_dict.get('failed', 0)
-        completed_count = status_dict.get('completed', 0)
+        pending_count = status_dict.get("pending", 0)
+        processing_count = status_dict.get("processing", 0)
+        failed_count = status_dict.get("failed", 0)
+        completed_count = status_dict.get("completed", 0)
 
         if not links:
             log.info("数据库中没有链接")
@@ -1583,7 +1837,8 @@ def view_links_in_db(db_path=LINKS_DB_PATH):
         # 显示进度条和统计信息
         print(f"总链接数: {total_count}")
         print(
-            f"待处理: {pending_count} | 处理中: {processing_count} | 失败: {failed_count} | 已完成: {completed_count}")
+            f"待处理: {pending_count} | 处理中: {processing_count} | 失败: {failed_count} | 已完成: {completed_count}"
+        )
 
         # 显示进度条 (已完成+失败+处理中的链接都算作已处理)
         if total_count > 0:
@@ -1591,7 +1846,7 @@ def view_links_in_db(db_path=LINKS_DB_PATH):
             progress = processed / total_count
             bar_length = 40
             filled_length = int(bar_length * progress)
-            bar = '█' * filled_length + '-' * (bar_length - filled_length)
+            bar = "█" * filled_length + "-" * (bar_length - filled_length)
             print(f"完成进度: |{bar}| {progress:.1%} ({processed}/{total_count})")
 
         print("-" * 100)
@@ -1601,7 +1856,7 @@ def view_links_in_db(db_path=LINKS_DB_PATH):
         for link in links:
             link_id, url, status, created_at = link
             # 截断长URL以提高可读性
-            short_url = (url[:70] + '...') if len(url) > 73 else url
+            short_url = (url[:70] + "...") if len(url) > 73 else url
             print(f"{link_id:<5} {status:<12} {created_at:<20} {short_url}")
 
     except Exception as e:
@@ -1634,65 +1889,62 @@ def clear_database(db_path=LINKS_DB_PATH, status=None):
         conn.close()
 
 
-def main():
-    """
-    主函数 - 抖音自动化脚本入口点
-    直接使用文件顶部定义的配置参数运行脚本
-    """
-    import sys
+class DouyinShareCrawler(AbstractCrawler):
+    async def start(self):
+        """
+        主函数 - 抖音自动化脚本入口点
+        直接使用文件顶部定义的配置参数运行脚本
+        """
+        import sys
 
-    try:
-        # 检查命令行参数
-        if len(sys.argv) > 1:
-            log.info(f"命令行参数: {sys.argv}")
-            if sys.argv[1] == "add":
-                # 添加链接模式
-                add_links_cli()
+        try:
+            # 检查命令行参数
+            if len(sys.argv) > 1:
+                log.info(f"命令行参数: {sys.argv}")
+                if sys.argv[1] == "add":
+                    # 添加链接模式
+                    add_links_cli()
+                    return
+                elif sys.argv[1] == "run":
+                    # 持续运行模式
+                    main_database()
+                    return
+                elif sys.argv[1] == "look":
+                    # 查看链接模式
+                    view_links_in_db()
+                    return
+                elif sys.argv[1] == "clear":
+                    # 清空数据库
+                    if len(sys.argv) > 2:
+                        clear_database(status=sys.argv[2])
+                    else:
+                        clear_database()
+                    return
+                elif sys.argv[1] == "help":
+                    # 帮助信息
+                    log.info("显示帮助信息")
+                    log.info("使用方法:")
+                    log.info("  python DY_ku.py run    # 持续运行，从数据库读取链接")
+                    log.info("  python DY_ku.py add    # 添加链接到数据库")
+                    log.info("  python DY_ku.py look   # 查看数据库中的链接")
+                    log.info("  python DY_ku.py clear  # 清空数据库中的所有链接")
+                    log.info("  python DY_ku.py clear pending  # 清空待处理链接")
+                    log.info("  python DY_ku.py clear failed   # 清空失败链接")
+                    log.info("  python DY_ku.py help   # 显示此帮助信息")
+                    return
+
+            # 检查是否有配置浏览器ID
+            if not config.BIT_BROWSER_IDS:
+                log.error("请在代码中的 BIT_BROWSER_IDS 列表中配置浏览器ID")
                 return
-            elif sys.argv[1] == "run":
-                # 持续运行模式
-                main_database()
-                return
-            elif sys.argv[1] == "look":
-                # 查看链接模式
-                view_links_in_db()
-                return
-            elif sys.argv[1] == "clear":
-                # 清空数据库
-                if len(sys.argv) > 2:
-                    clear_database(status=sys.argv[2])
-                else:
-                    clear_database()
-                return
-            elif sys.argv[1] == "help":
-                # 帮助信息
-                log.info("显示帮助信息")
-                log.info("使用方法:")
-                log.info("  python DY_ku.py run    # 持续运行，从数据库读取链接")
-                log.info("  python DY_ku.py add    # 添加链接到数据库")
-                log.info("  python DY_ku.py look   # 查看数据库中的链接")
-                log.info("  python DY_ku.py clear  # 清空数据库中的所有链接")
-                log.info("  python DY_ku.py clear pending  # 清空待处理链接")
-                log.info("  python DY_ku.py clear failed   # 清空失败链接")
-                log.info("  python DY_ku.py help   # 显示此帮助信息")
-                return
 
-        # 检查是否有配置浏览器ID
-        if not config.BIT_BROWSER_IDS:
-            log.error("请在代码中的 BIT_BROWSER_IDS 列表中配置浏览器ID")
-            return
+            # 直接调用数据库模式
+            main_database()
 
-        # 直接调用数据库模式
-        main_database()
-
-    except LicenseException:
-        # 捕获LicenseException并退出程序
-        log.error("卡密验证失败，程序即将退出")
-        sys.exit(1)
-    except KeyboardInterrupt:
-        log.info("程序已被用户中断")
-        sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()
+        except LicenseException:
+            # 捕获LicenseException并退出程序
+            log.error("卡密验证失败，程序即将退出")
+            sys.exit(1)
+        except KeyboardInterrupt:
+            log.info("程序已被用户中断")
+            sys.exit(0)

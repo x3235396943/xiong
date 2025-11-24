@@ -2,7 +2,7 @@ import requests
 import json
 import time
 from typing import Any
-from .var import config
+from ..tools import config
 # 官方文档地址
 # https://doc2.bitbrowser.cn/jiekou/ben-di-fu-wu-zhi-nan.html
 

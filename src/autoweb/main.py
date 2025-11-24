@@ -1,19 +1,20 @@
 import asyncio
 
-from tools import verify, config
-from tools.base import AbstractCrawler
-from dy import DouyinCrawler
+from .tools import verify, config
+from .tools.base import AbstractCrawler
+from .dy import DouyinCrawler
+from .dyShare import DouyinShareCrawler
 
 
 class CrawlerFactory:
-    CRAWLERS = {"dy": DouyinCrawler}
+    CRAWLERS = {"dy": DouyinCrawler, "dys": DouyinShareCrawler}
 
     @staticmethod
     def create_crawler(platform: str) -> AbstractCrawler:
         crawler_class = CrawlerFactory.CRAWLERS.get(platform)
         if not crawler_class:
             raise ValueError(
-                "Invalid Media Platform Currently only supported dy or ks ..."
+                "Invalid Media Platform Currently only supported dy or dys or ks ..."
             )
         return crawler_class()
 

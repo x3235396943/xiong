@@ -27,6 +27,9 @@ pyinstaller = ">=6.16.0,<7"
 aiohttp = ">=3.13.2,<4"
 ujson = ">=5.11.0,<6"
 
+[tool.pixi.tasks]
+web = "python -m autoweb.main"
+
 [project.scripts]
 start = "dy:main"
 dys = "dyShare:main"

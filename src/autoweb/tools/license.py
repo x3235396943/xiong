@@ -2,7 +2,7 @@ import os
 import requests
 import threading
 import time
-from tools import log
+from . import log
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,6 +10,7 @@ load_dotenv()
 
 class LicenseException(Exception):
     """卡密验证异常类"""
+
     pass
 
 
@@ -41,8 +42,8 @@ class LicenseManager:
             bool: 验证是否成功
         """
         # 从参数或环境变量获取卡密信息
-        siberian_key = siberian_key or os.environ.get('SIBERIAN_KEY')
-        device_code = device_code or os.environ.get('DEVICE_CODE')
+        siberian_key = siberian_key or os.environ.get("SIBERIAN_KEY")
+        device_code = device_code or os.environ.get("DEVICE_CODE")
 
         # 检查参数或环境变量是否设置
         if not siberian_key or not device_code:
@@ -51,11 +52,8 @@ class LicenseManager:
 
         # log.info("正在进行卡密验证...")
         # 从环境变量获取验证URL
-        siberian_url = os.environ.get('SIBERIAN_URL')
-        data = {
-            "siberian": siberian_key,
-            "deviceCode": device_code
-        }
+        siberian_url = os.environ.get("SIBERIAN_URL")
+        data = {"siberian": siberian_key, "deviceCode": device_code}
 
         try:
             response = requests.post(siberian_url, json=data)
@@ -63,7 +61,7 @@ class LicenseManager:
                 result = response.json()
                 # 添加调试信息，打印完整的响应内容
                 log.debug(f"卡密验证服务器响应: {result}")
-                if result.get('code') == 200:
+                if result.get("code") == 200:
                     # log.info("卡密验证成功")
                     return True
                 else:
@@ -82,7 +80,7 @@ class LicenseManager:
         使用缓存机制，避免频繁发送HTTP请求
         """
         current_time = time.time()
-        
+
         # 如果距离上次验证时间超过间隔时间，才真正验证
         if current_time - self.last_check_time >= self.check_interval:
             # 主动验证许可证
@@ -124,7 +122,9 @@ class LicenseManager:
         """
         启动定期验证线程
         """
-        self.check_thread = threading.Thread(target=self.periodic_license_check, daemon=True)
+        self.check_thread = threading.Thread(
+            target=self.periodic_license_check, daemon=True
+        )
         self.check_thread.start()
 
     def stop_periodic_check(self):
@@ -141,3 +141,4 @@ class LicenseManager:
             bool: 卡密是否有效
         """
         return self.license_valid
+
