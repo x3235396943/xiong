@@ -30,12 +30,8 @@ ujson = ">=5.11.0,<6"
 [tool.pixi.tasks]
 web = "python -m autoweb.main"
 
-[project.scripts]
-start = "dy:main"
-dys = "dyShare:main"
-
 [tool.pixi.tasks.build-web]
-cmd = "pyinstaller --onefile --noconsole --icon assets\\ICO.png --name web .\\src\\dy\\main.py"
+cmd = "pyinstaller --onefile --noconsole --icon assets\\ICO.png --name web .\\src\\autoweb\\main.py"
 
 [tool.pyright]
 # 所有虚拟环境的父目录
