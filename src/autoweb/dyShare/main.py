@@ -1283,23 +1283,91 @@ def print_config_debug():
     log.info("=" * 80)
     log.info("📋 配置参数调试信息 (DEBUG MODE)")
     log.info("=" * 80)
-    # ... 省略部分代码，保持原逻辑 ...
-    pass
+
+    # 定义需要忽略的方法和内部属性
+    ignore_attrs = {
+        "construct",
+        "copy",
+        "dict",
+        "json",
+        "from_orm",
+        "model_computed_fields",
+        "model_config",
+        "model_construct",
+        "model_copy",
+        "model_dump",
+        "model_dump_json",
+        "model_extra",
+        "model_fields",
+        "model_fields_set",
+        "model_json_schema",
+        "model_dump_json",
+        "model_parametrized_name",
+        "model_post_init",
+        "model_rebuild",
+        "model_validate",
+        "model_validate_json",
+        "model_validate_strings",
+        "model_validate_python",
+        "parse_obj",
+        "parse_raw",
+        "parse_file",
+        "parse_obj_or_dict",
+        "schema",
+        "schema_json",
+        "update_forward_refs",
+        "validate",
+    }
+
+    # 动态获取KuSettings的所有属性
+    for attr_name in dir(config):
+        # 跳过私有属性、方法和需要忽略的属性
+        if not attr_name.startswith("_") and attr_name not in ignore_attrs:
+            try:
+                attr_value = getattr(config, attr_name)
+                # 检查是否为方法或函数
+                if callable(attr_value):
+                    continue
+
+                # 特殊处理列表类型的属性，只显示前几项
+                if isinstance(attr_value, list) and len(attr_value) > 0:
+                    if len(attr_value) <= 5:
+                        log.info(f"  {attr_name}: {attr_value}")
+                    else:
+                        log.info(
+                            f"  {attr_name}: 共 {len(attr_value)} 项 [{', '.join(map(str, attr_value[:3]))}, ...]"
+                        )
+                else:
+                    log.info(f"  {attr_name}: {attr_value}")
+            except Exception as e:
+                log.info(f"  {attr_name}: 无法获取值 (错误: {e})")
+
+    log.info("=" * 80)
 
 
 def main_database():
     """
-    使用数据库或列表的主函数 - 持续运行模式
+    使用数据库或列表的主函数 - 持续运行模式，从环境变量获取卡密信息
+
+    环境变量:
+        SIBERIAN_KEY: 卡密密钥
+        DEVICE_CODE: 设备码
+        URLS: URL列表（如果配置了则使用列表模式，否则使用数据库模式）
+        DEBUG: 是否输出调试信息（True/False）
     """
+    # 首先验证卡密
     if not li.verify_license():
         log.error("❌ 卡密不存在！")
         return
 
+    # 如果启用了调试模式，打印所有配置参数
     if config.DEBUG:
         print_config_debug()
 
+    # 启动定期验证线程
     li.start_periodic_check()
 
+    # 判断使用列表模式还是数据库模式
     use_list_mode = config.URLS and len(config.URLS) > 0
 
     if use_list_mode:
