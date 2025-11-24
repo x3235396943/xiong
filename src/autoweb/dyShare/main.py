@@ -1388,32 +1388,6 @@ def main_database():
         li.stop_periodic_check()
 
 
-def view_links_in_db(db_path=LINKS_DB_PATH):
-    """查看数据库中的链接"""
-    log.info("查看数据库中的链接")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute(
-            "SELECT id, url, status, created_at FROM links ORDER BY created_at"
-        )
-        links = cursor.fetchall()
-        # ... 原有逻辑 ...
-        status_counts = cursor.fetchall()  # 逻辑需修正，fetchall之后cursor为空
-
-        # 重新查询统计
-        cursor.execute("SELECT status, COUNT(*) FROM links GROUP BY status")
-        status_counts = cursor.fetchall()
-        status_dict = {status: count for status, count in status_counts}
-
-        # ... 剩余打印逻辑 ...
-    except Exception as e:
-        log.error(f"查看链接时出错: {e}")
-    finally:
-        conn.close()
-
-
 def clear_database(db_path=LINKS_DB_PATH, status=None):
     """清空数据库中的链接"""
     log.info("开始清空数据库")
@@ -1422,9 +1396,11 @@ def clear_database(db_path=LINKS_DB_PATH, status=None):
 
     try:
         if status:
+            # 删除特定状态的链接
             cursor.execute("DELETE FROM links WHERE status = ?", (status,))
             log.info(f"已删除状态为 {status} 的链接")
         else:
+            # 删除所有链接
             cursor.execute("DELETE FROM links")
             log.info("已删除所有链接")
 
@@ -1432,6 +1408,68 @@ def clear_database(db_path=LINKS_DB_PATH, status=None):
         log.info("数据库清空完成")
     except Exception as e:
         log.error(f"清空数据库时出错: {e}")
+    finally:
+        conn.close()
+
+
+def view_links_in_db(db_path=LINKS_DB_PATH):
+    """查看数据库中的链接"""
+    log.info("查看数据库中的链接")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    try:
+        # 查询所有链接
+        cursor.execute(
+            "SELECT id, url, status, created_at FROM links ORDER BY created_at"
+        )
+        links = cursor.fetchall()
+
+        # 查询各种状态的链接数量
+        cursor.execute("SELECT status, COUNT(*) FROM links GROUP BY status")
+        status_counts = cursor.fetchall()
+        status_dict = {status: count for status, count in status_counts}
+
+        total_count = sum(status_dict.values())
+        pending_count = status_dict.get("pending", 0)
+        processing_count = status_dict.get("processing", 0)
+        failed_count = status_dict.get("failed", 0)
+        completed_count = status_dict.get("completed", 0)
+
+        if not links:
+            log.info("数据库中没有链接")
+            return
+
+        log.info(f"数据库中的链接 (共 {len(links)} 条)")
+        print(f"数据库中的链接 (共 {len(links)} 条):")
+
+        # 显示统计信息
+        print(f"总链接数: {total_count}")
+        print(
+            f"待处理: {pending_count} | 处理中: {processing_count} | 失败: {failed_count} | 已完成: {completed_count}"
+        )
+
+        print("-" * 100)
+        print(f"{'ID':<5} {'状态':<12} {'创建时间':<20} {'链接'}")
+        print("-" * 100)
+
+        for link in links:
+            link_id, url, status, created_at = link
+            # 截断长URL以提高可读性
+            short_url = (url[:70] + "...") if len(url) > 73 else url
+            print(f"{link_id:<5} {status:<12} {created_at:<20} {short_url}")
+
+        # 显示进度条 (已完成+失败+处理中的链接都算作已处理)
+        if total_count > 0:
+            processed = completed_count + failed_count + processing_count
+            progress = processed / total_count
+            bar_length = 40
+            filled_length = int(bar_length * progress)
+            bar = "█" * filled_length + "-" * (bar_length - filled_length)
+            print(f"完成进度: |{bar}| {progress:.1%} ({processed}/{total_count})")
+
+    except Exception as e:
+        log.error(f"查看链接时出错: {e}")
     finally:
         conn.close()
 
