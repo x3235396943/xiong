@@ -16,9 +16,11 @@ cp .env.example .env
 ## 🚀 Getting Started
 
 ```bash
-pixi run start
+pixi run web
+```
 
 ## Build
+
 ```bash
 pixi run build-web
 ```
