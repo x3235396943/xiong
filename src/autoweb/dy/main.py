@@ -19,7 +19,7 @@ import sys
 
 from ..tools import log, log2, config
 from ..tools.base import AbstractCrawler
-from src.autoweb.tools.bit_api import openBrowser
+from ..tools.bit_api import openBrowser
 
 
 class DouyinCrawler(AbstractCrawler):
