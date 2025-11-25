@@ -10,6 +10,10 @@ class Base(BaseSettings):
 
 
 class KuSettings(Base):
+    KEYWORDS: list = []
+    MAX_SCROLL_VIDEO: list = [10, 20]
+    MAX_COMMENT: list = [2, 15]
+
     LIKE_PROBABILITY: int = 30  # 点赞概率 (0-100)
     VISIT_ENABLE: int = 10  # 进入主页的概率 (0-100)
     PROFILE_FOLLOW_PROBABILITY: int = 10  # 进入主页后关注的概率 (0-100)
@@ -44,8 +48,6 @@ class KuSettings(Base):
     VIDEO_REPLY_WAIT_MAX: int = 12  # 视频留言前最大等待时间（秒）
     COMMENT_WAIT_MIN: int = 12  # 评论回复前最小等待时间（秒）
     COMMENT_WAIT_MAX: int = 12  # 评论回复前最大等待时间（秒）
-
-    KEYWORDS: str = ""
 
     # 数据库路径
     LINKS_DB_PATH: str = "links.db"
@@ -91,9 +93,7 @@ class KuSettings(Base):
     COMMENT_KEYWORDS: list = []
 
     @field_validator(
-        "MIN_FOLLOWS_PER_VIDEO",
         "MAX_FOLLOWS_PER_VIDEO",
-        "COMMENT_LIKE_COUNT_MIN",
         "COMMENT_LIKE_COUNT_MAX",
         mode="after",
     )
@@ -101,16 +101,12 @@ class KuSettings(Base):
     def validate_min_max_pairs(cls, v, info):
         # 验证关注和点赞的最小最大值对
         field_name = info.field_name
-        if field_name == "MAX_FOLLOWS_PER_VIDEO" and hasattr(
-            cls, "MIN_FOLLOWS_PER_VIDEO"
-        ):
+        if field_name == "MAX_FOLLOWS_PER_VIDEO":
             if v < cls.MIN_FOLLOWS_PER_VIDEO:
                 raise ValueError(
                     f"MAX_FOLLOWS_PER_VIDEO ({v}) must be greater than or equal to MIN_FOLLOWS_PER_VIDEO ({cls.MIN_FOLLOWS_PER_VIDEO})"
                 )
-        elif field_name == "COMMENT_LIKE_COUNT_MAX" and hasattr(
-            cls, "COMMENT_LIKE_COUNT_MIN"
-        ):
+        elif field_name == "COMMENT_LIKE_COUNT_MAX":
             if v < cls.COMMENT_LIKE_COUNT_MIN:
                 raise ValueError(
                     f"COMMENT_LIKE_COUNT_MAX ({v}) must be greater than or equal to COMMENT_LIKE_COUNT_MIN ({cls.COMMENT_LIKE_COUNT_MIN})"
