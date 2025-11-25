@@ -113,7 +113,7 @@ class BrowserCluster:
                 browser = self.browsers.get(browser_id)
                 if browser is None:
                     return browser_id, False, "浏览器不存在"
-                
+                time.sleep(3)
                 if browser.driver is None:
                     result = browser._open_control(browser_id)
                     return browser_id, result.get('driver') is not None, result.get('message', '')
@@ -173,7 +173,6 @@ class BrowserCluster:
         for browser_info in matched_browsers:
             browser_name = browser_info['name']
             browser_id = browser_info['id']
-            
             # 创建新的浏览器实例
             browser = SeleniumBrowser()
             browser.id = browser_id  # 设置浏览器ID
@@ -188,6 +187,7 @@ class BrowserCluster:
             # 添加到集群
             if self.add_browser(browser_name, browser, display_name=browser_name):
                 # 打开浏览器
+                time.sleep(3)
                 result = browser._open_control(browser_id)
                 success = result.get('driver') is not None
                 entry['success'] = success
@@ -257,6 +257,7 @@ class BrowserCluster:
             }
             display_name = entry['name'] or browser_id
             browser.display_name = display_name
+            time.sleep(3)
             if self.add_browser(browser_id, browser, display_name=display_name):
                 result = browser._open_control(browser_id)
                 success = result.get('driver') is not None

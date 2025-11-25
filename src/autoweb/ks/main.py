@@ -34,7 +34,7 @@ def kill_chrome_processes():
 selenium_browser = None
 if config.USE_BITBROWSER and hasattr(config, 'BITBROWSER_URL') and config.BITBROWSER_URL and config.BITBROWSER_URL.strip():
     browser_names = getattr(config, 'BITBROWSER_NAMES', [])
-    browser_ids = getattr(config, 'BITBROWSER_IDS', [])
+    browser_ids = getattr(config, 'BIT_BROWSER_IDS', [])
 
     name_results = {}
     id_results = {}
@@ -178,7 +178,7 @@ logger.info(f"{'='*50}")
 # results = cluster.execute_batch(tasks)
 
 DEFAULT_SEARCH_KEYWORDS = ["御姐", "美女", "性感", "制服", "清纯", "可爱", "性感", "女神", "模特", "丰满"]
-SEARCH_KEYWORDS = config.KUAISHOU_SEARCH_KEYWORDS if config.KUAISHOU_SEARCH_KEYWORDS else DEFAULT_SEARCH_KEYWORDS
+SEARCH_KEYWORDS = config.KEYWORDS if config.KEYWORDS else DEFAULT_SEARCH_KEYWORDS
 
 # ==================== 主流程循环配置 ====================
 # 主流程执行间隔时间范围（秒）

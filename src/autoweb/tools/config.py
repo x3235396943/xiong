@@ -228,17 +228,17 @@ class Config:
         else:
             BITBROWSER_NAMES = []
 
-    # 浏览器ID列表（BITBROWSER_IDS），支持 JSON、Python 列表或逗号分隔字符串
-    _browser_ids_source = _get_env_value('BITBROWSER_IDS', None)
+    # 浏览器ID列表（BIT_BROWSER_IDS），支持 JSON、Python 列表或逗号分隔字符串
+    _browser_ids_source = _get_env_value('BIT_BROWSER_IDS', None)
     if isinstance(_browser_ids_source, list):
-        BITBROWSER_IDS = [str(browser_id).strip() for browser_id in _browser_ids_source if str(browser_id).strip()]
+        BIT_BROWSER_IDS = [str(browser_id).strip() for browser_id in _browser_ids_source if str(browser_id).strip()]
     else:
         _browser_ids_env = str(_browser_ids_source or '')
         if _browser_ids_env.strip():
-            BITBROWSER_IDS = _parse_list_env(_browser_ids_env, item_type=str)
-            BITBROWSER_IDS = [browser_id.strip() for browser_id in BITBROWSER_IDS if browser_id.strip()]
+            BIT_BROWSER_IDS = _parse_list_env(_browser_ids_env, item_type=str)
+            BIT_BROWSER_IDS = [browser_id.strip() for browser_id in BIT_BROWSER_IDS if browser_id.strip()]
         else:
-            BITBROWSER_IDS = []
+            BIT_BROWSER_IDS = []
     
     # ==================== 浏览器基础配置 ====================
     BROWSER_SAVE_DIR = str(_get_env_value('BROWSER_SAVE_DIR', 'browser_sessions') or 'browser_sessions')
@@ -293,16 +293,16 @@ class Config:
     
     # ==================== 快手关键词配置 ====================
     # 搜索关键词列表，支持 JSON、Python 列表或逗号分隔字符串
-    _search_keywords_source = _get_env_value('KUAISHOU_SEARCH_KEYWORDS', None)
+    _search_keywords_source = _get_env_value('KEYWORDS', None)
     if isinstance(_search_keywords_source, list):
-        KUAISHOU_SEARCH_KEYWORDS = [str(kw).strip() for kw in _search_keywords_source if str(kw).strip()]
+        KEYWORDS = [str(kw).strip() for kw in _search_keywords_source if str(kw).strip()]
     else:
         _search_keywords_env = str(_search_keywords_source or '')
         if _search_keywords_env.strip():
-            KUAISHOU_SEARCH_KEYWORDS = _parse_list_env(_search_keywords_env, item_type=str)
-            KUAISHOU_SEARCH_KEYWORDS = [kw.strip() for kw in KUAISHOU_SEARCH_KEYWORDS if kw.strip()]
+            KEYWORDS = _parse_list_env(_search_keywords_env, item_type=str)
+            KEYWORDS = [kw.strip() for kw in KEYWORDS if kw.strip()]
         else:
-            KUAISHOU_SEARCH_KEYWORDS = []
+            KEYWORDS = []
     
     # 评论关键词列表，支持 JSON、Python 列表或逗号分隔字符串
     _comment_keywords_source = _get_env_value('KUAISHOU_COMMENT_KEYWORDS', None)
@@ -448,11 +448,6 @@ class Config:
     def SCROLL_INTERVAL_MAX(self):
         """兼容旧属性名"""
         return self.VIDEO_SCROLL_INTERVAL_MAX
-    
-    @property
-    def KEYWORDS(self):
-        """兼容旧属性名"""
-        return self.KUAISHOU_SEARCH_KEYWORDS
     
     @property
     def COMMENT_KEYWORDS(self):

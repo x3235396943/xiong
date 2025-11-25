@@ -2096,6 +2096,10 @@ def browser_video_loop(
                 if not pause_manager_id:
                     logger.warning(f"[{params['browser_name']}] 缺少浏览器id，暂停/播放管理将被跳过")
                 while main_loop_duration > (time.time() - start_time) and loop_max_videos > video_count:
+                    time.sleep(1)
+                    if "short-video" not in driver.current_url:
+                        logger.error(f"[{params['browser_name']}] 不在视频页面，跳出循环")
+                        break
                     last_current_duration = None  # 记录上一次的当前时长
                     # 当前视频的操作计数
                     current_video_action_count = 0
@@ -2137,9 +2141,10 @@ def browser_video_loop(
                                 mark_need_play(pause_manager_id)
                             time.sleep(0.5)
                             total_seconds, current_seconds = _get_video_duration(driver)
+                            logger.debug(f"[{params['browser_name']}] 当前进度: {current_seconds} 秒/{total_seconds} 秒")
                             if current_seconds is None:
                                 logger.debug(f"[{params['browser_name']}] 当前进度为空，结束本次检测循环")
-                                continue
+                                break
                             if current_seconds < old_current_seconds:
                                 now_video_poster_url = _get_video_poster(driver)
                                 if old_video_poster_url == now_video_poster_url:
