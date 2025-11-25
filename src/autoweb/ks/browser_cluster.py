@@ -5,7 +5,7 @@ from .selenium_browser import SeleniumBrowser
 import time
 from functools import partial
 from ..tools import log as logger
-from ..tools import ks_config as config
+from ..tools import config
 
 class BrowserCluster:
     """浏览器集群控制类：用一个线程控制多个浏览器"""
@@ -213,7 +213,7 @@ class BrowserCluster:
         Returns:
             每个浏览器的初始化结果（键为浏览器ID），包含 name/id/success/message
         """
-        from ..tools import ks_config as config
+        from ..tools import config
 
         if browser_ids is None:
             browser_ids = getattr(config, 'KUAISHOU_BROWSER_IDS', [])

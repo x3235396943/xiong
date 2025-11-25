@@ -17,7 +17,7 @@ import shutil
 import platform
 from datetime import datetime
 from typing import Optional, Dict, Any
-from ..tools import ks_config as config
+from ..tools import config
 from ..tools import log as logger
 
 class SeleniumBrowser:
@@ -32,7 +32,6 @@ class SeleniumBrowser:
         self.driver = None
         self.id = None
         self.display_name: Optional[str] = None
-        self.IPFinge_browser_url = config.BITBROWSER_URL if hasattr(config, 'BITBROWSER_URL') else ''
         self.headers = {'Content-Type': 'application/json'}
         self.save_dir = save_dir
         # 创建 requests Session 以复用连接，解决连接池满的问题
@@ -71,8 +70,6 @@ class SeleniumBrowser:
             self.chromedriver_path = None
         # 判断是否使用本地浏览器：如果 USE_BITBROWSER 为 False，或者 BITBROWSER_URL 为空，则使用本地浏览器
         use_bitbrowser = getattr(config, 'USE_BITBROWSER', False)
-        has_bitbrowser_url = self.IPFinge_browser_url and self.IPFinge_browser_url.strip() != ''
-        self.use_local_browser = not use_bitbrowser or not has_bitbrowser_url
         # 确保保存目录存在
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
@@ -150,16 +147,6 @@ class SeleniumBrowser:
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             
-            if getattr(config, 'RUN_BROWSER_IN_BACKGROUND', False):
-                chrome_options.add_argument("--disable-background-timer-throttling")
-                chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-                chrome_options.add_argument("--disable-renderer-backgrounding")
-                chrome_options.add_argument("--disable-features=CalculateNativeWinOcclusion")
-                chrome_options.add_argument("--mute-audio")
-                chrome_options.add_argument("--hide-scrollbars")
-                chrome_options.add_argument("--window-size=1280,720")
-                chrome_options.add_argument("--window-position=-2000,0")
-            
             # 尝试创建浏览器实例
             # 优先使用手动指定的路径，其次查找系统已有的，最后尝试自动下载
             driver_created = False
@@ -225,7 +212,6 @@ class SeleniumBrowser:
                 logger.info("="*60 + "\n")
                 raise Exception("无法创建浏览器: 找不到 ChromeDriver。请手动下载并配置 ChromeDriver。")
             
-            self._apply_background_mode()
             return self.driver
         except Exception as e:
             logger.info(f"创建本地浏览器失败: {e}")
@@ -240,120 +226,103 @@ class SeleniumBrowser:
         Returns:
             包含driver和message的字典
         """
-        # 如果IPFinge_browser_url为空，使用本地浏览器
-        if self.use_local_browser:
-            try:
-                # 优先使用传入的proxy，其次使用初始化时的proxy
-                proxy_to_use = proxy if proxy is not None else self.proxy
-                self.driver = self._create_local_browser(proxy=proxy_to_use)
-                return {
-                    'driver': self.driver,
-                    'message': '本地浏览器打开成功'
-                }
-            except Exception as e:
-                logger.info(f"打开本地浏览器失败: {e}")
-                return {
-                    'message': f'打开本地浏览器失败: {e}'
-                }
-        else:
-            # 使用指纹浏览器接口
-            try:
-                # 如果没有传入ID，从get_list获取列表并根据名称匹配
-                browser_id = id
-                if not browser_id:
-                    logger.info("未提供浏览器ID，正在从列表获取浏览器...")
-                    list_result = self.get_list()
-                    browser_list_data = list_result.get('data', [])
-                    
-                    if not browser_list_data or len(browser_list_data) == 0:
-                        return {
-                            'message': '未找到可用的浏览器，请先创建浏览器或提供浏览器ID'
-                        }
-                    
-                    # 获取浏览器列表（可能是嵌套结构）
-                    if isinstance(browser_list_data, dict):
-                        browser_list = browser_list_data.get('list', browser_list_data)
-                    else:
-                        browser_list = browser_list_data
-                    
-                    if not browser_list or len(browser_list) == 0:
-                        return {
-                            'message': '浏览器列表为空，请先创建浏览器或提供浏览器ID'
-                        }
-                    
-                    # 如果配置了浏览器名称列表，根据名称匹配
-                    browser_names = getattr(config, 'BITBROWSER_NAMES', [])
-                    if browser_names and len(browser_names) > 0:
-                        logger.info(f"根据配置的浏览器名称列表查找: {browser_names}")
-                        # 遍历浏览器列表，查找匹配名称的浏览器
-                        for browser in browser_list:
-                            browser_name = browser.get('name', '')
-                            if browser_name in browser_names:
-                                browser_id = browser.get('id') or browser.get('_id')
-                                if browser_id:
-                                    logger.info(f"找到匹配的浏览器: {browser_name}, ID: {browser_id}")
-                                    break
-                        
-                        if not browser_id:
-                            return {
-                                'message': f'未找到匹配的浏览器，配置的名称: {browser_names}'
-                            }
-                    else:
-                        # 如果没有配置名称列表，使用第一个浏览器
-                        first_browser = browser_list[0]
-                        if isinstance(first_browser, dict):
-                            browser_id = first_browser.get('id') or first_browser.get('_id')
-                        else:
-                            browser_id = str(first_browser)
-                        
-                        if not browser_id:
-                            return {
-                                'message': '无法从浏览器列表中获取ID'
-                            }
-                        
-                        logger.info(f"使用列表中的第一个浏览器，ID: {browser_id}")
-                    
-                    self.id = browser_id
+        # 使用指纹浏览器接口
+        try:
+            # 如果没有传入ID，从get_list获取列表并根据名称匹配
+            browser_id = id
+            if not browser_id:
+                logger.info("未提供浏览器ID，正在从列表获取浏览器...")
+                list_result = self.get_list()
+                browser_list_data = list_result.get('data', [])
                 
-                json_data: Dict[str, Any] = {"id": f'{browser_id}'}
-                json_data["args"] = ["--headless"]
-                json_data["queue"] = True
-                json_data["ignoreDefaultUrls"] = True
-                try:
-                    with self.session.post(f"{self.IPFinge_browser_url}/browser/open",
-                                          data=json.dumps(json_data), timeout=10) as resp:
-                        resp.raise_for_status()  # 抛出 HTTP 错误（4xx/5xx）
-                        res = resp.json()
-                except requests.exceptions.RequestException as e:
-                    logger.error(f"打开浏览器请求失败: {e}")
-                    raise
-                if 'msg' in res:
-                    logger.info(f"浏览器ID: {browser_id}, 错误信息: {res['msg']}")
-                    exit(1)
-                driverPath = res['data']['driver']
-                debuggerAddress = res['data']['http']
+                if not browser_list_data or len(browser_list_data) == 0:
+                    return {
+                        'message': '未找到可用的浏览器，请先创建浏览器或提供浏览器ID'
+                    }
+                
+                # 获取浏览器列表（可能是嵌套结构）
+                if isinstance(browser_list_data, dict):
+                    browser_list = browser_list_data.get('list', browser_list_data)
+                else:
+                    browser_list = browser_list_data
+                
+                if not browser_list or len(browser_list) == 0:
+                    return {
+                        'message': '浏览器列表为空，请先创建浏览器或提供浏览器ID'
+                    }
+                
+                # 如果配置了浏览器名称列表，根据名称匹配
+                browser_names = getattr(config, 'BITBROWSER_NAMES', [])
+                if browser_names and len(browser_names) > 0:
+                    logger.info(f"根据配置的浏览器名称列表查找: {browser_names}")
+                    # 遍历浏览器列表，查找匹配名称的浏览器
+                    for browser in browser_list:
+                        browser_name = browser.get('name', '')
+                        if browser_name in browser_names:
+                            browser_id = browser.get('id') or browser.get('_id')
+                            if browser_id:
+                                logger.info(f"找到匹配的浏览器: {browser_name}, ID: {browser_id}")
+                                break
+                    
+                    if not browser_id:
+                        return {
+                            'message': f'未找到匹配的浏览器，配置的名称: {browser_names}'
+                        }
+                else:
+                    # 如果没有配置名称列表，使用第一个浏览器
+                    first_browser = browser_list[0]
+                    if isinstance(first_browser, dict):
+                        browser_id = first_browser.get('id') or first_browser.get('_id')
+                    else:
+                        browser_id = str(first_browser)
+                    
+                    if not browser_id:
+                        return {
+                            'message': '无法从浏览器列表中获取ID'
+                        }
+                    
+                    logger.info(f"使用列表中的第一个浏览器，ID: {browser_id}")
+                
+                self.id = browser_id
+            
+            json_data: Dict[str, Any] = {"id": f'{browser_id}'}
+            json_data["args"] = ["--headless"]
+            json_data["queue"] = True
+            json_data["ignoreDefaultUrls"] = True
+            try:
+                with self.session.post(f"http://127.0.0.1:54345/browser/open",
+                                        data=json.dumps(json_data), timeout=10) as resp:
+                    resp.raise_for_status()  # 抛出 HTTP 错误（4xx/5xx）
+                    res = resp.json()
+            except requests.exceptions.RequestException as e:
+                logger.error(f"打开浏览器请求失败: {e}")
+                raise
+            if 'msg' in res:
+                logger.info(f"浏览器ID: {browser_id}, 错误信息: {res['msg']}")
+                exit(1)
+            driverPath = res['data']['driver']
+            debuggerAddress = res['data']['http']
 
-                # selenium 连接代码
-                chrome_options = webdriver.ChromeOptions()
-                chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
+            # selenium 连接代码
+            chrome_options = webdriver.ChromeOptions()
+            chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
 
-                chrome_service = Service(driverPath)
-                self.driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-                self.id = browser_id  # 保存浏览器ID
-                self._apply_background_mode()
-                return {
-                    'driver': self.driver,
-                    'name': res['data']['name'],
-                    'id': browser_id,
-                    'debuggerAddress': debuggerAddress,
-                    'driverPath': driverPath,
-                    'message': f'打开控制成功，浏览器ID: {browser_id}'
-                }
-            except Exception as e:
-                logger.info(f"打开控制失败: {e}")
-                return {
-                    'message': f'打开控制失败: {e},需求selenium版本到4.0及以上，请升级selenium版本'
-                }
+            chrome_service = Service(driverPath)
+            self.driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+            self.id = browser_id  # 保存浏览器ID
+            return {
+                'driver': self.driver,
+                'name': res['data']['name'],
+                'id': browser_id,
+                'debuggerAddress': debuggerAddress,
+                'driverPath': driverPath,
+                'message': f'打开控制成功，浏览器ID: {browser_id}'
+            }
+        except Exception as e:
+            logger.info(f"打开控制失败: {e}")
+            return {
+                'message': f'打开控制失败: {e},需求selenium版本到4.0及以上，请升级selenium版本'
+            }
 
     def _close_control(self, id=None):
         """
@@ -363,60 +332,30 @@ class SeleniumBrowser:
         Returns:
             包含message的字典
         """
-        # 如果使用本地浏览器，直接关闭driver
-        if self.use_local_browser:
-            try:
-                if self.driver:
-                    self.driver.quit()
-                    self.driver = None
-                    logger.info("本地浏览器已关闭")
-                return {
-                    'message': '本地浏览器关闭成功'
-                }
-            except Exception as e:
-                logger.info(f"关闭本地浏览器失败: {e}")
-                return {
-                    'message': f'关闭本地浏览器失败: {e}'
-                }
-        else:
-            # 使用指纹浏览器接口
-            try:
-                if not id:
-                    return {
-                        'message': '使用指纹浏览器时需要提供浏览器ID'
-                    }
-                
-                json_data = {"id": f'{id}'}
-                try:
-                    with self.session.post(f"{self.IPFinge_browser_url}/browser/close",
-                                          data=json.dumps(json_data), timeout=10) as resp:
-                        resp.raise_for_status()  # 抛出 HTTP 错误（4xx/5xx）
-                        resp.json()  # 读取响应以确保连接关闭
-                except requests.exceptions.RequestException as e:
-                    logger.error(f"关闭浏览器请求失败: {e}")
-                    # 即使请求失败，也返回成功消息，因为可能是浏览器已经关闭
-                return {
-                    'message': '关闭控制成功'
-                }
-            except Exception as e:
-                logger.info(f"关闭控制失败: {e}")
-                return {
-                    'message': f'关闭控制失败: {e}'
-                }
-
-    def _apply_background_mode(self):
-        """将浏览器移动到后台运行（无需置顶窗口）"""
-        if not getattr(config, 'RUN_BROWSER_IN_BACKGROUND', False):
-            return
-        if not self.driver:
-            return
+        # 使用指纹浏览器接口
         try:
-            self.driver.set_window_rect(x=-2000, y=0, width=1280, height=800)
-        except Exception:
+            if not id:
+                return {
+                    'message': '使用指纹浏览器时需要提供浏览器ID'
+                }
+            
+            json_data = {"id": f'{id}'}
             try:
-                self.driver.minimize_window()
-            except Exception:
-                pass
+                with self.session.post(f"http://127.0.0.1:54345/browser/close",
+                                        data=json.dumps(json_data), timeout=10) as resp:
+                    resp.raise_for_status()  # 抛出 HTTP 错误（4xx/5xx）
+                    resp.json()  # 读取响应以确保连接关闭
+            except requests.exceptions.RequestException as e:
+                logger.error(f"关闭浏览器请求失败: {e}")
+                # 即使请求失败，也返回成功消息，因为可能是浏览器已经关闭
+            return {
+                'message': '关闭控制成功'
+            }
+        except Exception as e:
+            logger.info(f"关闭控制失败: {e}")
+            return {
+                'message': f'关闭控制失败: {e}'
+            }
 
     def get_list(self):
         """
@@ -424,17 +363,11 @@ class SeleniumBrowser:
         Returns:
             包含data和message的字典
         """
-        # 如果使用本地浏览器，返回空列表
-        if self.use_local_browser:
-            return {
-                'data': [],
-                'message': '本地浏览器模式，无需获取浏览器列表'
-            }
         
         try:
             json_data = {'page': 0, 'pageSize': 100}
             try:
-                with self.session.post(f"{self.IPFinge_browser_url}/browser/list",
+                with self.session.post(f"http://127.0.0.1:54345/browser/list",
                                       data=json.dumps(json_data), timeout=10) as resp:
                     resp.raise_for_status()  # 抛出 HTTP 错误（4xx/5xx）
                     res = resp.json()
@@ -460,9 +393,6 @@ class SeleniumBrowser:
         Returns:
             匹配的浏览器ID列表，格式: [{'name': '浏览器名', 'id': '浏览器ID'}, ...]
         """
-        if self.use_local_browser:
-            return []
-        
         try:
             # 如果没有传入名称列表，从配置中读取
             if browser_names is None:

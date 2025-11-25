@@ -2,7 +2,7 @@ import time
 import random
 import re
 from selenium.webdriver.common.by import By
-from ..tools import ks_config as config
+from ..tools import config
 from ..tools import log as logger
 from .selenium_common import (
     scroll_page,

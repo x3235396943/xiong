@@ -8,7 +8,7 @@ import sys
 from .selenium_browser import SeleniumBrowser
 from .selenium_kuaisou import *
 from selenium.webdriver.common.by import By
-from ..tools import ks_config
+from ..tools import log
 from .browser_cluster import BrowserCluster, cluster
 from .video_browser import browser_video_loop, browser_video_url_list_loop
 from .video_monitor import start_monitoring, stop_monitoring
@@ -17,6 +17,7 @@ import tempfile
 import os
 import platform
 from ..tools import log as logger
+import ast
 
 # 清理残留进程
 def kill_chrome_processes():
@@ -29,24 +30,28 @@ def kill_chrome_processes():
         os.system("pkill -f chromedriver >/dev/null 2>&1")
 
 # kill_chrome_processes()
+browser_ids = getattr(config, 'BIT_BROWSER_IDS', [])
+if not browser_ids:
+    logger.info(f"未配置浏览器ID")
 
-# 根据 USE_BITBROWSER 配置决定是否使用比特浏览器
 selenium_browser = None
-if config.USE_BITBROWSER and hasattr(config, 'BITBROWSER_URL') and config.BITBROWSER_URL and config.BITBROWSER_URL.strip():
-    browser_names = getattr(config, 'BITBROWSER_NAMES', [])
-    browser_ids = getattr(config, 'BIT_BROWSER_IDS', [])
+if browser_ids:
 
     name_results = {}
     id_results = {}
-    has_targets = bool(browser_names or browser_ids)
-
-    if browser_names:
-        logger.info(f"使用指纹浏览器模式，准备根据名称启动 {len(browser_names)} 个浏览器: {browser_names}")
-        name_results = cluster.init_browsers_by_names(browser_names)
 
     if browser_ids:
         logger.info(f"使用指纹浏览器模式，准备根据ID启动 {len(browser_ids)} 个浏览器: {browser_ids}")
         id_results = cluster.init_browsers_by_ids(browser_ids)
+    else:
+        logger.info("未配置浏览器ID，使用单个浏览器模式")
+        selenium_browser = SeleniumBrowser()
+        result = selenium_browser._open_control()
+        if result.get('message'):
+            logger.info(f"指纹浏览器: {result.get('message')}")
+        if selenium_browser.driver:
+            browser_name = "single_browser_fallback"
+            added = cluster.add_browser(browser_name, selenium_browser, display_name=browser_name)
 
     combined_results = {**name_results, **id_results}
 
@@ -82,70 +87,11 @@ if config.USE_BITBROWSER and hasattr(config, 'BITBROWSER_URL') and config.BITBRO
         if selenium_browser is None:
             logger.warning("没有成功启动的浏览器")
 
-    if selenium_browser is None:
-        reason = "未能通过指纹配置启动浏览器" if has_targets else "未配置浏览器名称或ID，使用单个浏览器模式"
-        logger.warning(f"{reason}，尝试使用单个浏览器模式")
-        selenium_browser = SeleniumBrowser()
-        result = selenium_browser._open_control()
-        if result.get('message'):
-            logger.info(f"指纹浏览器: {result.get('message')}")
-        if selenium_browser.driver:
-            browser_name = "single_browser_fallback" if has_targets else "single_browser_default"
-            added = cluster.add_browser(browser_name, selenium_browser, display_name=browser_name)
-            if added:
-                logger.info(f"已将单个浏览器 '{browser_name}' 添加到集群")
-            else:
-                logger.warning(f"无法将单个浏览器 '{browser_name}' 添加到集群")
-else:
-    # 使用本地浏览器，根据 PROXIES 配置启动多个实例
-    logger.info("使用本地浏览器模式")
-
-    # 优先使用 NETWORK_PROXIES 列表；如果未配置，则回退到单个 NETWORK_PROXY 或无代理
-    proxies_list = getattr(config, 'NETWORK_PROXIES', [])
-    if proxies_list:
-        proxies = proxies_list
-    elif getattr(config, 'NETWORK_PROXY', None):
-        proxies = [config.NETWORK_PROXY]
-    else:
-        proxies = [None]
-
-    successful_browsers = 0
-
-    for index, proxy in enumerate(proxies, start=1):
-        proxy_display = proxy if proxy else '无代理'
-        browser_name = f"local_browser_{index}"
-        logger.info(f"启动本地浏览器 {browser_name}，代理: {proxy_display}")
-
-        browser_instance = SeleniumBrowser(proxy=proxy)
-        result = browser_instance._open_control(None)
-        message = result.get('message')
-        if message:
-            logger.info(f"{browser_name}: {message}")
-
-        if browser_instance.driver:
-            added = cluster.add_browser(browser_name, browser_instance, display_name=browser_name)
-            if added:
-                successful_browsers += 1
-                if selenium_browser is None:
-                    selenium_browser = browser_instance
-            else:
-                logger.warning(f"无法将 {browser_name} 添加到浏览器集群")
-        else:
-            logger.warning(f"浏览器 {browser_name} 启动失败")
-
-    if selenium_browser is None:
-        logger.error("没有成功启动的本地浏览器")
-        exit(1)
-    else:
-        logger.info(f"成功启动 {successful_browsers} 个本地浏览器")
-
-
-
 # 获取主浏览器驱动（用于当前的主流程）
 driver = selenium_browser.driver if selenium_browser and selenium_browser.driver else None
 if not driver:
     logger.error("无法获取浏览器驱动，程序退出")
-    exit(1)
+    sys.exit(1)
 
 # 显示所有已启动的浏览器信息
 logger.info(f"{'='*50}")
@@ -177,8 +123,27 @@ logger.info(f"{'='*50}")
 # ]
 # results = cluster.execute_batch(tasks)
 
+def _parse_keywords(raw_keywords):
+    """将配置中的关键词统一转换为列表"""
+    if isinstance(raw_keywords, list):
+        return [str(kw).strip() for kw in raw_keywords if str(kw).strip()]
+
+    if isinstance(raw_keywords, str):
+        stripped = raw_keywords.strip()
+        if not stripped:
+            return []
+        try:
+            parsed = ast.literal_eval(stripped)
+            if isinstance(parsed, list):
+                return [str(kw).strip() for kw in parsed if str(kw).strip()]
+        except (ValueError, SyntaxError):
+            pass
+        return [kw.strip() for kw in stripped.split(",") if kw.strip()]
+
+    return []
+
 DEFAULT_SEARCH_KEYWORDS = ["御姐", "美女", "性感", "制服", "清纯", "可爱", "性感", "女神", "模特", "丰满"]
-SEARCH_KEYWORDS = config.KEYWORDS if config.KEYWORDS else DEFAULT_SEARCH_KEYWORDS
+SEARCH_KEYWORDS = _parse_keywords(config.KEYWORDS) or DEFAULT_SEARCH_KEYWORDS
 
 # ==================== 主流程循环配置 ====================
 # 主流程执行间隔时间范围（秒）
@@ -202,7 +167,7 @@ follow_count_min = config.FOLLOW_COUNT_MIN
 follow_count_max = config.FOLLOW_COUNT_MAX
 
 # 评论区关键词
-comment_keywords = config.KUAISHOU_COMMENT_KEYWORDS if config.KUAISHOU_COMMENT_KEYWORDS else []
+comment_keywords = config.COMMENT_FILTER_KEYWORDS if config.COMMENT_FILTER_KEYWORDS else []
 
 # 优先关注评论关键词列表
 comment_filter_keywords = config.COMMENT_FILTER_KEYWORDS if config.COMMENT_FILTER_KEYWORDS else []

@@ -35,7 +35,7 @@ from .video_pause_manager import (
     is_need_play
 )
 from ..tools import log as logger
-from ..tools import ks_config as config
+from ..tools import config
 from .browser_cluster import cluster
 
 
