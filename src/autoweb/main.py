@@ -4,10 +4,11 @@ from .tools import verify, config
 from .tools.base import AbstractCrawler
 from .dy import DouyinCrawler
 from .dyShare import DouyinShareCrawler
+from .ks import KuaishouCrawler
 
 
 class CrawlerFactory:
-    CRAWLERS = {"dy": DouyinCrawler, "dys": DouyinShareCrawler}
+    CRAWLERS = {"dy": DouyinCrawler, "dys": DouyinShareCrawler, "ks": KuaishouCrawler}
 
     @staticmethod
     def create_crawler(platform: str) -> AbstractCrawler:
