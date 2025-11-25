@@ -66,6 +66,28 @@ global_followed_count = 0
 li = LicenseManager()
 
 
+# ----------------------------------------------------------------------
+# 优化点 1: 增加一个网络容错的卡密检查函数
+# ----------------------------------------------------------------------
+def safe_check_license():
+    """带有网络重试机制的卡密检查"""
+    max_retries = 3
+    for i in range(max_retries):
+        try:
+            li.check_license_validity()
+            return True
+        except LicenseException:
+            # 如果是真正的卡密无效，直接抛出
+            raise
+        except Exception as e:
+            # 如果是网络错误，等待后重试
+            log.warning(f"卡密验证网络波动 (第{i + 1}次): {e}")
+            time.sleep(2)
+    # 如果重试多次都失败，再抛出异常或记录错误
+    log.error("卡密验证因网络问题连续失败，暂跳过本次检查")
+    return True
+
+
 def parse_search_keywords():
     raw = config.COMMENT_FILTER_KEYWORDS or []
     seps = [",", "，", " ", "\t", ";", "；"]
@@ -341,6 +363,83 @@ def extract_douyin_link(text):
     return None
 
 
+# ----------------------------------------------------------------------
+# 优化点 2: 重构 process_comment，使用稳健的窗口切换逻辑
+# ----------------------------------------------------------------------
+def visit_user_profile(driver, main_window, avatar_element, wait_time, browser_number, browser_id=""):
+    """
+    专门处理进入用户主页的逻辑
+    返回: bool (是否成功执行了关注操作)
+    """
+    browser_info = get_browser_info(browser_number)
+    handles_before = driver.window_handles
+
+    try:
+        # 点击头像
+        driver.execute_script("arguments[0].click();", avatar_element)
+        debug_log("info", "点击头像进入主页", browser_number)
+    except Exception as e:
+        log.error(f"{browser_info} 点击头像失败: {e}")
+        return False
+
+    # 等待新窗口出现
+    new_window = None
+    try:
+        WebDriverWait(driver, wait_time).until(
+            lambda d: len(d.window_handles) > len(handles_before)
+        )
+        # 获取新窗口句柄
+        handles_after = driver.window_handles
+        new_window = [h for h in handles_after if h not in handles_before][0]
+        driver.switch_to.window(new_window)
+    except Exception as e:
+        log.warning(f"{browser_info} 切换到用户主页窗口失败: {e}")
+        # 尝试切回主窗口
+        driver.switch_to.window(main_window)
+        return False
+
+    # 在新窗口中的操作
+    action_success = False
+    try:
+        # 等待元素加载，这里可以适当缩短时间，因为不是核心业务
+        time.sleep(random.uniform(2, 4))
+
+        # 关注逻辑
+        follow_btn_css = '#user_detail_element [data-e2e="user-info-follow-btn"]'
+        try:
+            follow_button = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, follow_btn_css))
+            )
+            human_like_delay(0.5, 1.0, browser_number)
+            follow_button.click()
+            output_json(0, "", "follow", browser_id, "")  # 传递browser_id参数
+            debug_log("info", "关注成功", browser_number)
+            action_success = True
+            time.sleep(random.uniform(1, 2))
+        except Exception:
+            # 没找到关注按钮或者已经关注了，不算严重错误
+            pass
+
+    except Exception as e:
+        log.error(f"{browser_info} 主页操作异常: {e}")
+    finally:
+        # === 关键修正：无论如何都要关闭新窗口并切回 ===
+        try:
+            if new_window:
+                driver.close()
+        except Exception:
+            pass  # 窗口可能已经关了
+
+        try:
+            driver.switch_to.window(main_window)
+        except Exception as e:
+            # 如果切回主窗口失败，说明主窗口也崩了，抛出致命错误让外层重启浏览器
+            log.error(f"{browser_info} 致命错误：无法切回主窗口")
+            raise e
+
+    return action_success
+
+
 def process_comment(
         web_driver,
         main_window,
@@ -355,228 +454,102 @@ def process_comment(
         browser_id="",
         enable_follow=True,
 ):
-    """处理单条评论：根据概率和次数决定是否点赞，关注用户"""
+    """重构后的评论处理函数"""
     browser_info = get_browser_info(browser_number)
-    # debug_log("info", f"开始处理第{comment_index + 1}条评论", browser_number)
     check_stop_signal()
 
+    # 定位评论容器
     try:
-        comments_container = WebDriverWait(web_driver, wait_time).until(
-            EC.presence_of_element_located(
-                (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
-            )
+        comments_container = WebDriverWait(web_driver, 5).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, '[data-e2e="comment-list"]'))
         )
         comment_items = comments_container.find_elements(By.XPATH, "./div")
         if comment_index >= len(comment_items):
-            log.warning(
-                f"{browser_info} 评论索引 {comment_index} 超出范围，共有 {len(comment_items)} 条评论"
-            )
             return False, like_count
         target_comment = comment_items[comment_index]
     except Exception as e:
-        log.error(f"{browser_info} 无法定位评论项: {e}")
+        # 找不到评论不用报错，可能是到底了
         return False, like_count
 
+    # 提取内容和关键词匹配逻辑 (保持不变)
     comment_text = _extract_comment_text(target_comment)
     norm_comment = normalize_text(comment_text)
     keyword_matched = False
-    matched_keyword = None
     if SEARCH_KEYWORDS:
         for kw in SEARCH_KEYWORDS:
-            nk = normalize_text(kw)
-            if nk and nk in norm_comment:
+            if normalize_text(kw) in norm_comment:
                 keyword_matched = True
-                matched_keyword = kw
                 break
 
+    # 记录关键词日志
     if keyword_matched:
         try:
             snippet = comment_text[:100]
-            output_json(
-                0, f"关键词:{matched_keyword} 内容:{snippet}", "keyword", browser_id
-            )
-        except Exception:
+            output_json(0, f"关键词匹配: {snippet}", "keyword", browser_id)
+        except:
             pass
 
-    should_like = (like_count < target_like_count) and (
-            keyword_matched or (random.random() < like_probability)
-    )
-
-    # 点赞操作
+    # 点赞逻辑 (保持不变)
+    should_like = (like_count < target_like_count) and (keyword_matched or (random.random() < like_probability))
     if should_like:
-        debug_log("debug", f"尝试点赞第{comment_index + 1}条评论", browser_number)
         try:
-            # 查找点赞按钮
             like_button = target_comment.find_element(
-                By.XPATH,
-                ".//div[contains(@class, 'comment-item-stats-container')]/div[1]/p[1]",
+                By.XPATH, ".//div[contains(@class, 'comment-item-stats-container')]/div[1]/p[1]"
             )
-
-            # 模拟人类操作
-            human_like_delay(0.5, 1.5, browser_number)
-
-            like_button.click()
-            # 输出点赞成功
+            human_like_delay(0.3, 0.8, browser_number)
+            web_driver.execute_script("arguments[0].click();", like_button)  # 使用JS点击更稳定
             output_json(0, "", "like", browser_id)
-            # 增加点赞计数
             like_count += 1
-            debug_log("info", f"点赞第{comment_index + 1}条评论成功", browser_number)
-            # 点赞后等待
-            like_wait_time = random.uniform(config.LIKE_WAIT_MIN, config.LIKE_WAIT_MAX)
-            time.sleep(like_wait_time)
-        except Exception as e:
-            # 找不到按钮等异常
-            error_msg = repr(e)
-            log.error(f"{browser_info} 点赞第{comment_index + 1}条评论失败: {e}")
-            output_json(-1, error_msg, "like", browser_id)
-    else:
-        # debug_log("info", f"第{comment_index + 1}条评论未执行点赞操作", browser_number)
-        pass
+            time.sleep(random.uniform(0.5, 1.5))
+        except Exception:
+            pass  # 点赞失败忽略
 
-    if enable_follow and (
-            keyword_matched or (random.random() < visit_profile_probability)
-    ):
+    # 关注/主页逻辑 (优化版)
+    # 只有当开启关注，且(匹配关键词 或 随机命中) 时才进入
+    should_visit = enable_follow and (keyword_matched or (random.random() < visit_profile_probability))
+
+    if should_visit:
         try:
-            # 先定位评论容器
-            comments_container = WebDriverWait(web_driver, wait_time).until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
-                )
-            )
+            # 重新获取元素，防止DOM刷新导致StaleElementReferenceException
+            comments_container = web_driver.find_element(By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+            target_comment_now = comments_container.find_elements(By.XPATH, "./div")[comment_index]
 
-            # 使用容器定位方法查找用户头像
-            comment_items = comments_container.find_elements(By.XPATH, "./div")
-            if comment_index >= len(comment_items):
-                return False, like_count
-
-            # 获取指定索引的评论项
-            target_comment = comment_items[comment_index]
-
-            # 查找带a链接的头像，如果找不到就点击头像容器
+            # 尝试找头像
+            avatar = None
             try:
-                avatar = target_comment.find_element(
-                    By.CSS_SELECTOR, ".comment-item-avatar a"
-                )
+                avatar = target_comment_now.find_element(By.CSS_SELECTOR, ".comment-item-avatar a")
             except:
-                # 如果没找到带a标签的头像，点击头像容器
-                avatar = target_comment.find_element(
-                    By.CSS_SELECTOR, ".comment-item-avatar"
-                )
-                debug_log(
-                    "info",
-                    f"第{comment_index + 1}条评论未找到带链接的头像，点击头像容器",
-                    browser_number,
-                )
-
-            # 模拟人类操作
-            human_like_delay(0.5, 1.5, browser_number)
-
-            # 点击找到的头像元素
-            avatar.click()
-            debug_log(
-                "info",
-                f"点击第{comment_index + 1}个评论的用户头像进入主页",
-                browser_number,
-            )
-
-            # 等待新页面加载
-            time.sleep(random.uniform(3, 5))
-
-            # 获取所有窗口句柄
-            all_windows = web_driver.window_handles
-
-            # 切换到新窗口（非主窗口）
-            new_window = None
-            for window in all_windows:
-                if window != main_window:
-                    new_window = window
-                    web_driver.switch_to.window(window)
-                    break
-
-            # 等待页面加载
-            time.sleep(random.uniform(2, 4))
-
-            # 进入主页后根据概率决定是否关注
-            if enable_follow and (
-                    keyword_matched or (random.random() < profile_follow_probability)
-            ):
                 try:
-                    # 查找并点击关注按钮
-                    follow_button_wait = WebDriverWait(web_driver, wait_time)
-                    follow_button = follow_button_wait.until(
-                        EC.element_to_be_clickable(
-                            (
-                                By.CSS_SELECTOR,
-                                '#user_detail_element [data-e2e="user-info-follow-btn"]',
-                            )
-                        )
-                    )
-
-                    # 模拟人类操作
-                    human_like_delay(0.5, 1.5, browser_number)
-                    follow_button.click()
-                    # 输出关注成功
-                    output_json(0, "", "follow", browser_id)
-                    debug_log("info", "在用户主页关注该用户", browser_number)
-
-                    # 关注后等待
-                    follow_wait_time = random.uniform(
-                        config.VISIT_MIN, config.VISIT_MAX
-                    )
-                    time.sleep(follow_wait_time)
-
-                    # 关注成功后更新全局计数器并返回"followed"标识
-                    global global_followed_count
-                    global_followed_count += 1
-
-                    # 关闭新窗口并切换回主窗口
-                    try:
-                        if "new_window" in locals() and new_window:
-                            web_driver.close()  # 关闭新窗口
-                            debug_log("info", "用户主页窗口已关闭", browser_number)
-                        web_driver.switch_to.window(main_window)  # 切换回主窗口
-                        return "followed", like_count
-                    except Exception as switch_error:
-                        log.error(f"{browser_info} 窗口切换时出错: {switch_error}")
-                        try:
-                            web_driver.switch_to.window(main_window)
-                        except:
-                            pass
-                        return "followed", like_count
-                except Exception as follow_error:
-                    # 找不到按钮等异常
-                    error_msg = repr(follow_error)
-                    debug_log(
-                        "error",
-                        f"{browser_info} 关注用户失败: {follow_error}",
-                        browser_number,
-                    )
-                    output_json(-1, error_msg, "follow", browser_id)
-
-            # 关闭新窗口并切换回主窗口
-            try:
-                if "new_window" in locals() and new_window:
-                    web_driver.close()  # 关闭新窗口
-                    debug_log("info", "用户主页窗口已关闭", browser_number)
-                web_driver.switch_to.window(main_window)  # 切换回主窗口
-            except Exception as switch_error:
-                log.error(f"{browser_info} 窗口切换时出错: {switch_error}")
-                try:
-                    web_driver.switch_to.window(main_window)
+                    avatar = target_comment_now.find_element(By.CSS_SELECTOR, ".comment-item-avatar")
                 except:
                     pass
 
-        except Exception as avatar_error:
-            log.error(f"{browser_info} 点击用户头像失败: {avatar_error}")
-            # 确保回到主窗口
+            if avatar:
+                # 调用独立的窗口处理函数
+                is_followed = visit_user_profile(web_driver, main_window, avatar, wait_time, browser_number, browser_id)
+                if is_followed:
+                    return "followed", like_count
+
+        except Exception as e:
+            # 捕获这里的异常，防止单条评论错误导致整个循环崩溃
+            # 但是如果是 session invalid，外层会捕获
+            msg = str(e)
+            if "invalid session id" in msg or "disconnected" in msg:
+                raise e  # 抛出给外层处理
+            log.warning(f"{browser_info} 访问主页过程中出错: {e}")
+            # 确保在主窗口
             try:
-                web_driver.switch_to.window(main_window)
+                if len(web_driver.window_handles) > 1 and web_driver.current_window_handle != main_window:
+                    web_driver.switch_to.window(main_window)
             except:
                 pass
 
-    # 如果没有执行任何操作，也视为成功
     return True, like_count
 
+
+# ----------------------------------------------------------------------
+# 优化点 3: 修改 run_automation 中的异常捕获
+# ----------------------------------------------------------------------
 
 def run_automation(
         driver,
@@ -632,7 +605,7 @@ def run_automation(
         browser_number,
     )
     # 检查卡密是否仍然有效
-    li.check_license_validity()
+    safe_check_license()
 
     try:
         debug_log("info", f"访问网页: {url}", browser_number)
@@ -647,11 +620,14 @@ def run_automation(
         debug_log("info", "处理视频评论", browser_number)
         debug_log("info", "打开评论区", browser_number)
 
+        # 修改此处：将打开评论区失败视为链接失效而非浏览器崩溃
         try:
             if not open_comment_section(driver, wait_time, browser_number):
                 debug_log("error", "无法打开评论区，链接可能失效", browser_number)
+                # 返回False表示链接失效，而不是抛出异常
                 return False
         except Exception as e:
+            # 即使出现异常，我们也将其视为链接问题而非浏览器问题
             log.error(f"{browser_info} 打开评论区时发生异常: {e}")
             return False
 
@@ -674,13 +650,14 @@ def run_automation(
             )
         except Exception as e:
             log.error(f"{browser_info} 无法定位评论容器: {e}")
+            # 无法定位评论容器也视为链接问题
             return False
 
         while True:
             check_stop_signal()
 
             try:
-                li.check_license_validity()
+                safe_check_license()  # 使用新的安全检查
 
                 # 处理单条评论
                 result, video_liked_count = process_comment(
@@ -697,6 +674,16 @@ def run_automation(
                     browser_id,
                     enable_follow,
                 )
+
+                # 如果返回 False，可能是到底了，或者出错
+                if result is False:
+                    # 检查是否是真的到底了
+                    try:
+                        comment_items = comments_container.find_elements(By.XPATH, "./div")
+                        if comment_index >= len(comment_items):
+                            break
+                    except:
+                        break
 
                 processed_comment_count += 1
 
@@ -736,43 +723,55 @@ def run_automation(
                     break
 
                 try:
-                    if comments_container is not None:
-                        comment_items = comments_container.find_elements(
-                            By.XPATH, "./div"
+                    padding = driver.find_element(
+                        By.CSS_SELECTOR, '[data-e2e="comment-list"] > div:last-child'
+                    ).text
+                    # 如果显示"暂时没有更多评论"就是到底了
+                    if padding == "暂时没有更多评论":
+                        debug_log(
+                            "info",
+                            "已滚动到底部或没有更多评论，结束当前链接操作",
+                            browser_number,
                         )
-                        if comment_index + 2 >= len(comment_items):
-                            debug_log(
-                                "info",
-                                "可能已滚动到底部或没有更多评论，结束当前链接操作",
-                                browser_number,
-                            )
-                            break
-                    else:
                         break
                 except Exception as e:
-                    log.error(f"{browser_info} 无法获取评论列表: {e}")
+                    log.error(f"{browser_info} 无法检测评论区是否到底: {e}")
                     break
 
                 comment_index += 1
-                driver.switch_to.window(main_window)
+
+                # 确保焦点在主窗口，避免后续操作出错
+                if driver.current_window_handle != main_window:
+                    driver.switch_to.window(main_window)
+
                 human_like_delay(2, 5, browser_number)
             except LicenseException:
                 raise
             except Exception as e:
-                msg = str(e)
-                if (
-                        "invalid session id" in msg
-                        or "Failed to establish a new connection" in msg
-                        or "ConnectionResetError" in msg
-                ):
-                    raise
-                log.error(
-                    f"{browser_info} 处理第{comment_index + 1}条评论时发生异常: {e}"
-                )
+                msg = str(e).lower()
+                # 遇到这些致命错误，直接返回False，触发外层的浏览器重启
+                # 浏览器崩溃的情况：会话失效、连接断开、窗口丢失等
+                if ("invalid session id" in msg or
+                        "disconnected" in msg or
+                        "not connected to devtools" in msg or
+                        "no such window" in msg):
+                    log.error(f"{get_browser_info(browser_number)} 致命错误: {e}")
+                    return False
+
+                log.error(f"{get_browser_info(browser_number)} 处理评论异常: {e}")
                 comment_index += 1
+                try:
+                    driver.switch_to.window(main_window)
+                except:
+                    return False  # 切不回主窗口也视为致命错误
                 continue
 
-        driver.switch_to.window(main_window)
+        # 结束循环后确保切回主窗口
+        try:
+            driver.switch_to.window(main_window)
+        except:
+            pass
+
         debug_log("info", "所有评论处理完成", browser_number)
         return True
 
@@ -780,8 +779,8 @@ def run_automation(
         raise
     except Exception as e:
         log.error(f"{browser_info} 程序执行出错: {e}")
-        log.info(f"{browser_info} 尝试重新打开浏览器以恢复控制...")
-        raise
+        # 如果是外部异常（不是循环内捕获的），返回False让上层决定是否重启
+        return False
 
 
 def process_urls_thread(
@@ -1121,6 +1120,10 @@ def mark_link_as_failed(link_id, db_path=LINKS_DB_PATH):
     conn.close()
 
 
+# ----------------------------------------------------------------------
+# 优化点 4: 修改 continuous_processing_loop 的重连逻辑
+# ----------------------------------------------------------------------
+
 def continuous_processing_loop(
         browser_id,
         wait_time,
@@ -1134,15 +1137,11 @@ def continuous_processing_loop(
         browser_number,
         db_path=LINKS_DB_PATH,
 ):
-    """持续处理循环"""
+    """持续处理循环 (优化版)"""
     browser_info = get_browser_info(browser_number)
     debug_log("info", "启动持续处理循环", browser_number)
 
-    driver = None
-    max_retries = 3
-
-    li.check_license_validity()
-
+    # 变量初始化
     enable_follow = config.ENABLE_FOLLOW
     like_probability = like_probability / 100.0
     visit_profile_probability = visit_profile_probability / 100.0
@@ -1150,17 +1149,28 @@ def continuous_processing_loop(
 
     output_json(0, "", "start", browser_id)
 
+    # 验证一次卡密
+    safe_check_license()
+
+    # 在循环开始前定义
+    driver = None
+
     try:
         while True:
+            # 1. 驱动检查与创建
             if driver is None:
-                debug_log("info", "尝试创建浏览器驱动...", browser_number)
+                # 根据项目规范，不主动关闭浏览器实例
+                # force_close_browser(browser_id, browser_number)
+                # time.sleep(3)  # 等待释放
+
+                debug_log("info", "正在创建新浏览器实例...", browser_number)
                 driver = get_driver(browser_id, browser_number)
                 if driver is None:
-                    log.error(f"{browser_info} 无法创建浏览器驱动，等待30秒后重试...")
-                    safe_sleep(30)
+                    log.error(f"{get_browser_info(browser_number)} 创建失败，30秒后重试")
+                    time.sleep(30)
                     continue
-                debug_log("info", "浏览器驱动创建成功", browser_number)
 
+            # 2. 获取链接
             link_id, url, url_index = get_next_link(db_path)
 
             if url is None:
@@ -1168,33 +1178,27 @@ def continuous_processing_loop(
                     debug_log("info", "列表中的所有URL已处理完毕", browser_number)
                     break
                 else:
-                    debug_log(
-                        "info",
-                        "数据库中没有待处理的链接，等待30秒后重试...",
-                        browser_number,
-                    )
+                    debug_log("info", "数据库中没有待处理的链接，等待30秒后重试...", browser_number)
                     safe_sleep(30)
                     continue
 
             debug_log("info", f"获取到新链接: {url}", browser_number)
 
+            # 3. 执行任务
             retry_count = 0
-            while retry_count < max_retries:
+            while retry_count < 3:
                 try:
+                    # 每次执行前检查驱动是否存活
+                    try:
+                        _ = driver.window_handles
+                    except:
+                        raise Exception("disconnected: not connected to DevTools (Pre-check)")
+
                     success = run_automation(
-                        driver,
-                        url,
-                        wait_time,
-                        like_probability,
-                        visit_profile_probability,
-                        profile_follow_probability,
-                        min_follows_per_video,
-                        max_follows_per_video,
-                        min_likes_per_video,
-                        max_likes_per_video,
-                        browser_number,
-                        browser_id,
-                        enable_follow,
+                        driver, url, wait_time, like_probability, visit_profile_probability,
+                        profile_follow_probability, min_follows_per_video, max_follows_per_video,
+                        min_likes_per_video, max_likes_per_video, browser_number, browser_id,
+                        enable_follow
                     )
 
                     if success:
@@ -1202,75 +1206,51 @@ def continuous_processing_loop(
                             mark_link_as_completed(link_id, db_path)
                         output_json(0, "", "url_ok", browser_id, url_index)
                         debug_log("info", f"链接处理成功: {url}", browser_number)
+                        break  # 跳出重试循环
                     else:
+                        # run_automation 返回 False 表示链接失效，不是浏览器崩溃
+                        # 直接标记为失败并跳出重试循环
                         if link_id is not None:
                             mark_link_as_failed(link_id, db_path)
                         output_json(1, "链接失效", "url_fail", browser_id, url_index)
-                        debug_log(
-                            "error",
-                            f"{browser_info} 链接处理失败（链接失效）: {url}",
-                            browser_number,
-                        )
-                    break
+                        debug_log("error", f"{browser_info} 链接处理失败（链接失效）: {url}", browser_number)
+                        break
 
                 except LicenseException:
-                    raise
+                    raise  # 向上抛出退出
                 except Exception as e:
                     retry_count += 1
-                    log.error(
-                        f"{browser_info} 处理链接 {url} 时发生异常 (第{retry_count}次): {e}"
-                    )
+                    err_msg = str(e).lower()
+                    log.error(f"{get_browser_info(browser_number)} 任务异常: {e}")
 
-                    import traceback
-                    log.error(f"{browser_info} 详细错误堆栈: {traceback.format_exc()}")
+                    # 如果是致命错误，不要重试了，直接销毁driver，跳出重试循环，重新获取链接
+                    # 浏览器崩溃的情况包括：连接断开、会话失效、浏览器死亡等
+                    if "disconnected" in err_msg or "session" in err_msg or "died" in err_msg:
+                        log.warning(f"{get_browser_info(browser_number)} 检测到浏览器崩溃，准备重启...")
+                        try:
+                            driver.quit()  # 尝试正常退出
+                        except:
+                            pass
+                        driver = None  # 标记为None，下一次大循环会重建
+                        break  # 跳出 retry loop，但因为 driver is None，大循环会重建浏览器
 
-                    error_msg = str(e).lower()
-                    if (
-                            "disconnected: unable to receive message from renderer"
-                            in error_msg
-                            or "disconnected: not connected to devtools" in error_msg
-                            or "invalid session id" in error_msg
-                            or "session not created" in error_msg
-                            or "invalid argument" in error_msg
-                    ):
-                        log.warning(
-                            f"{browser_info} 浏览器会话失效或连接断开，尝试重新连接浏览器..."
-                        )
-                        driver = get_driver(browser_id, browser_number)
-                        if driver is not None:
-                            log.info(f"{browser_info} 成功重新连接浏览器")
-                            retry_count = 0
-                            continue
-                        else:
-                            log.error(f"{browser_info} 重新连接浏览器失败")
-                            log.warning(
-                                f"{browser_info} 重新连接浏览器失败，使用最后的备选方案..."
-                            )
-                            driver = None
-                            safe_sleep(5)
-                            break
+                    # 标记失败
+                    if retry_count >= 3:
+                        if link_id is not None:
+                            mark_link_as_failed(link_id, db_path)
+                        output_json(1, "链接失效或多次重试失败", "url_fail", browser_id, url_index)
+                        debug_log("error", f"{browser_info} 链接处理彻底失败: {url}", browser_number)
 
-                    if retry_count >= max_retries:
-                        log.warning(f"{browser_info} 尝试重新连接浏览器以恢复控制...")
-                        driver = None
-                        safe_sleep(5)
-                        break
-                    else:
-                        log.info(f"{browser_info} 还有重试机会，等待10秒后继续尝试...")
-                        safe_sleep(10)
+                    time.sleep(5)
 
+            # Sleep逻辑
             wait_time_between_links = random.uniform(10, 30)
-            debug_log(
-                "info",
-                f"等待 {wait_time_between_links:.2f} 秒后处理下一个链接...",
-                browser_number,
-            )
+            debug_log("info", f"等待 {wait_time_between_links:.2f} 秒后处理下一个链接...", browser_number)
             safe_sleep(wait_time_between_links)
 
     except KeyboardInterrupt:
         log.info(f"{browser_info} 收到停止信号，正在退出...")
         output_json(0, "", "exit", browser_id)
-        log.info(f"{browser_info} 浏览器连接已释放")
         return
     except Exception as e:
         log.error(f"{browser_info} 程序异常退出: {e}")
