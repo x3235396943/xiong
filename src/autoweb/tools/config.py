@@ -101,12 +101,16 @@ class KuSettings(Base):
     def validate_min_max_pairs(cls, v, info):
         # 验证关注和点赞的最小最大值对
         field_name = info.field_name
-        if field_name == "MAX_FOLLOWS_PER_VIDEO":
+        if field_name == "MAX_FOLLOWS_PER_VIDEO" and hasattr(
+            cls, "MIN_FOLLOWS_PER_VIDEO"
+        ):
             if v < cls.MIN_FOLLOWS_PER_VIDEO:
                 raise ValueError(
                     f"MAX_FOLLOWS_PER_VIDEO ({v}) must be greater than or equal to MIN_FOLLOWS_PER_VIDEO ({cls.MIN_FOLLOWS_PER_VIDEO})"
                 )
-        elif field_name == "COMMENT_LIKE_COUNT_MAX":
+        elif field_name == "COMMENT_LIKE_COUNT_MAX" and hasattr(
+            cls, "COMMENT_LIKE_COUNT_MIN"
+        ):
             if v < cls.COMMENT_LIKE_COUNT_MIN:
                 raise ValueError(
                     f"COMMENT_LIKE_COUNT_MAX ({v}) must be greater than or equal to COMMENT_LIKE_COUNT_MIN ({cls.COMMENT_LIKE_COUNT_MIN})"
