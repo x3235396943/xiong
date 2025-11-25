@@ -18,13 +18,14 @@ class KuSettings(Base):
     VISIT_ENABLE: int = 10  # 进入主页的概率 (0-100)
     PROFILE_FOLLOW_PROBABILITY: int = 10  # 进入主页后关注的概率 (0-100)
     ENABLE_FOLLOW: bool = True  # 是否启用关注功能
+    ENABLE_PROFILE_VISIT: bool = True  # 是否启用进入主页功能
     ENABLE_LIKE: bool = False  # 是否启用点赞功能
     ENABLE_SEARCH_KEYWORDS: bool = False  # 是否启用搜索关键字功能
     ENABLE_COMMENT_REPLY: bool = False  # 是否启用评论回复功能
     ENABLE_VIDEO_COMMENT: bool = False  # 是否启用视频留言功能
     ENABLE_COMMENT_TEMPLATES: bool = False  # 是否启用评论话术功能
-    COMMENT_REPLIES: str  # 回复评论的内容
-    VIDEO_COMMENTS: str  # 视频留言的内容
+    COMMENT_REPLIES: str = ""  # 回复评论的内容
+    VIDEO_COMMENTS: str = ""  # 视频留言的内容
     COMMENT_FILTER_KEYWORDS: list = []  # 筛选评论区关键字
 
     # 新增的概率参数
@@ -72,14 +73,14 @@ class KuSettings(Base):
         # 验证关注和点赞的最小最大值对
         field_name = info.field_name
         if field_name == "MAX_FOLLOWS_PER_VIDEO":
-            if v < cls.MIN_FOLLOWS_PER_VIDEO:
+            if v < cls.model_fields['MIN_FOLLOWS_PER_VIDEO'].default:
                 raise ValueError(
-                    f"MAX_FOLLOWS_PER_VIDEO ({v}) must be greater than or equal to MIN_FOLLOWS_PER_VIDEO ({cls.MIN_FOLLOWS_PER_VIDEO})"
+                    f"MAX_FOLLOWS_PER_VIDEO ({v}) must be greater than or equal to MIN_FOLLOWS_PER_VIDEO ({cls.model_fields['MIN_FOLLOWS_PER_VIDEO'].default})"
                 )
         elif field_name == "COMMENT_LIKE_COUNT_MAX":
-            if v < cls.COMMENT_LIKE_COUNT_MIN:
+            if v < cls.model_fields['COMMENT_LIKE_COUNT_MIN'].default:
                 raise ValueError(
-                    f"COMMENT_LIKE_COUNT_MAX ({v}) must be greater than or equal to COMMENT_LIKE_COUNT_MIN ({cls.COMMENT_LIKE_COUNT_MIN})"
+                    f"COMMENT_LIKE_COUNT_MAX ({v}) must be greater than or equal to COMMENT_LIKE_COUNT_MIN ({cls.model_fields['COMMENT_LIKE_COUNT_MIN'].default})"
                 )
         return v
 

@@ -29,6 +29,7 @@ import json
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
 from selenium.webdriver.support.ui import WebDriverWait
@@ -113,7 +114,37 @@ def parse_search_keywords():
     return kws
 
 
+def parse_comment_replies():
+    """解析评论回复内容列表"""
+    raw = getattr(config, 'COMMENT_REPLIES', '') or ''
+    if not raw:
+        return []
+    
+    seps = [",", "，", " ", "\t", ";", "；"]
+    replies = []
+    
+    if isinstance(raw, str):
+        s = raw.strip()
+        try:
+            data = json.loads(s)
+            if isinstance(data, list):
+                replies = [str(x).strip() for x in data if str(x).strip()]
+            else:
+                replies = [s] if s else []
+        except Exception:
+            # 不是JSON，按分隔符分割
+            base = s
+            for sep in seps:
+                base = base.replace(sep, ",")
+            replies = [x.strip() for x in base.split(",") if x.strip()]
+    elif isinstance(raw, list):
+        replies = [str(x).strip() for x in raw if str(x).strip()]
+    
+    return replies if replies else []
+
+
 SEARCH_KEYWORDS = parse_search_keywords()
+COMMENT_REPLIES = parse_comment_replies()
 
 
 def normalize_text(t):
@@ -145,7 +176,7 @@ def _extract_comment_text(element):
         return ""
 
 
-def output_json(code, msg="", data_type="", browser_id="", url_index=None):
+def output_json(code, msg="", data_type="", browser_id="", url_index=None, comment_reply=None, keywords=None):
     """
     输出JSON格式的操作结果
 
@@ -155,6 +186,8 @@ def output_json(code, msg="", data_type="", browser_id="", url_index=None):
         data_type: 操作类型 start|exit|like|follow|video|url_ok|url_fail
         browser_id: 浏览器ID
         url_index: URL在数据库中的索引（从0开始）
+        comment_reply: 评论回复内容
+        keywords: 关键词匹配信息
     """
     result = {"code": code, "data": {"type": data_type, "id": browser_id}}
     # 只在有错误信息时添加msg字段
@@ -164,6 +197,14 @@ def output_json(code, msg="", data_type="", browser_id="", url_index=None):
     # 如果提供了url_index，添加到结果中
     if url_index is not None:
         result["urlIndex"] = url_index
+
+    # 如果提供了comment_reply，添加到结果中
+    if comment_reply is not None:
+        result["comment_reply"] = comment_reply
+
+    # 如果提供了keywords，添加到结果中
+    if keywords is not None:
+        result["keywords"] = keywords
 
     # 输出JSON
     print(json.dumps(result, ensure_ascii=False))
@@ -366,7 +407,7 @@ def extract_douyin_link(text):
 # ----------------------------------------------------------------------
 # 优化点 2: 重构 process_comment，使用稳健的窗口切换逻辑
 # ----------------------------------------------------------------------
-def visit_user_profile(driver, main_window, avatar_element, wait_time, browser_number, browser_id=""):
+def visit_user_profile(driver, main_window, avatar_element, wait_time, browser_number, browser_id="", profile_follow_probability=0.5):
     """
     专门处理进入用户主页的逻辑
     返回: bool (是否成功执行了关注操作)
@@ -404,21 +445,24 @@ def visit_user_profile(driver, main_window, avatar_element, wait_time, browser_n
         # 等待元素加载，这里可以适当缩短时间，因为不是核心业务
         time.sleep(random.uniform(2, 4))
 
-        # 关注逻辑
-        follow_btn_css = '#user_detail_element [data-e2e="user-info-follow-btn"]'
-        try:
-            follow_button = WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, follow_btn_css))
-            )
-            human_like_delay(0.5, 1.0, browser_number)
-            follow_button.click()
-            output_json(0, "", "follow", browser_id, "")  # 传递browser_id参数
-            debug_log("info", "关注成功", browser_number)
-            action_success = True
-            time.sleep(random.uniform(1, 2))
-        except Exception:
-            # 没找到关注按钮或者已经关注了，不算严重错误
-            pass
+        # 关注逻辑 - 根据概率决定是否关注
+        if random.random() < profile_follow_probability:
+            follow_btn_css = '#user_detail_element [data-e2e="user-info-follow-btn"]'
+            try:
+                follow_button = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, follow_btn_css))
+                )
+                human_like_delay(0.5, 1.0, browser_number)
+                follow_button.click()
+                output_json(0, "", "follow", browser_id, "")  # 传递browser_id参数
+                debug_log("info", "关注成功", browser_number)
+                action_success = True
+                time.sleep(random.uniform(1, 2))
+            except Exception:
+                # 没找到关注按钮或者已经关注了，不算严重错误
+                pass
+        else:
+            debug_log("info", f"根据概率设置 ({profile_follow_probability:.1%})，跳过关注操作", browser_number)
 
     except Exception as e:
         log.error(f"{browser_info} 主页操作异常: {e}")
@@ -440,6 +484,58 @@ def visit_user_profile(driver, main_window, avatar_element, wait_time, browser_n
     return action_success
 
 
+def reply_to_comment(web_driver, target_comment, reply_text, browser_number=None, browser_id=""):
+    """
+    回复指定评论
+    
+    Args:
+        web_driver: WebDriver实例
+        target_comment: 目标评论元素
+        reply_text: 回复内容
+        browser_number: 浏览器编号
+        browser_id: 浏览器ID
+        
+    Returns:
+        bool: 是否成功回复
+    """
+    browser_info = get_browser_info(browser_number)
+    try:
+        # 查找评论的回复按钮
+        reply_button = target_comment.find_element(
+            By.CSS_SELECTOR,
+            'div:nth-child(2) > div > div:nth-child(4) > div > div:nth-child(3) > div'
+        )
+        
+        # 点击回复按钮
+        web_driver.execute_script("arguments[0].click();", reply_button)
+        time.sleep(0.5)  # 等待回复框出现
+        
+        # 输入回复文本
+        ActionChains(web_driver).send_keys(reply_text).perform()
+        time.sleep(0.5)
+        
+        # 尝试点击发送按钮
+        try:
+            send_button = web_driver.find_element(
+                By.CSS_SELECTOR,
+                '[data-e2e="comment-post"]'
+            )
+            web_driver.execute_script("arguments[0].click();", send_button)
+            debug_log("info", f"成功回复评论: {reply_text[:20]}...", browser_number)
+            time.sleep(1)  # 等待发送完成
+            return True
+        except:
+            # 如果找不到发送按钮，尝试按回车键
+            ActionChains(web_driver).send_keys(Keys.RETURN).perform()
+            debug_log("info", f"通过回车键发送回复: {reply_text[:20]}...", browser_number)
+            time.sleep(1)
+            return True
+            
+    except Exception as e:
+        log.warning(f"{browser_info} 回复评论失败: {e}")
+        return False
+
+
 def process_comment(
         web_driver,
         main_window,
@@ -453,6 +549,13 @@ def process_comment(
         browser_number=None,
         browser_id="",
         enable_follow=True,
+        enable_profile_visit=True,
+        enable_like=True,
+        enable_search_keywords=False,
+        enable_comment_reply=False,
+        comment_reply_probability=0.05,
+        comment_wait_min=12,
+        comment_wait_max=12,
 ):
     """重构后的评论处理函数"""
     browser_info = get_browser_info(browser_number)
@@ -475,7 +578,7 @@ def process_comment(
     comment_text = _extract_comment_text(target_comment)
     norm_comment = normalize_text(comment_text)
     keyword_matched = False
-    if SEARCH_KEYWORDS:
+    if enable_search_keywords and SEARCH_KEYWORDS:
         for kw in SEARCH_KEYWORDS:
             if normalize_text(kw) in norm_comment:
                 keyword_matched = True
@@ -485,12 +588,12 @@ def process_comment(
     if keyword_matched:
         try:
             snippet = comment_text[:100]
-            output_json(0, f"关键词匹配: {snippet}", "keyword", browser_id)
+            output_json(0, "", "search_keywords", browser_id, keywords=f"关键词匹配: {snippet}")
         except:
             pass
 
     # 点赞逻辑 (保持不变)
-    should_like = (like_count < target_like_count) and (keyword_matched or (random.random() < like_probability))
+    should_like = enable_like and (like_count < target_like_count) and (keyword_matched or (random.random() < like_probability))
     if should_like:
         try:
             like_button = target_comment.find_element(
@@ -505,8 +608,8 @@ def process_comment(
             pass  # 点赞失败忽略
 
     # 关注/主页逻辑 (优化版)
-    # 只有当开启关注，且(匹配关键词 或 随机命中) 时才进入
-    should_visit = enable_follow and (keyword_matched or (random.random() < visit_profile_probability))
+    # 只有当开启关注、开启主页访问，且(匹配关键词 或 随机命中) 时才进入
+    should_visit = enable_follow and enable_profile_visit and (keyword_matched or (random.random() < visit_profile_probability))
 
     if should_visit:
         try:
@@ -526,7 +629,7 @@ def process_comment(
 
             if avatar:
                 # 调用独立的窗口处理函数
-                is_followed = visit_user_profile(web_driver, main_window, avatar, wait_time, browser_number, browser_id)
+                is_followed = visit_user_profile(web_driver, main_window, avatar, wait_time, browser_number, browser_id, profile_follow_probability)
                 if is_followed:
                     return "followed", like_count
 
@@ -537,6 +640,38 @@ def process_comment(
             if "invalid session id" in msg or "disconnected" in msg:
                 raise e  # 抛出给外层处理
             log.warning(f"{browser_info} 访问主页过程中出错: {e}")
+            # 确保在主窗口
+            try:
+                if len(web_driver.window_handles) > 1 and web_driver.current_window_handle != main_window:
+                    web_driver.switch_to.window(main_window)
+            except:
+                pass
+
+    # 评论回复逻辑
+    if enable_comment_reply and COMMENT_REPLIES and random.random() < comment_reply_probability:
+        try:
+            # 等待一段时间再回复
+            wait_time_before_reply = random.uniform(comment_wait_min, comment_wait_max)
+            safe_sleep(wait_time_before_reply)
+            
+            # 重新获取元素，防止DOM刷新导致StaleElementReferenceException
+            comments_container = web_driver.find_element(By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+            target_comment_now = comments_container.find_elements(By.XPATH, "./div")[comment_index]
+            
+            # 从回复内容列表中随机选择一条回复
+            reply_content = random.choice(COMMENT_REPLIES)
+            
+            # 执行回复
+            reply_success = reply_to_comment(web_driver, target_comment_now, reply_content, browser_number, browser_id)
+            if reply_success:
+                # 修改输出格式
+                output_json(0, "", "comment", browser_id, comment_reply=reply_content)
+                debug_log("info", f"成功回复评论，内容: {reply_content[:30]}...", browser_number)
+        except Exception as e:
+            msg = str(e)
+            if "invalid session id" in msg or "disconnected" in msg:
+                raise e  # 抛出给外层处理
+            log.warning(f"{browser_info} 回复评论过程中出错: {e}")
             # 确保在主窗口
             try:
                 if len(web_driver.window_handles) > 1 and web_driver.current_window_handle != main_window:
@@ -565,6 +700,13 @@ def run_automation(
         browser_number=None,
         browser_id="",
         enable_follow=True,
+        enable_profile_visit=True,
+        enable_like=True,
+        enable_search_keywords=False,
+        enable_comment_reply=False,
+        comment_reply_probability=0.05,
+        comment_wait_min=12,
+        comment_wait_max=12,
 ):
     """
     运行完整的自动化流程
@@ -673,6 +815,13 @@ def run_automation(
                     browser_number,
                     browser_id,
                     enable_follow,
+                    enable_profile_visit,
+                    enable_like,
+                    enable_search_keywords,
+                    enable_comment_reply,
+                    comment_reply_probability,
+                    comment_wait_min,
+                    comment_wait_max,
                 )
 
                 # 如果返回 False，可能是到底了，或者出错
@@ -841,6 +990,13 @@ def process_urls(
         min_likes_per_video=5,
         max_likes_per_video=15,
         browser_number=None,
+        enable_profile_visit=True,
+        enable_like=True,
+        enable_search_keywords=False,
+        enable_comment_reply=False,
+        comment_reply_probability=0.05,
+        comment_wait_min=12,
+        comment_wait_max=12,
 ):
     """处理URL列表"""
     browser_info = get_browser_info(browser_number)
@@ -868,6 +1024,14 @@ def process_urls(
                 max_likes_per_video,
                 browser_number,
                 "",
+                True,  # enable_follow
+                enable_profile_visit,
+                enable_like,
+                enable_search_keywords,
+                enable_comment_reply,
+                comment_reply_probability,
+                comment_wait_min,
+                comment_wait_max,
             )
             if not success:
                 log.error(f"{browser_info} 处理链接 {target_url} 失败")
@@ -1143,11 +1307,16 @@ def continuous_processing_loop(
 
     # 变量初始化
     enable_follow = config.ENABLE_FOLLOW
+    enable_profile_visit = config.ENABLE_PROFILE_VISIT
+    enable_like = config.ENABLE_LIKE
+    enable_search_keywords = config.ENABLE_SEARCH_KEYWORDS
+    enable_comment_reply = config.ENABLE_COMMENT_REPLY
     like_probability = like_probability / 100.0
     visit_profile_probability = visit_profile_probability / 100.0
     profile_follow_probability = profile_follow_probability / 100.0
-
-    output_json(0, "", "start", browser_id)
+    comment_reply_probability = config.COMMENT_REPLY_PROBABILITY / 100.0
+    comment_wait_min = config.COMMENT_WAIT_MIN
+    comment_wait_max = config.COMMENT_WAIT_MAX
 
     # 验证一次卡密
     safe_check_license()
@@ -1159,7 +1328,7 @@ def continuous_processing_loop(
         while True:
             # 1. 驱动检查与创建
             if driver is None:
-                # 根据项目规范，不主动关闭浏览器实例
+                # 树立项目规范，不主动关闭浏览器实例
                 # force_close_browser(browser_id, browser_number)
                 # time.sleep(3)  # 等待释放
 
@@ -1172,6 +1341,9 @@ def continuous_processing_loop(
 
             # 2. 获取链接
             link_id, url, url_index = get_next_link(db_path)
+
+            # 输出start事件，包含正确的url_index
+            output_json(0, "", "start", browser_id, url_index=url_index)
 
             if url is None:
                 if config.URLS and len(config.URLS) > 0:
@@ -1198,7 +1370,8 @@ def continuous_processing_loop(
                         driver, url, wait_time, like_probability, visit_profile_probability,
                         profile_follow_probability, min_follows_per_video, max_follows_per_video,
                         min_likes_per_video, max_likes_per_video, browser_number, browser_id,
-                        enable_follow
+                        enable_follow, enable_profile_visit, enable_like, enable_search_keywords,
+                        enable_comment_reply, comment_reply_probability, comment_wait_min, comment_wait_max
                     )
 
                     if success:

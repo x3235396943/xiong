@@ -25,11 +25,14 @@ VISIT_MIN=2
 # 关注后最大等待时间（秒）
 VISIT_MAX=5
 
+#是否启用进入主页功能 (True/False)
+ENABLE_PROFILE_VISIT=True
+
 # 进入主页的概率 (0-100)
-VISIT_ENABLE=10
+VISIT_ENABLE=5
 
 # 进入主页后关注的概率 (0-100)
-PROFILE_FOLLOW_PROBABILITY=10
+PROFILE_FOLLOW_PROBABILITY=5
 
 # 是否启用点赞功能 (True/False)
 ENABLE_LIKE=False
@@ -41,7 +44,7 @@ LIKE_WAIT_MIN=4
 LIKE_WAIT_MAX=10
 
 # 点赞概率 (0-100)
-LIKE_PROBABILITY=10
+LIKE_PROBABILITY=5
 
 # 每条视频最少点赞数量
 COMMENT_LIKE_COUNT_MIN=20
@@ -53,7 +56,7 @@ COMMENT_LIKE_COUNT_MAX=30
 MIN_FOLLOWS_PER_VIDEO=5
 
 # 每条视频最多关注数量
-MAX_FOLLOWS_PER_VIDEO=15
+MAX_FOLLOWS_PER_VIDEO=10
 
 #视频留言前最小等待时间
 VIDEO_REPLY_WAIT_MIN=12
@@ -89,17 +92,17 @@ COMMENT_REPLIES=回复1,回复2,回复3
 VIDEO_COMMENTS=留言1,留言2,留言3
 
 # 筛选评论区关键字
-COMMENT_FILTER_KEYWORDS=["妈","给"]
+COMMENT_FILTER_KEYWORDS=[]
 
 # 本地导入的视频链接
- URLS=["3.38 i@P.Kw 09/26 yGV:/ 见面拿你十块钱，#你好我叫少司缘 cos  王者 少司缘  https://v.douyin.com/DSAOcoEF64s/ 复制此链接，打开Dou音搜索，直接观看视频！","https://v.douyin.com/XYrjay03T2Y/","https://v.douyin.com/yQ3LG6jX_ts/","https://v.douyin.com/X8qHJ4qnuS8/","https://v.douyin.com/LtRViqp5V7A/","https://v.douyin.com/0m9B7btWXCo/","https://v.douyin.com/T_SgWNGGt_4/"]
+#URLS=["3.38 i@P.Kw 09/26 yGV:/ 见面拿你十块钱，#你好我叫少司缘 cos  王者 少司缘  https://v.douyin.com/DSAOcoEF64s/ 复制此链接，打开Dou音搜索，直接观看视频！","https://v.douyin.com/XYrjay03T2Y/","https://v.douyin.com/yQ3LG6jX_ts/","https://v.douyin.com/X8qHJ4qnuS8/","https://v.douyin.com/LtRViqp5V7A/","https://v.douyin.com/0m9B7btWXCo/","https://v.douyin.com/T_SgWNGGt_4/"]
 # 视频链接索引
- URL_INDEX=[0,1]
+#URL_INDEX=[0,1]
 
 # 是否以无头模式运行浏览器(True/False)
 #HEADLESS=True
 HEADLESS=False
 
 # 比特浏览器ID列表（替换为你自己的浏览器ID）
-BIT_BROWSER_IDS=["9bdb9d0f63304e1ebb72563cc3a913c0"]
+BIT_BROWSER_IDS=["933622f2f6394705809a7b7dadaec70d","57bd9953b5364d3db5c4ac7cfbb9a1b3"]
 #BIT_BROWSER_IDS=["e9dee06cc50e4f26843195d701c5b685","43665aab2f9e4bd183c85871705df46e"]
