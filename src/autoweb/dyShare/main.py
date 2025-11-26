@@ -26,6 +26,8 @@
 """
 
 import json
+import sys
+import os
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -43,27 +45,32 @@ from datetime import datetime
 import threading
 import concurrent.futures
 
-from ..tools import LicenseManager, LicenseException, log
+from ..tools import log
 from ..tools.config import KuSettings
 from ..tools.base import AbstractCrawler
-# 导入比特浏览器接口封装
 from ..tools.bit_api import openBrowser, closeBrowser
+
+# ==============================================================================
+# 修改: 从 tools.verify 导入卡密管理器
+# ==============================================================================
+try:
+    from ..tools.verify import LicenseManager, LicenseException
+except ImportError:
+    log.error("❌ 无法导入 verify 模块，请检查 tools/verify.py 是否存在")
+    sys.exit(1)
 
 # 将全局变量的初始化移到导入之后，确保config已经完全加载
 config: KuSettings = KuSettings()  # type: ignore
 
 LINKS_DB_PATH = config.LINKS_DB_PATH
-print(LINKS_DB_PATH)
 
 # 全局变量定义
-# 连续没有新评论的滚动次数计数器
 scroll_count_total = 0
 previous_comment_count = 0
 no_new_comments_count = 0
-# 全局关注计数器
 global_followed_count = 0
 
-# 卡密验证管理器实例
+# 实例化卡密管理器
 li = LicenseManager()
 
 
@@ -71,22 +78,21 @@ li = LicenseManager()
 # 优化点 1: 增加一个网络容错的卡密检查函数
 # ----------------------------------------------------------------------
 def safe_check_license():
-    """带有网络重试机制的卡密检查"""
-    max_retries = 3
-    for i in range(max_retries):
-        try:
-            li.check_license_validity()
-            return True
-        except LicenseException:
-            # 如果是真正的卡密无效，直接抛出
-            raise
-        except Exception as e:
-            # 如果是网络错误，等待后重试
-            log.warning(f"卡密验证网络波动 (第{i + 1}次): {e}")
-            time.sleep(2)
-    # 如果重试多次都失败，再抛出异常或记录错误
-    log.error("卡密验证因网络问题连续失败，暂跳过本次检查")
-    return True
+    """
+    带有网络容错的卡密检查
+    由于 LicenseManager 已经在后台处理了网络请求，
+    这里主要负责检查状态标记。
+    """
+    try:
+        li.check_license_validity()
+        return True
+    except LicenseException:
+        # 如果是真正的卡密无效，直接抛出，中断程序
+        raise
+    except Exception as e:
+        # 其他未知错误，记录日志但不中断
+        log.warning(f"状态检查异常: {e}")
+        return True
 
 
 def parse_search_keywords():
@@ -119,10 +125,10 @@ def parse_comment_replies():
     raw = getattr(config, 'COMMENT_REPLIES', '') or ''
     if not raw:
         return []
-    
+
     seps = [",", "，", " ", "\t", ";", "；"]
     replies = []
-    
+
     if isinstance(raw, str):
         s = raw.strip()
         try:
@@ -139,7 +145,7 @@ def parse_comment_replies():
             replies = [x.strip() for x in base.split(",") if x.strip()]
     elif isinstance(raw, list):
         replies = [str(x).strip() for x in raw if str(x).strip()]
-    
+
     return replies if replies else []
 
 
@@ -206,8 +212,10 @@ def output_json(code, msg="", data_type="", browser_id="", url_index=None, comme
     if keywords is not None:
         result["keywords"] = keywords
 
-    # 输出JSON
-    print(json.dumps(result, ensure_ascii=False))
+    # 输出JSON并立即刷新，确保在打包环境中也能正常输出
+    output = json.dumps(result, ensure_ascii=False)
+    print(output)
+    sys.stdout.flush()
 
 
 def get_driver(browser_id, browser_number=None):
@@ -407,7 +415,8 @@ def extract_douyin_link(text):
 # ----------------------------------------------------------------------
 # 优化点 2: 重构 process_comment，使用稳健的窗口切换逻辑
 # ----------------------------------------------------------------------
-def visit_user_profile(driver, main_window, avatar_element, wait_time, browser_number, browser_id="", profile_follow_probability=0.5):
+def visit_user_profile(driver, main_window, avatar_element, wait_time, browser_number, browser_id="",
+                       profile_follow_probability=0.5):
     """
     专门处理进入用户主页的逻辑
     返回: bool (是否成功执行了关注操作)
@@ -487,14 +496,14 @@ def visit_user_profile(driver, main_window, avatar_element, wait_time, browser_n
 def reply_to_comment(web_driver, target_comment, reply_text, browser_number=None, browser_id=""):
     """
     回复指定评论
-    
+
     Args:
         web_driver: WebDriver实例
         target_comment: 目标评论元素
         reply_text: 回复内容
         browser_number: 浏览器编号
         browser_id: 浏览器ID
-        
+
     Returns:
         bool: 是否成功回复
     """
@@ -505,15 +514,15 @@ def reply_to_comment(web_driver, target_comment, reply_text, browser_number=None
             By.CSS_SELECTOR,
             'div:nth-child(2) > div > div:nth-child(4) > div > div:nth-child(3) > div'
         )
-        
+
         # 点击回复按钮
         web_driver.execute_script("arguments[0].click();", reply_button)
         time.sleep(0.5)  # 等待回复框出现
-        
+
         # 输入回复文本
         ActionChains(web_driver).send_keys(reply_text).perform()
         time.sleep(0.5)
-        
+
         # 尝试点击发送按钮
         try:
             send_button = web_driver.find_element(
@@ -530,7 +539,7 @@ def reply_to_comment(web_driver, target_comment, reply_text, browser_number=None
             debug_log("info", f"通过回车键发送回复: {reply_text[:20]}...", browser_number)
             time.sleep(1)
             return True
-            
+
     except Exception as e:
         log.warning(f"{browser_info} 回复评论失败: {e}")
         return False
@@ -593,7 +602,8 @@ def process_comment(
             pass
 
     # 点赞逻辑 (保持不变)
-    should_like = enable_like and (like_count < target_like_count) and (keyword_matched or (random.random() < like_probability))
+    should_like = enable_like and (like_count < target_like_count) and (
+                keyword_matched or (random.random() < like_probability))
     if should_like:
         try:
             like_button = target_comment.find_element(
@@ -609,7 +619,8 @@ def process_comment(
 
     # 关注/主页逻辑 (优化版)
     # 只有当开启关注、开启主页访问，且(匹配关键词 或 随机命中) 时才进入
-    should_visit = enable_follow and enable_profile_visit and (keyword_matched or (random.random() < visit_profile_probability))
+    should_visit = enable_follow and enable_profile_visit and (
+                keyword_matched or (random.random() < visit_profile_probability))
 
     if should_visit:
         try:
@@ -629,7 +640,8 @@ def process_comment(
 
             if avatar:
                 # 调用独立的窗口处理函数
-                is_followed = visit_user_profile(web_driver, main_window, avatar, wait_time, browser_number, browser_id, profile_follow_probability)
+                is_followed = visit_user_profile(web_driver, main_window, avatar, wait_time, browser_number, browser_id,
+                                                 profile_follow_probability)
                 if is_followed:
                     return "followed", like_count
 
@@ -653,14 +665,14 @@ def process_comment(
             # 等待一段时间再回复
             wait_time_before_reply = random.uniform(comment_wait_min, comment_wait_max)
             safe_sleep(wait_time_before_reply)
-            
+
             # 重新获取元素，防止DOM刷新导致StaleElementReferenceException
             comments_container = web_driver.find_element(By.CSS_SELECTOR, '[data-e2e="comment-list"]')
             target_comment_now = comments_container.find_elements(By.XPATH, "./div")[comment_index]
-            
+
             # 从回复内容列表中随机选择一条回复
             reply_content = random.choice(COMMENT_REPLIES)
-            
+
             # 执行回复
             reply_success = reply_to_comment(web_driver, target_comment_now, reply_content, browser_number, browser_id)
             if reply_success:
@@ -852,6 +864,24 @@ def run_automation(
                         log.error(f"{browser_info} 滚动后无法重新定位评论容器: {e}")
                         break
 
+                # 每处理30条评论检测一次是否还有更多评论
+                if processed_comment_count % 30 == 0:
+                    try:
+                        padding = driver.find_element(
+                            By.CSS_SELECTOR, '[data-e2e="comment-list"] > div:last-child'
+                        ).text
+                        # 如果显示"暂时没有更多评论"就是到底了
+                        if padding == "暂时没有更多评论":
+                            debug_log(
+                                "info",
+                                "已滚动到底部或没有更多评论，结束当前链接操作",
+                                browser_number,
+                            )
+                            break
+                    except Exception as e:
+                        log.error(f"{browser_info} 无法检测评论区是否到底: {e}")
+                        break
+
                 if result == "followed":
                     video_followed_count += 1
                     debug_log(
@@ -869,22 +899,6 @@ def run_automation(
                         f"已达到目标关注数量 {target_follow_count} 和点赞数量 {target_like_count}，切换到下一个链接",
                         browser_number,
                     )
-                    break
-
-                try:
-                    padding = driver.find_element(
-                        By.CSS_SELECTOR, '[data-e2e="comment-list"] > div:last-child'
-                    ).text
-                    # 如果显示"暂时没有更多评论"就是到底了
-                    if padding == "暂时没有更多评论":
-                        debug_log(
-                            "info",
-                            "已滚动到底部或没有更多评论，结束当前链接操作",
-                            browser_number,
-                        )
-                        break
-                except Exception as e:
-                    log.error(f"{browser_info} 无法检测评论区是否到底: {e}")
                     break
 
                 comment_index += 1
