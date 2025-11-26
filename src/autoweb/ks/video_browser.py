@@ -35,7 +35,7 @@ from .video_pause_manager import (
     is_need_play
 )
 from ..tools import log as logger
-from ..tools import config
+from ..tools import config, log2
 from .browser_cluster import cluster
 
 
@@ -1728,6 +1728,15 @@ def _video_single_operation(driver, comment_elements:list, params: dict) -> tupl
                     # 等待一下，让点赞操作生效
                     time.sleep(0.5)
                     logger.info(f"[{params['browser_name']}] ✓ 点赞操作完成")
+                    log2.info(
+                        {
+                            "code": 0,
+                            "data": {
+                                "type": "like",
+                                "id": config.DEVICE_CODE,
+                            },
+                        }
+                    )
                     return True, ActionType.LIKE
                 return False, None
             except Exception as e:
@@ -1779,6 +1788,15 @@ def _video_single_operation(driver, comment_elements:list, params: dict) -> tupl
                         time.sleep(3)
                         follow_success = True
                         logger.info(f"[{params['browser_name']}] ✓ 关注操作完成")
+                        log2.info(
+                            {
+                                "code": 0,
+                                "data": {
+                                    "type": "comment",
+                                    "id": config.DEVICE_CODE,
+                                },
+                            }
+                        )
                     else:
                         # 关注按钮不可见或已关注
                         already_followed = True
@@ -1988,6 +2006,16 @@ def browser_video_loop(
         logger.error(f"[{params['browser_name']}] ✗ 浏览器驱动未初始化，跳过")
         return
 
+    log2.info(
+                {
+                    "code": 0,
+                    "data": {
+                        "type": "start",
+                        "id": config.DEVICE_CODE
+                    },
+                }
+            )
+
     # 删除多余页面保留一个
     _delete_extra_pages(driver, params)
     
@@ -2035,8 +2063,16 @@ def browser_video_loop(
                 if not now_search_keywords:
                     keywords_exhausted = True
                     logger.info(f"[{params['browser_name']}] 搜索关键词已耗尽，停止新的搜索流程")
+                    log2.info(
+                            {
+                                "code": 0,
+                                "data": {
+                                    "type": "exit",
+                                    "id": config.DEVICE_CODE
+                                },
+                            }
+                        )
                     break
-                
                 _search_and_click_video(driver, browser, params, now_search_keywords)
                 time.sleep(1)
                 if "short-video" not in driver.current_url:
@@ -2047,6 +2083,17 @@ def browser_video_loop(
                     continue
                 else:
                     logger.info(f"[{params['browser_name']}] ✓ 点击视频完成")
+                    log2.info(
+                            {
+                                "code": 0,
+                                "data": {
+                                    "type": "search_keywords",
+                                    "id": config.DEVICE_CODE,
+                                    "search_keywords": now_search_keywords
+                                },
+                            }
+                        )
+
                 
                 # ==================== 刷视频流程 ====================
                 logger.debug(f"[{params['browser_name']}] 开始刷视频流程...")
@@ -2135,6 +2182,15 @@ def browser_video_loop(
                         if old_current_seconds is None:
                             logger.debug(f"[{params['browser_name']}] 无法获取上一帧进度，跳过本次播放完毕检测")
                             video_operation_completed = False
+                            log2.info(
+                                {
+                                    "code": 0,
+                                    "data": {
+                                        "type": "video",
+                                        "id": config.DEVICE_CODE,
+                                    },
+                                }
+                            )
                             continue
                         while old_video_poster_url == now_video_poster_url and video_operation_completed:
                             if pause_manager_id and not is_need_play(pause_manager_id):
@@ -2156,6 +2212,15 @@ def browser_video_loop(
                             if now_video_poster_url and now_video_poster_url != old_video_poster_url:
                                 old_video_poster_url = now_video_poster_url
                                 video_operation_completed =False
+                                log2.info(
+                                    {
+                                        "code": 0,
+                                        "data": {
+                                            "type": "video",
+                                            "id": config.DEVICE_CODE,
+                                        },
+                                    }
+                                )
                                 break
                         if not video_operation_completed:
                             # 将浏览器加入暂停管理列表
