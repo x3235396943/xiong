@@ -17,6 +17,7 @@ import tempfile
 import os
 import platform
 from ..tools import log as logger
+from ..tools import config
 import ast
 
 # 清理残留进程
@@ -29,17 +30,17 @@ def kill_chrome_processes():
         os.system("pkill -f chrome >/dev/null 2>&1")
         os.system("pkill -f chromedriver >/dev/null 2>&1")
 
-# kill_chrome_processes()
-browser_ids = getattr(config, 'BIT_BROWSER_IDS', [])
-if not browser_ids:
-    logger.info(f"未配置浏览器ID")
+def init_browsers():
+    """初始化浏览器，返回主浏览器实例"""
+    # kill_chrome_processes()  # 如果需要清理进程，取消注释
+    browser_ids = getattr(config, 'BIT_BROWSER_IDS', [])
+    if not browser_ids:
+        logger.info(f"未配置浏览器ID")
 
-selenium_browser = None
-if browser_ids:
-
+    selenium_browser = None
     name_results = {}
     id_results = {}
-
+    
     if browser_ids:
         logger.info(f"使用指纹浏览器模式，准备根据ID启动 {len(browser_ids)} 个浏览器: {browser_ids}")
         id_results = cluster.init_browsers_by_ids(browser_ids)
@@ -87,26 +88,28 @@ if browser_ids:
         if selenium_browser is None:
             logger.warning("没有成功启动的浏览器")
 
-# 获取主浏览器驱动（用于当前的主流程）
-driver = selenium_browser.driver if selenium_browser and selenium_browser.driver else None
-if not driver:
-    logger.error("无法获取浏览器驱动，程序退出")
-    sys.exit(1)
+    # 获取主浏览器驱动（用于当前的主流程）
+    driver = selenium_browser.driver if selenium_browser and selenium_browser.driver else None
+    if not driver:
+        logger.error("无法获取浏览器驱动，程序退出")
+        sys.exit(1)
 
-# 显示所有已启动的浏览器信息
-logger.info(f"{'='*50}")
-logger.info("已启动的浏览器列表:")
-browser_list = cluster.list_browsers()
-for i, browser_key in enumerate(browser_list, 1):
-    browser = cluster.get_browser(browser_key)
-    status = "✓ 运行中" if browser and browser.driver else "✗ 未启动"
-    browser_id = browser.id if browser else "N/A"
-    display_name = cluster.get_browser_display_name(browser_key) if browser else browser_key
-    if display_name != browser_key:
-        logger.info(f"{i}. {display_name} (Key: {browser_key}, ID: {browser_id}) - {status}")
-    else:
-        logger.info(f"{i}. {display_name} (ID: {browser_id}) - {status}")
-logger.info(f"{'='*50}")
+    # 显示所有已启动的浏览器信息
+    logger.info(f"{'='*50}")
+    logger.info("已启动的浏览器列表:")
+    browser_list = cluster.list_browsers()
+    for i, browser_key in enumerate(browser_list, 1):
+        browser = cluster.get_browser(browser_key)
+        status = "✓ 运行中" if browser and browser.driver else "✗ 未启动"
+        browser_id = browser.id if browser else "N/A"
+        display_name = cluster.get_browser_display_name(browser_key) if browser else browser_key
+        if display_name != browser_key:
+            logger.info(f"{i}. {display_name} (Key: {browser_key}, ID: {browser_id}) - {status}")
+        else:
+            logger.info(f"{i}. {display_name} (ID: {browser_id}) - {status}")
+    logger.info(f"{'='*50}")
+    
+    return selenium_browser
 
 # 使用示例：如何控制所有浏览器
 # 方法1: 获取特定浏览器
@@ -210,6 +213,9 @@ def thread_func(browser_name, browser, params, url_queue=None):
 
 def main():
     """主函数：多线程模式启动浏览器任务"""
+    # 初始化浏览器
+    init_browsers()
+    
     browser_list = cluster.list_browsers()
     if not browser_list:
         logger.error("没有可用的浏览器")
@@ -323,8 +329,6 @@ def signal_handler(signum, frame):
     sys.exit(0)
 
 class KuaishouCrawler:
-    def __init__(self):
-        pass
     
     async def start(self):
         try:
