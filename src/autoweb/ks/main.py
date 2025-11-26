@@ -8,7 +8,7 @@ import sys
 from .selenium_browser import SeleniumBrowser
 from .selenium_kuaisou import *
 from selenium.webdriver.common.by import By
-from ..tools import log
+from ..tools import log as logger
 from .browser_cluster import BrowserCluster, cluster
 from .video_browser import browser_video_loop, browser_video_url_list_loop
 from .video_monitor import start_monitoring, stop_monitoring
@@ -16,7 +16,6 @@ from selenium import webdriver
 import tempfile
 import os
 import platform
-from ..tools import log as logger
 from ..tools import config
 import ast
 
