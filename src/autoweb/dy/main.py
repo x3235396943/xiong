@@ -314,6 +314,7 @@ class DouyinCrawler(AbstractCrawler):
             self.driver = driver = webdriver.Chrome(
                 service=Service(res["data"]["driver"]), options=chrome_options
             )
+            driver.implicitly_wait(6)
 
             # 除第1个tab之外的标签关闭
             for tab in driver.window_handles[1:]:
