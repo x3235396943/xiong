@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-抖音自动化脚本
+抖音自动化脚本 (已修复滚动逻辑 + 防休眠)
 
 环境变量配置说明:
     SIBERIAN_KEY: 卡密密钥，用于验证脚本使用权限
@@ -45,7 +45,7 @@ from datetime import datetime
 import threading
 import concurrent.futures
 
-from ..tools import log
+from ..tools import log, log2
 from ..tools.config import KuSettings
 from ..tools.base import AbstractCrawler
 from ..tools.bit_api import openBrowser, closeBrowser
@@ -121,12 +121,11 @@ def parse_search_keywords():
 
 
 def parse_comment_replies():
-    """解析评论回复内容列表"""
+    """解析评论回复内容列表，使用 & 作为分隔符"""
     raw = getattr(config, 'COMMENT_REPLIES', '') or ''
     if not raw:
         return []
 
-    seps = [",", "，", " ", "\t", ";", "；"]
     replies = []
 
     if isinstance(raw, str):
@@ -138,11 +137,8 @@ def parse_comment_replies():
             else:
                 replies = [s] if s else []
         except Exception:
-            # 不是JSON，按分隔符分割
-            base = s
-            for sep in seps:
-                base = base.replace(sep, ",")
-            replies = [x.strip() for x in base.split(",") if x.strip()]
+            # 不是JSON，按 & 分隔符分割
+            replies = [x.strip() for x in s.split("&") if x.strip()]
     elif isinstance(raw, list):
         replies = [str(x).strip() for x in raw if str(x).strip()]
 
@@ -151,6 +147,34 @@ def parse_comment_replies():
 
 SEARCH_KEYWORDS = parse_search_keywords()
 COMMENT_REPLIES = parse_comment_replies()
+
+
+def parse_video_comments():
+    """解析视频留言内容列表，使用 & 作为分隔符"""
+    raw = getattr(config, 'VIDEO_COMMENTS', '') or ''
+    if not raw:
+        return []
+
+    comments = []
+
+    if isinstance(raw, str):
+        s = raw.strip()
+        try:
+            data = json.loads(s)
+            if isinstance(data, list):
+                comments = [str(x).strip() for x in data if str(x).strip()]
+            else:
+                comments = [s] if s else []
+        except Exception:
+            # 不是JSON，按 & 分隔符分割
+            comments = [x.strip() for x in s.split("&") if x.strip()]
+    elif isinstance(raw, list):
+        comments = [str(x).strip() for x in raw if str(x).strip()]
+
+    return comments if comments else []
+
+
+VIDEO_COMMENTS = parse_video_comments()
 
 
 def normalize_text(t):
@@ -200,13 +224,13 @@ def output_json(code, msg="", data_type="", browser_id="", url_index=None, comme
     if msg:
         result["msg"] = msg
 
-    # 如果提供了url_index，添加到结果中
-    if url_index is not None:
+    # 如果提供了url_index，且不是关注操作，添加到结果中
+    if url_index is not None and data_type != "follow":
         result["urlIndex"] = url_index
 
-    # 如果提供了comment_reply，添加到结果中
+    # 如果提供了comment_reply，添加到data中
     if comment_reply is not None:
-        result["comment_reply"] = comment_reply
+        result["data"]["comment_reply"] = comment_reply
 
     # 如果提供了keywords，添加到结果中
     if keywords is not None:
@@ -413,13 +437,36 @@ def extract_douyin_link(text):
 
 
 # ----------------------------------------------------------------------
+# 新增: 元素可见性辅助函数
+# ----------------------------------------------------------------------
+def ensure_element_visible(driver, element, browser_number=None):
+    """
+    将指定元素滚动到屏幕中央，解决长评论遮挡问题
+    """
+    browser_info = get_browser_info(browser_number)
+    try:
+        # 使用 JS 将元素滚动到视口垂直居中位置 (block: 'center')
+        driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'nearest'});",
+                              element)
+        time.sleep(0.5)
+        return True
+    except Exception as e:
+        log.warning(f"{browser_info} 元素滚动可见性处理失败: {e}")
+        return False
+
+
+# ----------------------------------------------------------------------
 # 优化点 2: 重构 process_comment，使用稳健的窗口切换逻辑
 # ----------------------------------------------------------------------
 def visit_user_profile(driver, main_window, avatar_element, wait_time, browser_number, browser_id="",
-                       profile_follow_probability=0.5):
+                       profile_follow_probability=0.5, visit_min=2, visit_max=5):
     """
     专门处理进入用户主页的逻辑
     返回: bool (是否成功执行了关注操作)
+
+    Args:
+        visit_min: 进入主页后最小等待时间（秒）
+        visit_max: 进入主页后最大等待时间（秒）
     """
     browser_info = get_browser_info(browser_number)
     handles_before = driver.window_handles
@@ -451,10 +498,12 @@ def visit_user_profile(driver, main_window, avatar_element, wait_time, browser_n
     # 在新窗口中的操作
     action_success = False
     try:
-        # 等待元素加载，这里可以适当缩短时间，因为不是核心业务
-        time.sleep(random.uniform(2, 4))
+        # 进入主页后先等待（VISIT_MIN 到 VISIT_MAX 秒）
+        visit_wait_time = random.uniform(visit_min, visit_max)
+        debug_log("info", f"进入主页，等待 {visit_wait_time:.2f} 秒", browser_number)
+        safe_sleep(visit_wait_time)
 
-        # 关注逻辑 - 根据概率决定是否关注
+        # 等待结束后再根据概率判断是否关注
         if random.random() < profile_follow_probability:
             follow_btn_css = '#user_detail_element [data-e2e="user-info-follow-btn"]'
             try:
@@ -545,6 +594,57 @@ def reply_to_comment(web_driver, target_comment, reply_text, browser_number=None
         return False
 
 
+def leave_video_comment(driver, comment_text, browser_number=None, browser_id=""):
+    """
+    在当前视频页面留下评论
+
+    Args:
+        driver: WebDriver实例
+        comment_text (str): 要发布的评论内容
+        browser_number: 浏览器编号
+        browser_id: 浏览器ID
+
+    Returns:
+        bool: 评论是否成功发布
+    """
+    browser_info = get_browser_info(browser_number, browser_id)
+    try:
+        # 查找评论输入框 (使用指定的class)
+        comment_input = driver.find_element(
+            By.CSS_SELECTOR,
+            '.GXmFLge7.comment-input-inner-container'
+        )
+
+        # 点击评论输入框
+        driver.execute_script("arguments[0].click();", comment_input)
+        time.sleep(0.5)  # 等待回复框出现
+
+        # 输入评论文本
+        ActionChains(driver).send_keys(comment_text).perform()
+        time.sleep(0.5)
+
+        # 尝试点击发送按钮
+        try:
+            send_button = driver.find_element(
+                By.CSS_SELECTOR,
+                '[data-e2e="comment-post"]'
+            )
+            driver.execute_script("arguments[0].click();", send_button)
+            debug_log("info", f"成功发布视频评论: {comment_text[:20]}...", browser_number)
+            time.sleep(1)  # 等待发送完成
+            return True
+        except:
+            # 如果找不到发送按钮，尝试按回车键
+            ActionChains(driver).send_keys(Keys.RETURN).perform()
+            debug_log("info", f"通过回车键发送视频评论: {comment_text[:20]}...", browser_number)
+            time.sleep(1)
+            return True
+
+    except Exception as e:
+        log.warning(f"{browser_info} 发布视频评论失败: {e}")
+        return False
+
+
 def process_comment(
         web_driver,
         main_window,
@@ -565,6 +665,8 @@ def process_comment(
         comment_reply_probability=0.05,
         comment_wait_min=12,
         comment_wait_max=12,
+        visit_min=2,
+        visit_max=5,
 ):
     """重构后的评论处理函数"""
     browser_info = get_browser_info(browser_number)
@@ -579,6 +681,12 @@ def process_comment(
         if comment_index >= len(comment_items):
             return False, like_count
         target_comment = comment_items[comment_index]
+
+        # =========================================================
+        # 修改点：确保元素可见（解决长评论遮挡问题）
+        # =========================================================
+        ensure_element_visible(web_driver, target_comment, browser_number)
+
     except Exception as e:
         # 找不到评论不用报错，可能是到底了
         return False, like_count
@@ -601,9 +709,9 @@ def process_comment(
         except:
             pass
 
-    # 点赞逻辑 (保持不变)
+    # 点赞逻辑：关键词命中后直接执行，否则按概率执行
     should_like = enable_like and (like_count < target_like_count) and (
-                keyword_matched or (random.random() < like_probability))
+            keyword_matched or (random.random() < like_probability))
     if should_like:
         try:
             like_button = target_comment.find_element(
@@ -617,10 +725,14 @@ def process_comment(
         except Exception:
             pass  # 点赞失败忽略
 
-    # 关注/主页逻辑 (优化版)
-    # 只有当开启关注、开启主页访问，且(匹配关键词 或 随机命中) 时才进入
+    # 关注/主页逻辑：关键词命中后直接执行，否则按概率执行
+    # 如果关键词匹配，直接执行关注（不受 visit_profile_probability 影响）
+    # 如果关键词匹配，关注操作总是执行（不受 profile_follow_probability 影响）
     should_visit = enable_follow and enable_profile_visit and (
-                keyword_matched or (random.random() < visit_profile_probability))
+            keyword_matched or (random.random() < visit_profile_probability))
+
+    # 如果关键词匹配，强制关注（不受 profile_follow_probability 影响）
+    force_follow = keyword_matched
 
     if should_visit:
         try:
@@ -640,8 +752,10 @@ def process_comment(
 
             if avatar:
                 # 调用独立的窗口处理函数
+                # 如果关键词匹配，强制关注（传入 1.0 作为概率，确保总是关注）
+                follow_prob = 1.0 if force_follow else profile_follow_probability
                 is_followed = visit_user_profile(web_driver, main_window, avatar, wait_time, browser_number, browser_id,
-                                                 profile_follow_probability)
+                                                 follow_prob, visit_min, visit_max)
                 if is_followed:
                     return "followed", like_count
 
@@ -659,8 +773,10 @@ def process_comment(
             except:
                 pass
 
-    # 评论回复逻辑
-    if enable_comment_reply and COMMENT_REPLIES and random.random() < comment_reply_probability:
+    # 评论回复逻辑：关键词命中后直接执行，否则按概率执行
+    should_reply = enable_comment_reply and COMMENT_REPLIES and (
+            keyword_matched or (random.random() < comment_reply_probability))
+    if should_reply:
         try:
             # 等待一段时间再回复
             wait_time_before_reply = random.uniform(comment_wait_min, comment_wait_max)
@@ -719,6 +835,8 @@ def run_automation(
         comment_reply_probability=0.05,
         comment_wait_min=12,
         comment_wait_max=12,
+        visit_min=2,
+        visit_max=5,
 ):
     """
     运行完整的自动化流程
@@ -771,6 +889,15 @@ def run_automation(
         human_like_delay(3, 6, browser_number)
         human_like_delay(1, 2, browser_number)
 
+        # 视频留言等待时间：在打开链接后、打开评论区前等待
+        if config.ENABLE_VIDEO_COMMENT:
+            wait_time_before_comment = random.uniform(
+                config.VIDEO_REPLY_WAIT_MIN,
+                config.VIDEO_REPLY_WAIT_MAX
+            )
+            debug_log("info", f"等待 {wait_time_before_comment:.2f} 秒后打开评论区", browser_number)
+            safe_sleep(wait_time_before_comment)
+
         debug_log("info", "处理视频评论", browser_number)
         debug_log("info", "打开评论区", browser_number)
 
@@ -786,6 +913,35 @@ def run_automation(
             return False
 
         human_like_delay(1, 3, browser_number)
+
+        # 视频留言逻辑：在打开评论区后，处理评论前进行留言
+        if config.ENABLE_VIDEO_COMMENT:
+            # 根据概率判断是否留言
+            video_reply_probability = config.VIDEO_REPLY_RATE / 100.0
+            if random.random() < video_reply_probability:
+                # 从留言列表中随机选择一条
+                if VIDEO_COMMENTS:
+                    comment_text = random.choice(VIDEO_COMMENTS)
+                    debug_log("info", f"开始发布视频留言: {comment_text[:30]}...", browser_number)
+
+                    # 执行留言
+                    success = leave_video_comment(driver, comment_text, browser_number, browser_id)
+
+                    if success:
+                        # 根据DEBUG模式输出
+                        if config.DEBUG:
+                            debug_log("info", f"视频留言成功: {comment_text[:30]}...", browser_number)
+                        else:
+                            # 非DEBUG模式只输出JSON
+                            output_json(0, "", "video_commit", browser_id)
+                    else:
+                        debug_log("warning", "视频留言失败", browser_number)
+                else:
+                    debug_log("warning", "VIDEO_COMMENTS 列表为空，跳过视频留言", browser_number)
+            else:
+                debug_log("info", f"根据概率设置 ({video_reply_probability:.1%})，跳过视频留言", browser_number)
+        else:
+            debug_log("info", "ENABLE_VIDEO_COMMENT 为 False，跳过视频留言", browser_number)
 
         main_window = driver.current_window_handle
 
@@ -813,6 +969,27 @@ def run_automation(
             try:
                 safe_check_license()  # 使用新的安全检查
 
+                # =========================================================
+                # 修改点：动态检测是否需要滚动加载更多
+                # =========================================================
+                try:
+                    current_items = comments_container.find_elements(By.XPATH, "./div")
+                    # 如果当前索引接近底部（剩3条以内），则触发滚动加载
+                    if comment_index >= len(current_items) - 3:
+                        debug_log("info", "接近底部，执行滚动以加载更多评论...", browser_number)
+                        scroll_number += 1
+                        scroll_comments(driver, scroll_number, browser_number)
+
+                        # 滚动后等待加载并重新定位容器
+                        human_like_delay(2, 3, browser_number)
+                        comments_container = WebDriverWait(driver, wait_time).until(
+                            EC.presence_of_element_located(
+                                (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                            )
+                        )
+                except Exception as e:
+                    pass  # 忽略检测错误，继续尝试处理
+
                 # 处理单条评论
                 result, video_liked_count = process_comment(
                     driver,
@@ -834,6 +1011,8 @@ def run_automation(
                     comment_reply_probability,
                     comment_wait_min,
                     comment_wait_max,
+                    visit_min,
+                    visit_max,
                 )
 
                 # 如果返回 False，可能是到底了，或者出错
@@ -848,23 +1027,7 @@ def run_automation(
 
                 processed_comment_count += 1
 
-                # 每处理3条评论就滚动一次
-                if processed_comment_count % 3 == 0 or processed_comment_count == 1:
-                    scroll_number += 1
-                    scroll_comments(driver, scroll_number, browser_number)
-
-                    # 滚动后重新定位评论容器
-                    try:
-                        comments_container = WebDriverWait(driver, wait_time).until(
-                            EC.presence_of_element_located(
-                                (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
-                            )
-                        )
-                    except Exception as e:
-                        log.error(f"{browser_info} 滚动后无法重新定位评论容器: {e}")
-                        break
-
-                # 每处理30条评论检测一次是否还有更多评论
+                # 每30条评论检测一次是否还有更多评论
                 if processed_comment_count % 30 == 0:
                     try:
                         padding = driver.find_element(
@@ -1011,6 +1174,8 @@ def process_urls(
         comment_reply_probability=0.05,
         comment_wait_min=12,
         comment_wait_max=12,
+        visit_min=2,
+        visit_max=5,
 ):
     """处理URL列表"""
     browser_info = get_browser_info(browser_number)
@@ -1046,6 +1211,8 @@ def process_urls(
                 comment_reply_probability,
                 comment_wait_min,
                 comment_wait_max,
+                visit_min,
+                visit_max,
             )
             if not success:
                 log.error(f"{browser_info} 处理链接 {target_url} 失败")
@@ -1331,6 +1498,8 @@ def continuous_processing_loop(
     comment_reply_probability = config.COMMENT_REPLY_PROBABILITY / 100.0
     comment_wait_min = config.COMMENT_WAIT_MIN
     comment_wait_max = config.COMMENT_WAIT_MAX
+    visit_min = config.VISIT_MIN
+    visit_max = config.VISIT_MAX
 
     # 验证一次卡密
     safe_check_license()
@@ -1355,9 +1524,6 @@ def continuous_processing_loop(
 
             # 2. 获取链接
             link_id, url, url_index = get_next_link(db_path)
-
-            # 输出start事件，包含正确的url_index
-            output_json(0, "", "start", browser_id, url_index=url_index)
 
             if url is None:
                 if config.URLS and len(config.URLS) > 0:
@@ -1385,7 +1551,8 @@ def continuous_processing_loop(
                         profile_follow_probability, min_follows_per_video, max_follows_per_video,
                         min_likes_per_video, max_likes_per_video, browser_number, browser_id,
                         enable_follow, enable_profile_visit, enable_like, enable_search_keywords,
-                        enable_comment_reply, comment_reply_probability, comment_wait_min, comment_wait_max
+                        enable_comment_reply, comment_reply_probability, comment_wait_min, comment_wait_max,
+                        visit_min, visit_max
                     )
 
                     if success:
@@ -1431,7 +1598,7 @@ def continuous_processing_loop(
                     time.sleep(5)
 
             # Sleep逻辑
-            wait_time_between_links = random.uniform(10, 30)
+            wait_time_between_links = random.uniform(5, 10)
             debug_log("info", f"等待 {wait_time_between_links:.2f} 秒后处理下一个链接...", browser_number)
             safe_sleep(wait_time_between_links)
 
@@ -1512,6 +1679,39 @@ def print_config_debug():
     log.info("=" * 80)
 
 
+# ----------------------------------------------------------------------
+# 新增: Windows防休眠设置
+# ----------------------------------------------------------------------
+def set_keep_awake(enable=True):
+    """
+    设置Windows系统防休眠
+    :param enable: True=开启(屏幕常亮), False=关闭(恢复默认)
+    """
+    if os.name != 'nt':
+        return
+
+    try:
+        import ctypes
+        ES_CONTINUOUS = 0x80000000
+        ES_SYSTEM_REQUIRED = 0x00000001
+        ES_DISPLAY_REQUIRED = 0x00000002
+
+        if enable:
+            # 阻止系统休眠和屏幕关闭
+            ctypes.windll.kernel32.SetThreadExecutionState(
+                ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
+            )
+            if config.DEBUG:
+                log.info("💻 Windows防休眠模式已启用 (屏幕常亮)")
+        else:
+            # 恢复系统默认状态
+            ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+            if config.DEBUG:
+                log.info("💤 Windows防休眠模式已解除")
+    except Exception as e:
+        log.warning(f"设置防休眠模式失败: {e}")
+
+
 def main_database():
     """
     使用数据库或列表的主函数 - 持续运行模式，从环境变量获取卡密信息
@@ -1534,6 +1734,11 @@ def main_database():
     # 启动定期验证线程
     li.start_periodic_check()
 
+    # ==========================
+    # 新增: 开启防休眠
+    # ==========================
+    set_keep_awake(True)
+
     # 判断使用列表模式还是数据库模式
     use_list_mode = config.URLS and len(config.URLS) > 0
 
@@ -1551,9 +1756,11 @@ def main_database():
 
         config.URLS = cleaned_urls
         if invalid_count > 0:
-            log.warning(f"URLS列表中有 {invalid_count} 个无效链接已跳过")
+            if config.DEBUG:
+                log.warning(f"URLS列表中有 {invalid_count} 个无效链接已跳过")
 
-        log.info(f"使用列表模式，共 {len(config.URLS)} 个有效URL")
+        if config.DEBUG:
+            log.info(f"使用列表模式，共 {len(config.URLS)} 个有效URL")
         reset_url_list_index()
     else:
         log.info("使用数据库模式")
@@ -1572,6 +1779,17 @@ def main_database():
     MAX_FOLLOWS_PER_VIDEO_USED = config.MAX_FOLLOWS_PER_VIDEO
     MIN_LIKES_PER_VIDEO_USED = config.COMMENT_LIKE_COUNT_MIN
     MAX_LIKES_PER_VIDEO_USED = config.COMMENT_LIKE_COUNT_MAX
+
+    # 输出版本信息
+    version_info = {"code": 0, "data": {"type": "version", "version": f"pc.{config.VERSION}"}}
+    output = json.dumps(version_info, ensure_ascii=False)
+    log2.info(output)
+
+    # 输出start事件，只输出一次，包含所有浏览器ID
+    # 修改为只输出一次，包含所有浏览器ID，不包含urlIndex
+    result = {"code": 0, "data": {"type": "start", "id": config.BIT_BROWSER_IDS}}
+    output = json.dumps(result, ensure_ascii=False)
+    log2.info(output)
 
     try:
         with ThreadPoolExecutor(max_workers=MAX_WORKERS_USED) as executor:
@@ -1620,6 +1838,10 @@ def main_database():
         log.error("卡密验证失败，程序终止")
         raise
     finally:
+        # ==========================
+        # 新增: 关闭防休眠
+        # ==========================
+        set_keep_awake(False)
         li.stop_periodic_check()
 
 
