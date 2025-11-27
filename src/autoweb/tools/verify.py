@@ -105,12 +105,14 @@ class LicenseManager:
 
     def verify_license(self):
         """初始验证，通常在程序启动时调用"""
-        log.info("正在验证卡密...")
+        if config.DEBUG:
+            log.info("正在验证卡密...")
         is_valid, msg = self._verify_logic()
 
         if is_valid:
             self._valid = True
-            log.info("✅ 卡密验证成功")
+            if config.DEBUG:
+                log.info("✅ 卡密验证成功")
             return True
         else:
             self._valid = False
