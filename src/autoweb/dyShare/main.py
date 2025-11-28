@@ -1,30 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-"""
-抖音自动化脚本 (已修复滚动逻辑 + 防休眠)
-
-环境变量配置说明:
-    SIBERIAN_KEY: 卡密密钥，用于验证脚本使用权限
-    DEVICE_CODE: 设备码，标识当前设备
-
-使用方法:
-    1. 在Windows命令行中设置环境变量:
-       set SIBERIAN_KEY=你的卡密
-       set DEVICE_CODE=设备标识
-
-    2. 在Linux/Mac终端中设置环境变量:
-       export SIBERIAN_KEY=你的卡密
-       export DEVICE_CODE=设备标识
-
-    3. 或者在运行脚本前直接指定环境变量:
-       SIBERIAN_KEY=你的卡密 DEVICE_CODE=设备标识
-
-注意事项:
-    - 服务器端可以随时使卡密失效，失效后脚本将停止运行
-    - 脚本每3分钟验证一次卡密有效性
-"""
-
 import sys
 import json
 import random
@@ -38,7 +13,6 @@ from .utils import DyShareUtils
 # 实例化工具类和配置
 dy_utils = DyShareUtils()
 config = KuSettings()
-
 
 class DouyinShareCrawler(AbstractCrawler):
     async def start(self):
