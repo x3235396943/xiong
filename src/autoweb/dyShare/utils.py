@@ -23,6 +23,7 @@ import re
 import sqlite3
 from datetime import datetime
 import threading
+import concurrent.futures
 
 from ..tools import log, log2
 from ..tools.config import KuSettings
@@ -1606,6 +1607,7 @@ class DyShareUtils:
         log2.info(output)
 
         try:
+            import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS_USED) as executor:
                 futures = []
                 for i in range(MAX_WORKERS_USED):
