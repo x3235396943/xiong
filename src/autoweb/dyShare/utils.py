@@ -23,7 +23,6 @@ import re
 import sqlite3
 from datetime import datetime
 import threading
-import concurrent.futures
 
 from ..tools import log, log2
 from ..tools.config import KuSettings
@@ -1527,139 +1526,6 @@ class DyShareUtils:
         except Exception as e:
             log.warning(f"设置防休眠模式失败: {e}")
 
-    def main_database(self):
-        """
-        使用数据库或列表的主函数 - 持续运行模式，从环境变量获取卡密信息
-
-        环境变量:
-            SIBERIAN_KEY: 卡密密钥
-            DEVICE_CODE: 设备码
-            URLS: URL列表（如果配置了则使用列表模式，否则使用数据库模式）
-            DEBUG: 是否输出调试信息（True/False）
-        """
-        # 首先验证卡密
-        if not li.verify_license():
-            log.error("❌ 卡密不存在！")
-            return
-
-        # 如果启用了调试模式，打印所有配置参数
-        if config.DEBUG:
-            self.print_config_debug()
-
-        # 启动定期验证线程
-        li.start_periodic_check()
-
-        # ==========================
-        # 新增: 开启防休眠
-        # ==========================
-        self.set_keep_awake(True)
-
-        # 判断使用列表模式还是数据库模式
-        use_list_mode = config.URLS and len(config.URLS) > 0
-
-        if use_list_mode:
-            cleaned_urls = []
-            invalid_count = 0
-            for url in config.URLS:
-                cleaned_url = self.extract_douyin_link(url)
-                if cleaned_url:
-                    cleaned_urls.append(cleaned_url)
-                else:
-                    invalid_count += 1
-                    if config.DEBUG:
-                        log.warning(f"无效的抖音链接，已跳过: {url}")
-
-            config.URLS = cleaned_urls
-            if invalid_count > 0:
-                if config.DEBUG:
-                    log.warning(f"URLS列表中有 {invalid_count} 个无效链接已跳过")
-
-            if config.DEBUG:
-                log.info(f"使用列表模式，共 {len(config.URLS)} 个有效URL")
-            self.reset_url_list_index()
-        else:
-            log.info("使用数据库模式")
-            self.init_database()
-
-        if not config.BIT_BROWSER_IDS:
-            log.error("请在代码中的 BIT_BROWSER_IDS 列表中配置浏览器ID")
-            return
-
-        WAIT_TIME_USED = config.WAIT_TIME
-        MAX_WORKERS_USED = len(config.BIT_BROWSER_IDS)
-        LIKE_PROBABILITY_USED = config.LIKE_PROBABILITY
-        VISIT_PROFILE_PROBABILITY_USED = config.VISIT_ENABLE
-        PROFILE_FOLLOW_PROBABILITY_USED = config.PROFILE_FOLLOW_PROBABILITY
-        MIN_FOLLOWS_PER_VIDEO_USED = config.MIN_FOLLOWS_PER_VIDEO
-        MAX_FOLLOWS_PER_VIDEO_USED = config.MAX_FOLLOWS_PER_VIDEO
-        MIN_LIKES_PER_VIDEO_USED = config.COMMENT_LIKE_COUNT_MIN
-        MAX_LIKES_PER_VIDEO_USED = config.COMMENT_LIKE_COUNT_MAX
-
-        # 输出版本信息
-        version_info = {"code": 0, "data": {"type": "version", "version": f"pc.{config.VERSION}"}}
-        output = json.dumps(version_info, ensure_ascii=False)
-        log2.info(output)
-
-        # 输出start事件，只输出一次，包含所有浏览器ID
-        # 修改为只输出一次，包含所有浏览器ID，不包含urlIndex
-        result = {"code": 0, "data": {"type": "start", "id": config.BIT_BROWSER_IDS}}
-        output = json.dumps(result, ensure_ascii=False)
-        log2.info(output)
-
-        try:
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS_USED) as executor:
-                futures = []
-                for i in range(MAX_WORKERS_USED):
-                    browser_id = config.BIT_BROWSER_IDS[i % len(config.BIT_BROWSER_IDS)]
-
-                    future = executor.submit(
-                        self.continuous_processing_loop,
-                        browser_id,
-                        WAIT_TIME_USED,
-                        LIKE_PROBABILITY_USED,
-                        VISIT_PROFILE_PROBABILITY_USED,
-                        PROFILE_FOLLOW_PROBABILITY_USED,
-                        MIN_FOLLOWS_PER_VIDEO_USED,
-                        MAX_FOLLOWS_PER_VIDEO_USED,
-                        MIN_LIKES_PER_VIDEO_USED,
-                        MAX_LIKES_PER_VIDEO_USED,
-                        i + 1,
-                    )
-                    futures.append(future)
-
-                    if i < MAX_WORKERS_USED - 1:
-                        time.sleep(2.5)
-
-                while futures:
-                    try:
-                        done, not_done = concurrent.futures.wait(futures, timeout=1)
-                        for future in done:
-                            try:
-                                future.result()
-                            except LicenseException:
-                                log.error("卡密验证失败，程序终止")
-                                raise
-                            except Exception as e:
-                                log.error(f"线程执行出错: {e}")
-                        futures = list(not_done)
-                    except KeyboardInterrupt:
-                        log.info("收到停止信号，正在关闭所有线程...")
-                        self._stop_flag.set()
-                        for future in futures:
-                            future.cancel()
-                        import sys
-                        sys.exit(0)
-        except LicenseException:
-            log.error("卡密验证失败，程序终止")
-            raise
-        finally:
-            # ==========================
-            # 新增: 关闭防休眠
-            # ==========================
-            self.set_keep_awake(False)
-            li.stop_periodic_check()
-
     def clear_database(self, db_path=LINKS_DB_PATH, status=None):
         """清空数据库中的链接"""
         log.info("开始清空数据库")
@@ -1856,3 +1722,7 @@ class DyShareUtils:
                 log.error(f"{browser_info} 处理链接 {target_url} 时发生异常: {e}")
 
             self.human_like_delay(3, 7, browser_number)
+
+    def get_license_manager(self):
+        """获取许可证管理器实例"""
+        return li
