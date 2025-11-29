@@ -972,8 +972,12 @@ def run_automation(
                     try:
                         comment_items = comments_container.find_elements(By.XPATH, "./div")
                         if comment_index >= len(comment_items):
+                            # 输出切换链接的消息
+                            output_json(0, "", "video", browser_id)
                             break
                     except:
+                        # 输出切换链接的消息
+                        output_json(0, "", "video", browser_id)
                         break
 
                 processed_comment_count += 1
@@ -991,6 +995,8 @@ def run_automation(
                                 "已滚动到底部或没有更多评论，结束当前链接操作",
                                 browser_number,
                             )
+                            # 输出切换链接的消息
+                            output_json(0, "", "video", browser_id)
                             break
                     except Exception as e:
                         log.error(f"{browser_info} 无法检测评论区是否到底: {e}")
@@ -1013,6 +1019,8 @@ def run_automation(
                         f"已达到目标关注数量 {target_follow_count} 和点赞数量 {target_like_count}，切换到下一个链接",
                         browser_number,
                     )
+                    # 输出切换链接的消息
+                    output_json(0, "", "video", browser_id)
                     break
 
                 comment_index += 1
@@ -1050,6 +1058,8 @@ def run_automation(
             pass
 
         debug_log("info", "所有评论处理完成", browser_number)
+        # 输出关注数量和点赞数量
+        output_follow_like_count(browser_id, video_followed_count, video_liked_count)
         return True
 
     except LicenseException:
@@ -1058,6 +1068,32 @@ def run_automation(
         log.error(f"{browser_info} 程序执行出错: {e}")
         # 如果是外部异常（不是循环内捕获的），返回False让上层决定是否重启
         return False
+
+
+def output_follow_like_count(browser_id, follow_count, like_count):
+    """
+    输出关注数量和点赞数量
+    
+    Args:
+        browser_id: 浏览器ID
+        follow_count: 关注数量
+        like_count: 点赞数量
+    """
+    result = {
+        "code": 0, 
+        "data": {
+            "type": "number",
+            "id": browser_id
+        },
+        "count": {
+            "follow": follow_count,
+            "like": like_count
+        }
+    }
+    
+    output = json.dumps(result, ensure_ascii=False)
+    print(output)
+    sys.stdout.flush()
 
 
 def process_urls_thread(
