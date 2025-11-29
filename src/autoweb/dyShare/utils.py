@@ -62,7 +62,6 @@ class DyShareUtils:
         self._url_list_index = 0
         self._url_list_lock = threading.Lock()
         self._stats_lock = threading.Lock()  # 保护全局统计变量的线程锁
-        self._stats_lock = threading.Lock()
         self._stop_flag = threading.Event()
 
     # ----------------------------------------------------------------------
