@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 import sys
 import json
-import random
 import concurrent.futures
 import time
 from ..tools.base import AbstractCrawler
