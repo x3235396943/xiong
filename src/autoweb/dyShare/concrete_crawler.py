@@ -33,7 +33,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         pass
 
     def validate_license(self) -> bool:
-        """验证许可证"""
+        """验证卡密"""
         return self.license_manager.verify_license()
 
     def prepare_environment(self) -> None:
@@ -141,7 +141,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         """清理资源"""
         # 关闭防休眠
         self.utils.set_keep_awake(False)
-        # 停止许可证检查
+        # 停止卡密检查
         self.license_manager.stop_periodic_check()
 
     def handle_add_command(self) -> None:

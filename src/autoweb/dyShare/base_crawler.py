@@ -29,7 +29,7 @@ class BaseDyShareCrawler(ABC):
 
     @abstractmethod
     def validate_license(self) -> bool:
-        """验证许可证"""
+        """验证卡密"""
         pass
 
     @abstractmethod
@@ -66,9 +66,9 @@ class BaseDyShareCrawler(ABC):
             # 1. 初始化配置
             self.initialize_config()
             
-            # 2. 验证许可证
+            # 2. 验证卡密
             if not self.validate_license():
-                print("❌ 许可证验证失败！")
+                print("❌ 卡密验证失败！")
                 return
             
             # 3. 准备运行环境
