@@ -1,30 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-"""
-抖音自动化脚本 (已修复滚动逻辑 + 防休眠)
-
-环境变量配置说明:
-    SIBERIAN_KEY: 卡密密钥，用于验证脚本使用权限
-    DEVICE_CODE: 设备码，标识当前设备
-
-使用方法:
-    1. 在Windows命令行中设置环境变量:
-       set SIBERIAN_KEY=你的卡密
-       set DEVICE_CODE=设备标识
-
-    2. 在Linux/Mac终端中设置环境变量:
-       export SIBERIAN_KEY=你的卡密
-       export DEVICE_CODE=设备标识
-
-    3. 或者在运行脚本前直接指定环境变量:
-       SIBERIAN_KEY=你的卡密 DEVICE_CODE=设备标识
-
-注意事项:
-    - 服务器端可以随时使卡密失效，失效后脚本将停止运行
-    - 脚本每3分钟验证一次卡密有效性
-"""
-
 import json
 import sys
 import os
@@ -49,17 +24,8 @@ from ..tools import log, log2
 from ..tools.config import KuSettings
 from ..tools.base import AbstractCrawler
 from ..tools.bit_api import openBrowser, closeBrowser
+from ..tools.verify import LicenseManager, LicenseException
 
-# ==============================================================================
-# 修改: 从 tools.verify 导入卡密管理器
-# ==============================================================================
-try:
-    from ..tools.verify import LicenseManager, LicenseException
-except ImportError:
-    log.error("❌ 无法导入 verify 模块，请检查 tools/verify.py 是否存在")
-    sys.exit(1)
-
-# 将全局变量的初始化移到导入之后，确保config已经完全加载
 config: KuSettings = KuSettings()  # type: ignore
 
 LINKS_DB_PATH = config.LINKS_DB_PATH
@@ -74,9 +40,6 @@ global_followed_count = 0
 li = LicenseManager()
 
 
-# ----------------------------------------------------------------------
-# 优化点 1: 增加一个网络容错的卡密检查函数
-# ----------------------------------------------------------------------
 def safe_check_license():
     """
     带有网络容错的卡密检查
@@ -211,7 +174,7 @@ def output_json(code, msg="", data_type="", browser_id="", url_index=None, comme
     输出JSON格式的操作结果
 
     Args:
-        code: 0表示成功，-1表示找不到按钮等异常，1表示链接失效
+        code: 0表示成功，-1表示内部异常，1表示外部异常
         msg: 错误信息，只在错误时输出
         data_type: 操作类型 start|exit|like|follow|video|url_ok|url_fail
         browser_id: 浏览器ID
@@ -436,9 +399,6 @@ def extract_douyin_link(text):
     return None
 
 
-# ----------------------------------------------------------------------
-# 新增: 元素可见性辅助函数
-# ----------------------------------------------------------------------
 def ensure_element_visible(driver, element, browser_number=None):
     """
     将指定元素滚动到屏幕中央，解决长评论遮挡问题
@@ -454,10 +414,6 @@ def ensure_element_visible(driver, element, browser_number=None):
         log.warning(f"{browser_info} 元素滚动可见性处理失败: {e}")
         return False
 
-
-# ----------------------------------------------------------------------
-# 优化点 2: 重构 process_comment，使用稳健的窗口切换逻辑
-# ----------------------------------------------------------------------
 def visit_user_profile(driver, main_window, avatar_element, wait_time, browser_number, browser_id="",
                        profile_follow_probability=0.5, visit_min=2, visit_max=5):
     """
@@ -809,11 +765,6 @@ def process_comment(
 
     return True, like_count
 
-
-# ----------------------------------------------------------------------
-# 优化点 3: 修改 run_automation 中的异常捕获
-# ----------------------------------------------------------------------
-
 def run_automation(
         driver,
         url,
@@ -933,7 +884,7 @@ def run_automation(
                             debug_log("info", f"视频留言成功: {comment_text[:30]}...", browser_number)
                         else:
                             # 非DEBUG模式只输出JSON
-                            output_json(0, "", "video_commit", browser_id)
+                            output_json(0, "", "videoComment", browser_id)
                     else:
                         debug_log("warning", "视频留言失败", browser_number)
                 else:
@@ -1021,8 +972,12 @@ def run_automation(
                     try:
                         comment_items = comments_container.find_elements(By.XPATH, "./div")
                         if comment_index >= len(comment_items):
+                            # 输出切换链接的消息
+                            output_json(0, "", "video", browser_id)
                             break
                     except:
+                        # 输出切换链接的消息
+                        output_json(0, "", "video", browser_id)
                         break
 
                 processed_comment_count += 1
@@ -1040,6 +995,8 @@ def run_automation(
                                 "已滚动到底部或没有更多评论，结束当前链接操作",
                                 browser_number,
                             )
+                            # 输出切换链接的消息
+                            output_json(0, "", "video", browser_id)
                             break
                     except Exception as e:
                         log.error(f"{browser_info} 无法检测评论区是否到底: {e}")
@@ -1062,6 +1019,8 @@ def run_automation(
                         f"已达到目标关注数量 {target_follow_count} 和点赞数量 {target_like_count}，切换到下一个链接",
                         browser_number,
                     )
+                    # 输出切换链接的消息
+                    output_json(0, "", "video", browser_id)
                     break
 
                 comment_index += 1
@@ -1099,6 +1058,8 @@ def run_automation(
             pass
 
         debug_log("info", "所有评论处理完成", browser_number)
+        # 输出关注数量和点赞数量
+        output_follow_like_count(browser_id, video_followed_count, video_liked_count)
         return True
 
     except LicenseException:
@@ -1107,6 +1068,32 @@ def run_automation(
         log.error(f"{browser_info} 程序执行出错: {e}")
         # 如果是外部异常（不是循环内捕获的），返回False让上层决定是否重启
         return False
+
+
+def output_follow_like_count(browser_id, follow_count, like_count):
+    """
+    输出关注数量和点赞数量
+    
+    Args:
+        browser_id: 浏览器ID
+        follow_count: 关注数量
+        like_count: 点赞数量
+    """
+    result = {
+        "code": 0, 
+        "data": {
+            "type": "number",
+            "id": browser_id
+        },
+        "count": {
+            "follow": follow_count,
+            "like": like_count
+        }
+    }
+    
+    output = json.dumps(result, ensure_ascii=False)
+    print(output)
+    sys.stdout.flush()
 
 
 def process_urls_thread(
@@ -1464,11 +1451,6 @@ def mark_link_as_failed(link_id, db_path=LINKS_DB_PATH):
     conn.commit()
     conn.close()
 
-
-# ----------------------------------------------------------------------
-# 优化点 4: 修改 continuous_processing_loop 的重连逻辑
-# ----------------------------------------------------------------------
-
 def continuous_processing_loop(
         browser_id,
         wait_time,
@@ -1485,6 +1467,9 @@ def continuous_processing_loop(
     """持续处理循环 (优化版)"""
     browser_info = get_browser_info(browser_number)
     debug_log("info", "启动持续处理循环", browser_number)
+
+    # 输出start事件，每个浏览器实例启动时单独输出
+    output_json(0, "", "start", browser_id)
 
     # 变量初始化
     enable_follow = config.ENABLE_FOLLOW
@@ -1679,9 +1664,6 @@ def print_config_debug():
     log.info("=" * 80)
 
 
-# ----------------------------------------------------------------------
-# 新增: Windows防休眠设置
-# ----------------------------------------------------------------------
 def set_keep_awake(enable=True):
     """
     设置Windows系统防休眠
@@ -1785,11 +1767,7 @@ def main_database():
     output = json.dumps(version_info, ensure_ascii=False)
     log2.info(output)
 
-    # 输出start事件，只输出一次，包含所有浏览器ID
-    # 修改为只输出一次，包含所有浏览器ID，不包含urlIndex
-    result = {"code": 0, "data": {"type": "start", "id": config.BIT_BROWSER_IDS}}
-    output = json.dumps(result, ensure_ascii=False)
-    log2.info(output)
+    # 在continuous_processing_loop函数中，每个浏览器启动时会输出自己的start事件
 
     try:
         with ThreadPoolExecutor(max_workers=MAX_WORKERS_USED) as executor:
@@ -1838,9 +1816,7 @@ def main_database():
         log.error("卡密验证失败，程序终止")
         raise
     finally:
-        # ==========================
         # 新增: 关闭防休眠
-        # ==========================
         set_keep_awake(False)
         li.stop_periodic_check()
 
