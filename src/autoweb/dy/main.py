@@ -161,7 +161,7 @@ class DouyinCrawler(AbstractCrawler):
                 # comment.click()
                 # await sleep(1)
                 commentOk = False
-                if comment.text:
+                if config.ENABLE_SEARCH_KEYWORDS and comment.text:
                     for li in config.COMMENT_FILTER_KEYWORDS:
                         if li in comment.text:
                             commentOk = True
@@ -199,17 +199,12 @@ class DouyinCrawler(AbstractCrawler):
                     )
                     await sleep(randint(config.LIKE_WAIT_MIN, config.LIKE_WAIT_MAX))
 
-                if (
-                    config.ENABLE_FOLLOW
-                    and followIndex < maxFollow
-                    and randint(1, 100) <= config.VISIT_ENABLE
-                ):
+                if config.ENABLE_PROFILE_VISIT and randint(1, 100) <= config.VISIT_ENABLE:
                     print("进入主页->", comment.text)
                     try:
-                        if randint(1, 100) <= config.PROFILE_FOLLOW_PROBABILITY:
-                            comment.find_element(
-                                By.CSS_SELECTOR, ".comment-item-avatar a"
-                            ).click()
+                        comment.find_element(
+                            By.CSS_SELECTOR, ".comment-item-avatar a"
+                        ).click()
                     except ElementClickInterceptedException:
                         driver.execute_script(
                             "arguments[0].click();",
@@ -231,44 +226,50 @@ class DouyinCrawler(AbstractCrawler):
                     await sleep(randint(3, 5))
                     driver.switch_to.window(driver.window_handles[1])
                     await sleep(randint(7, 15))
-                    try:
-                        driver.find_element(
-                            By.CSS_SELECTOR, '[data-e2e="user-info-follow-btn"]'
-                        ).click()
-                        log.info("💗关注用户成功")
-                        followIndex += 1
-                        log2.info(
-                            {
-                                "code": 0,
-                                "data": {
-                                    "type": "follow",
-                                    "id": config.DEVICE_CODE,
-                                },
-                            }
-                        )
-                    except ElementClickInterceptedException:
-                        timestamp = datetime.now().strftime("%Y年%m月%d日_%H时%M分%S秒")
-                        driver.get_screenshot_as_file(f"screenshot_{timestamp}.png")
-                        driver.execute_script(
-                            "arguments[0].click();",
+
+                    if (
+                        config.ENABLE_FOLLOW
+                        and followIndex < maxFollow
+                        and randint(1, 100) <= config.PROFILE_FOLLOW_PROBABILITY
+                    ):
+                        try:
                             driver.find_element(
                                 By.CSS_SELECTOR, '[data-e2e="user-info-follow-btn"]'
-                            ),
-                        )
-                        print("💗关注用户成功")
-                        followIndex += 1
-                        log2.info(
-                            {
-                                "code": 0,
-                                "data": {
-                                    "type": "follow",
-                                    "id": config.DEVICE_CODE,
-                                },
-                            }
-                        )
-                    except NoSuchElementException:
-                        print("用户不存在")
-                    await sleep(randint(config.VISIT_MIN, config.VISIT_MAX))
+                            ).click()
+                            log.info("💗关注用户成功")
+                            followIndex += 1
+                            log2.info(
+                                {
+                                    "code": 0,
+                                    "data": {
+                                        "type": "follow",
+                                        "id": config.DEVICE_CODE,
+                                    },
+                                }
+                            )
+                        except ElementClickInterceptedException:
+                            timestamp = datetime.now().strftime("%Y年%m月%d日_%H时%M分%S秒")
+                            driver.get_screenshot_as_file(f"screenshot_{timestamp}.png")
+                            driver.execute_script(
+                                "arguments[0].click();",
+                                driver.find_element(
+                                    By.CSS_SELECTOR, '[data-e2e="user-info-follow-btn"]'
+                                ),
+                            )
+                            print("💗关注用户成功")
+                            followIndex += 1
+                            log2.info(
+                                {
+                                    "code": 0,
+                                    "data": {
+                                        "type": "follow",
+                                        "id": config.DEVICE_CODE,
+                                    },
+                                }
+                            )
+                        except NoSuchElementException:
+                            print("用户不存在")
+                        await sleep(randint(config.VISIT_MIN, config.VISIT_MAX))
                     driver.close()
                     driver.switch_to.window(driver.window_handles[0])
 
