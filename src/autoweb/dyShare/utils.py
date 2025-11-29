@@ -55,8 +55,14 @@ class DyShareUtils:
         self.previous_comment_count = 0
         self.no_new_comments_count = 0
         self.global_followed_count = 0
+        self.global_liked_count = 0
+        self.global_comment_reply_count = 0
+        self.global_url_opened_count = 0
+        self.global_video_comment_count = 0
         self._url_list_index = 0
         self._url_list_lock = threading.Lock()
+        self._stats_lock = threading.Lock()  # 保护全局统计变量的线程锁
+        self._stats_lock = threading.Lock()
         self._stop_flag = threading.Event()
 
     # ----------------------------------------------------------------------
@@ -179,7 +185,7 @@ class DyShareUtils:
         except Exception:
             return ""
 
-    def output_json(self, code, msg="", data_type="", browser_id="", url_index=None, comment_reply=None, keywords=None):
+    def output_json(self, code, msg="", data_type="", browser_id="", url_index=None, comment_reply=None, keywords=None, count=None):
         """
         输出JSON格式的操作结果
 
@@ -191,6 +197,7 @@ class DyShareUtils:
             url_index: URL在数据库中的索引（从0开始）
             comment_reply: 评论回复内容
             keywords: 关键词匹配信息
+            count: 统计数据数组，如 [关注数, 点赞数, 回复评论数]
         """
         result = {"code": code, "data": {"type": data_type, "id": browser_id}}
         # 只在有错误信息时添加msg字段
@@ -208,6 +215,10 @@ class DyShareUtils:
         # 如果提供了keywords，添加到结果中
         if keywords is not None:
             result["keywords"] = keywords
+
+        # 如果提供了count，添加到结果中
+        if count is not None:
+            result["count"] = count
 
         # 输出JSON并立即刷新，确保在打包环境中也能正常输出
         output = json.dumps(result, ensure_ascii=False)
@@ -637,7 +648,7 @@ class DyShareUtils:
             )
             comment_items = comments_container.find_elements(By.XPATH, "./div")
             if comment_index >= len(comment_items):
-                return False, like_count
+                return False, like_count, 0
             target_comment = comment_items[comment_index]
 
             # =========================================================
@@ -647,7 +658,7 @@ class DyShareUtils:
 
         except Exception as e:
             # 找不到评论不用报错，可能是到底了
-            return False, like_count
+            return False, like_count, 0
 
         # 提取内容和关键词匹配逻辑 (保持不变)
         comment_text = self._extract_comment_text(target_comment)
@@ -717,7 +728,7 @@ class DyShareUtils:
                                                           browser_id,
                                                           follow_prob, visit_min, visit_max)
                     if is_followed:
-                        return "followed", like_count
+                        return "followed", like_count, 0
 
             except Exception as e:
                 # 捕获这里的异常，防止单条评论错误导致整个循环崩溃
@@ -734,6 +745,7 @@ class DyShareUtils:
                     pass
 
         # 评论回复逻辑：关键词命中后直接执行，否则按概率执行
+        reply_count = 0
         COMMENT_REPLIES = self.parse_comment_replies()
         should_reply = enable_comment_reply and COMMENT_REPLIES and (
                 keyword_matched or (random.random() < comment_reply_probability))
@@ -757,6 +769,7 @@ class DyShareUtils:
                     # 修改输出格式
                     self.output_json(0, "", "comment", browser_id, comment_reply=reply_content)
                     self.debug_log("info", f"成功回复评论，内容: {reply_content[:30]}...", browser_number)
+                    reply_count = 1
             except Exception as e:
                 msg = str(e)
                 if "invalid session id" in msg or "disconnected" in msg:
@@ -769,7 +782,7 @@ class DyShareUtils:
                 except:
                     pass
 
-        return True, like_count
+        return True, like_count, reply_count
 
     def run_automation(
             self,
@@ -795,6 +808,7 @@ class DyShareUtils:
             comment_wait_max=12,
             visit_min=2,
             visit_max=5,
+            url_index=None,
     ):
         """
         运行完整的自动化流程
@@ -829,6 +843,10 @@ class DyShareUtils:
                 min_likes_per_video,
             )
         target_like_count = random.randint(min_likes_per_video, max_likes_per_video)
+        
+        # 每条视频使用独立的回复评论和视频留言计数器
+        video_comment_reply_count = 0
+        video_comment_count = 0
         self.debug_log(
             "info",
             f"本视频计划关注 {target_follow_count} 个用户，点赞 {target_like_count} 条评论",
@@ -887,6 +905,7 @@ class DyShareUtils:
                         success = self.leave_video_comment(driver, comment_text, browser_number, browser_id)
 
                         if success:
+                            video_comment_count += 1
                             # 根据DEBUG模式输出
                             if config.DEBUG:
                                 self.debug_log("info", f"视频留言成功: {comment_text[:30]}...", browser_number)
@@ -950,7 +969,7 @@ class DyShareUtils:
                         pass  # 忽略检测错误，继续尝试处理
 
                     # 处理单条评论
-                    result, video_liked_count = self.process_comment(
+                    result, video_liked_count, reply_count = self.process_comment(
                         driver,
                         main_window,
                         comment_index,
@@ -973,6 +992,10 @@ class DyShareUtils:
                         visit_min,
                         visit_max,
                     )
+                    
+                    # 更新回复评论计数
+                    if reply_count > 0:
+                        video_comment_reply_count += reply_count
 
                     # 如果返回 False，可能是到底了，或者出错
                     if result is False:
@@ -1058,6 +1081,19 @@ class DyShareUtils:
                 pass
 
             self.debug_log("info", "所有评论处理完成", browser_number)
+            
+            # 更新全局统计数据（使用锁保护）
+            with self._stats_lock:
+                self.global_followed_count += video_followed_count
+                self.global_liked_count += video_liked_count
+                self.global_comment_reply_count += video_comment_reply_count
+                self.global_video_comment_count += video_comment_count
+            
+            # 输出完成链接的统计数据
+            if url_index is not None:
+                count_array = [video_followed_count, video_liked_count, video_comment_reply_count]
+                self.output_json(0, "", "number", browser_id, url_index=url_index, count=count_array)
+            
             return True
 
         except LicenseException:
@@ -1355,6 +1391,13 @@ class DyShareUtils:
                         continue
 
                 self.debug_log("info", f"获取到新链接: {url}", browser_number)
+                
+                # 输出切换链接事件
+                self.output_json(0, "", "video", browser_id)
+                
+                # 更新全局打开的链接量
+                with self._stats_lock:
+                    self.global_url_opened_count += 1
 
                 # 3. 执行任务
                 retry_count = 0
@@ -1372,7 +1415,7 @@ class DyShareUtils:
                             min_likes_per_video, max_likes_per_video, browser_number, browser_id,
                             enable_follow, enable_profile_visit, enable_like, enable_search_keywords,
                             enable_comment_reply, comment_reply_probability, comment_wait_min, comment_wait_max,
-                            visit_min, visit_max
+                            visit_min, visit_max, url_index
                         )
 
                         if success:
@@ -1424,11 +1467,29 @@ class DyShareUtils:
 
         except KeyboardInterrupt:
             log.info(f"{browser_info} 收到停止信号，正在退出...")
-            self.output_json(0, "", "exit", browser_id)
+            # 输出全局统计数据
+            with self._stats_lock:
+                count_array = [
+                    self.global_followed_count,
+                    self.global_liked_count,
+                    self.global_comment_reply_count,
+                    self.global_url_opened_count,
+                    self.global_video_comment_count
+                ]
+            self.output_json(0, "", "exit", browser_id, count=count_array)
             return
         except Exception as e:
             log.error(f"{browser_info} 程序异常退出: {e}")
-            self.output_json(0, "", "exit", browser_id)
+            # 输出全局统计数据
+            with self._stats_lock:
+                count_array = [
+                    self.global_followed_count,
+                    self.global_liked_count,
+                    self.global_comment_reply_count,
+                    self.global_url_opened_count,
+                    self.global_video_comment_count
+                ]
+            self.output_json(0, "", "exit", browser_id, count=count_array)
             raise
 
     def print_config_debug(self):
@@ -1715,6 +1776,7 @@ class DyShareUtils:
                     comment_wait_max,
                     visit_min,
                     visit_max,
+                    url_index=i,
                 )
                 if not success:
                     log.error(f"{browser_info} 处理链接 {target_url} 失败")
