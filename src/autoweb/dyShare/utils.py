@@ -1724,5 +1724,5 @@ class DyShareUtils:
             self.human_like_delay(3, 7, browser_number)
 
     def get_license_manager(self):
-        """获取许可证管理器实例"""
+        """获取卡密管理器实例"""
         return li
