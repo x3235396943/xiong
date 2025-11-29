@@ -884,7 +884,7 @@ def run_automation(
                             debug_log("info", f"视频留言成功: {comment_text[:30]}...", browser_number)
                         else:
                             # 非DEBUG模式只输出JSON
-                            output_json(0, "", "video_commit", browser_id)
+                            output_json(0, "", "videoComment", browser_id)
                     else:
                         debug_log("warning", "视频留言失败", browser_number)
                 else:
