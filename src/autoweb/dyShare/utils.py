@@ -28,6 +28,7 @@ from ..tools import log, log2
 from ..tools.config import KuSettings
 from ..tools.base import AbstractCrawler
 from ..tools.bit_api import openBrowser, closeBrowser
+from ..tools.websocket_client import WebSocketClient
 
 try:
     from ..tools.verify import LicenseManager, LicenseException
@@ -63,6 +64,51 @@ class DyShareUtils:
         self._url_list_lock = threading.Lock()
         self._stats_lock = threading.Lock()  # 保护全局统计变量的线程锁
         self._stop_flag = threading.Event()
+        # 初始化WebSocket客户端
+        self.websocket_client = None
+        self._setup_websocket_client()
+
+    def _setup_websocket_client(self):
+        """设置WebSocket客户端"""
+        try:
+            # 从配置中获取WebSocket服务器地址（需要在config.py中添加相关配置）
+            ws_server_uri = getattr(config, 'WEBSOCKET_SERVER_URI', None)
+            if ws_server_uri:
+                self.websocket_client = WebSocketClient(ws_server_uri, config.DEVICE_CODE)
+                if self.websocket_client.connect():
+                    # 注册消息处理器
+                    self.websocket_client.register_handler("control_command", self._handle_control_command)
+                    self.websocket_client.start_listening()
+                    self._send_ws_message({"type": "client_ready", "status": "connected"})
+        except Exception as e:
+            log.warning(f"WebSocket客户端初始化失败: {e}")
+
+    def _send_ws_message(self, message: dict):
+        """发送WebSocket消息的辅助方法"""
+        if self.websocket_client and self.websocket_client.is_connected:
+            try:
+                self.websocket_client.send_message(message)
+            except Exception as e:
+                log.warning(f"发送WebSocket消息失败: {e}")
+
+    def _handle_control_command(self, data: dict):
+        """处理来自服务器的控制命令"""
+        command = data.get("command")
+        if command == "stop":
+            self._stop_flag.set()
+            self._send_ws_message({"type": "status", "message": "收到停止命令，正在停止..."})
+        elif command == "get_stats":
+            # 发送当前统计信息
+            with self._stats_lock:
+                stats = {
+                    "followed_count": self.global_followed_count,
+                    "liked_count": self.global_liked_count,
+                    "comment_reply_count": self.global_comment_reply_count,
+                    "url_opened_count": self.global_url_opened_count,
+                    "video_comment_count": self.global_video_comment_count
+                }
+            self._send_ws_message({"type": "stats", "data": stats})
+        # 可以添加更多命令处理逻辑
 
     # ----------------------------------------------------------------------
     # 工具函数
@@ -223,6 +269,13 @@ class DyShareUtils:
         output = json.dumps(result, ensure_ascii=False)
         print(output)
         sys.stdout.flush()
+        
+        # 如果启用了WebSocket，同时发送到服务器
+        if data_type in ["start", "exit", "like", "follow", "video", "url_ok", "url_fail", "number"]:
+            self._send_ws_message({
+                "type": "log_event",
+                "event": result
+            })
 
     def get_driver(self, browser_id, browser_number=None):
         """
@@ -442,6 +495,9 @@ class DyShareUtils:
         handles_before = driver.window_handles
 
         try:
+            # 检查是否收到停止信号
+            self.check_stop_signal()
+            
             # 点击头像
             driver.execute_script("arguments[0].click();", avatar_element)
             self.debug_log("info", "点击头像进入主页", browser_number)
@@ -468,6 +524,9 @@ class DyShareUtils:
         # 在新窗口中的操作
         action_success = False
         try:
+            # 检查是否收到停止信号
+            self.check_stop_signal()
+            
             # 进入主页后先等待（VISIT_MIN 到 VISIT_MAX 秒）
             visit_wait_time = random.uniform(visit_min, visit_max)
             self.debug_log("info", f"进入主页，等待 {visit_wait_time:.2f} 秒", browser_number)
@@ -527,6 +586,9 @@ class DyShareUtils:
         """
         browser_info = self.get_browser_info(browser_number)
         try:
+            # 检查是否收到停止信号
+            self.check_stop_signal()
+            
             # 查找评论的回复按钮
             reply_button = target_comment.find_element(
                 By.CSS_SELECTOR,
@@ -577,6 +639,9 @@ class DyShareUtils:
         """
         browser_info = self.get_browser_info(browser_number, browser_id)
         try:
+            # 检查是否收到停止信号
+            self.check_stop_signal()
+            
             # 查找评论输入框 (使用指定的class)
             comment_input = driver.find_element(
                 By.CSS_SELECTOR,
@@ -910,7 +975,7 @@ class DyShareUtils:
                                 self.debug_log("info", f"视频留言成功: {comment_text[:30]}...", browser_number)
                             else:
                                 # 非DEBUG模式只输出JSON
-                                self.output_json(0, "", "video_commit", browser_id)
+                                self.output_json(0, "", "videoCommit", browser_id)
                         else:
                             self.debug_log("warning", "视频留言失败", browser_number)
                     else:
@@ -1364,6 +1429,11 @@ class DyShareUtils:
 
         try:
             while True:
+                # 检查是否收到停止信号
+                if self._stop_flag.is_set():
+                    log.info(f"{browser_info} 收到全局停止信号，正在退出...")
+                    break
+                    
                 # 1. 驱动检查与创建
                 if driver is None:
                     # 树立项目规范，不主动关闭浏览器实例
@@ -1401,6 +1471,11 @@ class DyShareUtils:
                 # 3. 执行任务
                 retry_count = 0
                 while retry_count < 3:
+                    # 检查是否收到停止信号
+                    if self._stop_flag.is_set():
+                        log.info(f"{browser_info} 收到全局停止信号，正在退出...")
+                        break
+                        
                     try:
                         # 每次执行前检查驱动是否存活
                         try:
@@ -1458,6 +1533,11 @@ class DyShareUtils:
                             self.debug_log("error", f"{browser_info} 链接处理彻底失败: {url}", browser_number)
 
                         time.sleep(5)
+                
+                # 如果收到停止信号，退出循环
+                if self._stop_flag.is_set():
+                    log.info(f"{browser_info} 收到全局停止信号，正在退出...")
+                    break
 
                 # Sleep逻辑
                 wait_time_between_links = random.uniform(5, 10)
@@ -1466,19 +1546,9 @@ class DyShareUtils:
 
         except KeyboardInterrupt:
             log.info(f"{browser_info} 收到停止信号，正在退出...")
-            # 输出全局统计数据
-            with self._stats_lock:
-                count_array = [
-                    self.global_followed_count,
-                    self.global_liked_count,
-                    self.global_comment_reply_count,
-                    self.global_url_opened_count,
-                    self.global_video_comment_count
-                ]
-            self.output_json(0, "", "exit", browser_id, count=count_array)
-            return
         except Exception as e:
             log.error(f"{browser_info} 程序异常退出: {e}")
+        finally:
             # 输出全局统计数据
             with self._stats_lock:
                 count_array = [
@@ -1489,7 +1559,13 @@ class DyShareUtils:
                     self.global_video_comment_count
                 ]
             self.output_json(0, "", "exit", browser_id, count=count_array)
-            raise
+            
+            # 关闭浏览器
+            if driver:
+                try:
+                    driver.quit()
+                except:
+                    pass
 
     def print_config_debug(self):
         """打印所有配置参数，用于调试"""
