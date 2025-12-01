@@ -28,7 +28,6 @@ from ..tools import log, log2
 from ..tools.config import KuSettings
 from ..tools.base import AbstractCrawler
 from ..tools.bit_api import openBrowser, closeBrowser
-from ..tools.websocket_client import WebSocketClient
 
 try:
     from ..tools.verify import LicenseManager, LicenseException
@@ -64,51 +63,6 @@ class DyShareUtils:
         self._url_list_lock = threading.Lock()
         self._stats_lock = threading.Lock()  # 保护全局统计变量的线程锁
         self._stop_flag = threading.Event()
-        # 初始化WebSocket客户端
-        self.websocket_client = None
-        self._setup_websocket_client()
-
-    def _setup_websocket_client(self):
-        """设置WebSocket客户端"""
-        try:
-            # 从配置中获取WebSocket服务器地址（需要在config.py中添加相关配置）
-            ws_server_uri = getattr(config, 'WEBSOCKET_SERVER_URI', None)
-            if ws_server_uri:
-                self.websocket_client = WebSocketClient(ws_server_uri, config.DEVICE_CODE)
-                if self.websocket_client.connect():
-                    # 注册消息处理器
-                    self.websocket_client.register_handler("control_command", self._handle_control_command)
-                    self.websocket_client.start_listening()
-                    self._send_ws_message({"type": "client_ready", "status": "connected"})
-        except Exception as e:
-            log.warning(f"WebSocket客户端初始化失败: {e}")
-
-    def _send_ws_message(self, message: dict):
-        """发送WebSocket消息的辅助方法"""
-        if self.websocket_client and self.websocket_client.is_connected:
-            try:
-                self.websocket_client.send_message(message)
-            except Exception as e:
-                log.warning(f"发送WebSocket消息失败: {e}")
-
-    def _handle_control_command(self, data: dict):
-        """处理来自服务器的控制命令"""
-        command = data.get("command")
-        if command == "stop":
-            self._stop_flag.set()
-            self._send_ws_message({"type": "status", "message": "收到停止命令，正在停止..."})
-        elif command == "get_stats":
-            # 发送当前统计信息
-            with self._stats_lock:
-                stats = {
-                    "followed_count": self.global_followed_count,
-                    "liked_count": self.global_liked_count,
-                    "comment_reply_count": self.global_comment_reply_count,
-                    "url_opened_count": self.global_url_opened_count,
-                    "video_comment_count": self.global_video_comment_count
-                }
-            self._send_ws_message({"type": "stats", "data": stats})
-        # 可以添加更多命令处理逻辑
 
     # ----------------------------------------------------------------------
     # 工具函数
@@ -270,12 +224,7 @@ class DyShareUtils:
         print(output)
         sys.stdout.flush()
         
-        # 如果启用了WebSocket，同时发送到服务器
-        if data_type in ["start", "exit", "like", "follow", "video", "url_ok", "url_fail", "number"]:
-            self._send_ws_message({
-                "type": "log_event",
-                "event": result
-            })
+        # 移除了WebSocket相关代码
 
     def get_driver(self, browser_id, browser_number=None):
         """
