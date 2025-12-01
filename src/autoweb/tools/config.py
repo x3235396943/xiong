@@ -93,26 +93,7 @@ class KuSettings(Base):
     FOLLOW_PROBABILITY: float = 4
     COMMENT_KEYWORDS: list = []
 
-    @field_validator(
-        "MAX_FOLLOWS_PER_VIDEO",
-        "COMMENT_LIKE_COUNT_MAX",
-        mode="after",
-    )
-    @classmethod
-    def validate_min_max_pairs(cls, v, info):
-        # 验证关注和点赞的最小最大值对
-        field_name = info.field_name
-        if field_name == "MAX_FOLLOWS_PER_VIDEO":
-            if v < cls.model_fields['MIN_FOLLOWS_PER_VIDEO'].default:
-                raise ValueError(
-                    f"MAX_FOLLOWS_PER_VIDEO ({v}) must be greater than or equal to MIN_FOLLOWS_PER_VIDEO ({cls.model_fields['MIN_FOLLOWS_PER_VIDEO'].default})"
-                )
-        elif field_name == "COMMENT_LIKE_COUNT_MAX":
-            if v < cls.model_fields['COMMENT_LIKE_COUNT_MIN'].default:
-                raise ValueError(
-                    f"COMMENT_LIKE_COUNT_MAX ({v}) must be greater than or equal to COMMENT_LIKE_COUNT_MIN ({cls.model_fields['COMMENT_LIKE_COUNT_MIN'].default})"
-                )
-        return v
+
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
 
