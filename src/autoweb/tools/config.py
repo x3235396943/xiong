@@ -93,6 +93,9 @@ class KuSettings(Base):
     FOLLOW_PROBABILITY: float = 4
     COMMENT_KEYWORDS: list = []
 
+    # WebSocket 配置
+    WEBSOCKET_URL: str = "ws://192.168.2.9:11221/ws/?id=111222"  # WebSocket 服务器地址
+
 
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")

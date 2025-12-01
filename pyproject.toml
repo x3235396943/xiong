@@ -27,6 +27,8 @@ pyinstaller = ">=6.16.0,<7"
 aiohttp = ">=3.13.2,<4"
 ujson = ">=5.11.0,<6"
 psutil = "*"
+websocket = ">=0.2.1,<0.3"
+websockets = ">=15.0.1,<16"
 
 [tool.pixi.tasks]
 web = "python -m autoweb.main"
