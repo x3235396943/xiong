@@ -15,10 +15,10 @@ from typing import List, Dict, Any, Optional
 
 
 class BaseDyShareCrawler(ABC):
-    """抖音分享爬虫抽象基类"""
+    """抖音自动化抽象基类"""
 
     def __init__(self):
-        """初始化爬虫"""
+        """初始化"""
         self.config = None
         self.utils = None
 

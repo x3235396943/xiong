@@ -22,10 +22,10 @@ from .utils import DyShareUtils
 
 
 class ConcreteDyShareCrawler(BaseDyShareCrawler):
-    """抖音分享爬虫具体实现类"""
+    """抖音自动化具体实现类"""
 
     def __init__(self):
-        """初始化具体爬虫实现"""
+        """初始化具体实现"""
         super().__init__()
         self.config = KuSettings()
         self.utils = DyShareUtils()
@@ -71,7 +71,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         if use_list_mode:
             self._prepare_url_list_mode()
         else:
-            print("使用数据库模式")
+            log.info("使用数据库模式")
             # 添加0.2秒延迟
             time.sleep(0.2)
             self.utils.init_database()
@@ -144,34 +144,34 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
                             try:
                                 future.result()
                             except LicenseException:
-                                print("卡密验证失败，程序终止")
+                                log.error("卡密验证失败，程序终止")
                                 raise
                             except Exception as e:
-                                print(f"线程执行出错: {e}")
+                                log.error(f"线程执行出错: {e}")
                         futures = list(not_done)
                         
                         # 检查是否收到停止信号
                         if self._check_stop_signal():
-                            print("=" * 50)
-                            print("主循环检测到停止信号，正在尝试关闭所有线程...")
-                            print("=" * 50)
+                            log.info("=" * 50)
+                            log.info("主循环检测到停止信号，正在尝试关闭所有线程...")
+                            log.info("=" * 50)
                             # 确保停止标志已设置
                             self.utils._stop_flag.set()
-                            print(f"✓ 已确认设置 _stop_flag")
+                            log.info(f"✓ 已确认设置 _stop_flag")
                             # 取消所有未完成的任务
                             for future in futures:
                                 future.cancel()
-                            print(f"✓ 已取消 {len(futures)} 个任务")
+                            log.info(f"✓ 已取消 {len(futures)} 个任务")
                             break
                     except KeyboardInterrupt:
-                        print("收到停止信号，正在关闭所有线程...")
+                        log.info("收到停止信号，正在关闭所有线程...")
                         self.utils._stop_flag.set()
                         for future in futures:
                             future.cancel()
                         import sys
                         sys.exit(0)
         except LicenseException:
-            print("卡密验证失败，程序终止")
+            log.error("卡密验证失败，程序终止")
             raise
 
     def cleanup_resources(self) -> None:
@@ -214,15 +214,15 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             else:
                 invalid_count += 1
                 if self.config.DEBUG:
-                    print(f"无效的抖音链接，已跳过: {url}")
+                    log.warning(f"无效的抖音链接，已跳过: {url}")
 
         self.config.URLS = cleaned_urls
         if invalid_count > 0:
             if self.config.DEBUG:
-                print(f"URLS列表中有 {invalid_count} 个无效链接已跳过")
+                log.warning(f"URLS列表中有 {invalid_count} 个无效链接已跳过")
 
         if self.config.DEBUG:
-            print(f"使用列表模式，共 {len(self.config.URLS)} 个有效URL")
+            log.info(f"使用列表模式，共 {len(self.config.URLS)} 个有效URL")
         self.utils.reset_url_list_index()
 
     def _output_browser_start_event(self, browser_id: str) -> None:
@@ -241,61 +241,21 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def _start_websocket_client(self):
         """启动WebSocket客户端（在单独的线程中运行）"""
-        # 获取设备码
-        device_code = getattr(self.config, 'DEVICE_CODE', '111222')
+        # 使用公共方法创建和启动WebSocket客户端
+        from ..tools.ws import create_websocket_client, start_websocket_client_in_thread
         
-        # 构建 WebSocket URL
-        ws_url = self.config.WEBSOCKET_URL
-        if not ws_url or ws_url == "ws://localhost:8000":
-            # 如果没有配置或使用默认值，使用 DEVICE_CODE 构建 URL
-            ws_url = f"ws://192.168.2.9:11221/ws/?id={device_code}"
-        else:
-            # 确保 URL 中的 id 参数使用当前的 DEVICE_CODE
-            if '?id=' in ws_url:
-                base_url = ws_url.split('?id=')[0]
-                ws_url = f"{base_url}?id={device_code}"
-            elif '?id=' not in ws_url:
-                separator = '&' if '?' in ws_url else '?'
-                ws_url = f"{ws_url}{separator}id={device_code}"
+        # 创建WebSocket客户端
+        self.ws_client = create_websocket_client(self.config)
         
-        print(f"[WebSocket] 准备连接到: {ws_url}")
+        # 在独立线程中启动WebSocket客户端
+        self.ws_thread = start_websocket_client_in_thread(
+            self.ws_client, 
+            self._on_stop_signal_received
+        )
         
-        if not ws_url:
-            print("❌ WebSocket URL 未配置，程序无法启动")
-            raise Exception("WebSocket URL 未配置，请检查配置文件")
-        
-        # 创建 WebSocket 客户端
-        self.ws_client = WSClient(ws_url)
-        
-        # 注册停止信号处理器
-        self.ws_client.register_stop_signal_handler(self._on_stop_signal_received)
-        
-        # 注册其他指令处理器（可扩展）
+        # 注册指令处理器
         self.ws_client.register_command_handler("LoginRes", self._handle_login_res_command)
         
-        # 在单独的线程中运行 WebSocket 客户端
-        def run_ws_in_thread():
-            """在独立线程中运行事件循环"""
-            # 创建新的事件循环（确保独立运行）
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                if self.ws_client:
-                    # 在新的事件循环中运行
-                    loop.run_until_complete(self.ws_client.run())
-            except Exception as e:
-                print(f"[WebSocket线程] 运行出错: {e}")
-            finally:
-                loop.close()
-        
-        # 启动后台线程（设置为非 daemon，确保能正常运行）
-        self.ws_thread = threading.Thread(target=run_ws_in_thread, daemon=False, name="WebSocketThread")
-        self.ws_thread.start()
-        
-        # 等待 WebSocket 连接建立（给一点时间）
-        time.sleep(2)
-        
-        print(f"✓ WebSocket 客户端已启动，连接到: {ws_url}")
         self.last_heartbeat = time.time()
 
     def _stop_websocket_client(self):
@@ -314,9 +274,9 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             if self.ws_thread is not None and self.ws_thread.is_alive():
                 self.ws_thread.join(timeout=2.0)
             
-            print("WebSocket客户端已关闭")
+            log.info("WebSocket客户端已关闭")
         except Exception as e:
-            print(f"关闭WebSocket客户端时出错: {e}")
+            log.error(f"关闭WebSocket客户端时出错: {e}")
 
     def _send_ws_message(self, message_dict):
         """发送WebSocket消息（线程安全）"""
@@ -328,29 +288,31 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
                     self.ws_loop
                 )
             except Exception as e:
-                print(f"发送WebSocket消息失败: {e}")
+                log.error(f"发送WebSocket消息失败: {e}")
 
     def _check_stop_signal(self):
         """检查是否收到停止信号"""
+
         # 检查WebSocket客户端是否收到了停止信号
         if self.ws_client and self.ws_client.stop_requested:
-            print("_check_stop_signal() 检测到停止信号")
+            log.info("_check_stop_signal() 检测到停止信号")
             return True
         # 也检查 _stop_flag（双重检查）
         if self.utils._stop_flag.is_set():
-            print("_check_stop_signal() 检测到 _stop_flag 已设置")
+            log.info("_check_stop_signal() 检测到 _stop_flag 已设置")
             return True
         return False
     
     def _on_stop_signal_received(self):
         """当收到停止信号时的回调函数"""
-        print("=" * 50)
-        print("收到WebSocket停止信号，设置停止标志...")
-        print("=" * 50)
+
+        log.info("=" * 50)
+        log.info("收到WebSocket停止信号，设置停止标志...")
+        log.info("=" * 50)
         # 设置停止标志，所有浏览器线程会检测到这个标志并退出
         self.utils._stop_flag.set()
-        print(f"✓ 已设置 _stop_flag，当前状态: {self.utils._stop_flag.is_set()}")
-        print(f"✓ WebSocket stop_requested 状态: {self.ws_client.stop_requested if self.ws_client else 'N/A'}")
+        log.info(f"✓ 已设置 _stop_flag，当前状态: {self.utils._stop_flag.is_set()}")
+        log.info(f"✓ WebSocket stop_requested 状态: {self.ws_client.stop_requested if self.ws_client else 'N/A'}")
     
     def _handle_login_res_command(self, data: dict):
         """处理 LoginRes 指令"""
@@ -360,9 +322,10 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def _reconnect_websocket(self):
         """重新连接WebSocket"""
+
         for attempt in range(self.max_reconnect_attempts):
             try:
-                print(f"尝试重新连接WebSocket (第 {attempt + 1}/{self.max_reconnect_attempts} 次)")
+                log.info(f"尝试重新连接WebSocket (第 {attempt + 1}/{self.max_reconnect_attempts} 次)")
                 
                 # 关闭现有连接
                 self._stop_websocket_client()
@@ -375,11 +338,11 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
                 
                 # 检查连接是否成功
                 if self.ws_client:
-                    print("WebSocket重新连接成功")
+                    log.info("WebSocket重新连接成功")
                     return True
                     
             except Exception as e:
-                print(f"重新连接失败 (尝试 {attempt + 1}/{self.max_reconnect_attempts}): {e}")
+                log.error(f"重新连接失败 (尝试 {attempt + 1}/{self.max_reconnect_attempts}): {e}")
                 
-        print("达到最大重连次数，无法重新连接")
+        log.error("达到最大重连次数，无法重新连接")
         return False
