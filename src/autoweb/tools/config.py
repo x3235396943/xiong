@@ -63,7 +63,7 @@ class KuSettings(Base):
 
     BIT_BROWSER_IDS: list = []
 
-    VERSION: str = "1.0.14"
+    VERSION: str = "1.0.18"
 
     # bit浏览器设置
     BROWSER_SAVE_DIR: str = "browser_sessions"
