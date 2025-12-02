@@ -28,12 +28,7 @@ from ..tools import log, log2
 from ..tools.config import KuSettings
 from ..tools.base import AbstractCrawler
 from ..tools.bit_api import openBrowser, closeBrowser
-
-try:
-    from ..tools.verify import LicenseManager, LicenseException
-except ImportError:
-    log.error("❌ 无法导入 verify 模块，请检查 tools/verify.py 是否存在")
-    sys.exit(1)
+from ..tools.verify import LicenseManager, LicenseException
 
 # 配置和全局变量
 config: KuSettings = KuSettings()  # type: ignore
@@ -1050,7 +1045,7 @@ class DyShareUtils:
                     processed_comment_count += 1
 
                     # 每30条评论检测一次是否还有更多评论
-                    if processed_comment_count % 30 == 0:
+                    if processed_comment_count % 40 == 0:
                         try:
                             padding = driver.find_element(
                                 By.CSS_SELECTOR, '[data-e2e="comment-list"] > div:last-child'
@@ -1165,7 +1160,7 @@ class DyShareUtils:
         try:
             body = driver.find_element(By.TAG_NAME, "body")
             scroll_origin = ScrollOrigin.from_element(body)
-            ActionChains(driver).scroll_from_origin(scroll_origin, 0, 470).perform()
+            ActionChains(driver).scroll_from_origin(scroll_origin, 0, 400).perform()
             if scroll_number is not None:
                 self.debug_log(
                     "info", f"使用ActionChains完成滑动 (第 {scroll_number} 次)", browser_number
