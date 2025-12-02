@@ -128,63 +128,56 @@ class DataReporter:
     
     def _check_and_report(self):
         """
-        检查统计数据是否有变化，如果有则输出并发送
-        注意：此方法应该快速执行，不应该阻塞
-        所有耗时操作都放到后台线程执行
+        检查统计数据是否有变化，如果有则发送
+        注意：此方法必须极快执行，绝对不能阻塞主线程
+        所有操作都是非阻塞的，只做最小必要操作
         """
-        # 在锁内快速读取数据，然后释放锁
+        # 快速读取数据（最小化锁持有时间）
         try:
             with self._lock:
-                # 判断是否完成：当前浏览器实例处理完所有链接（成功+失败 >= 总链接数）
+                # 判断是否完成
                 is_completed = False
                 if self._total_links > 0:
-                    # 当前浏览器实例处理的链接数（成功+失败）
                     processed_links = self._stats["urlOk"] + self._stats["urlFail"]
                     is_completed = (processed_links >= self._total_links)
                 
-                # 复制统计数据（避免在锁外访问）
-                stats_copy = self._stats.copy()
+                # 快速复制数据（只复制必要字段，不深拷贝）
+                stats = self._stats
                 device_code = self.device_code
                 browser_id = self.browser_id
         except Exception:
-            # 如果读取数据失败，直接返回，不影响主流程
-            return
+            return  # 读取失败直接返回，不影响主流程
         
-        # 将消息构造和发送都放到队列中，由后台线程异步处理
-        # 这样主线程完全不会被阻塞
+        # 快速构造消息（不进行任何耗时操作）
         try:
-            # 快速构造消息数据（不进行 JSON 序列化，避免阻塞）
-            message_data = {
+            message = {
                 "cmd": "PcDataReq",
                 "data": {
                     "browserId": browser_id,
-                    "comment": stats_copy["comment"],
+                    "comment": stats["comment"],
                     "deviceType": "pc",
-                    "follow": stats_copy["follow"],
+                    "follow": stats["follow"],
                     "id": device_code,
                     "isCompleted": is_completed,
-                    "keywordsIndex": stats_copy["keywordsIndex"],
-                    "like": stats_copy["like"],
-                    "urlFail": stats_copy["urlFail"],
-                    "urlOk": stats_copy["urlOk"],
-                    "video": stats_copy["video"],
-                    "videoComment": stats_copy["videoComment"]
+                    "keywordsIndex": stats["keywordsIndex"],
+                    "like": stats["like"],
+                    "urlFail": stats["urlFail"],
+                    "urlOk": stats["urlOk"],
+                    "video": stats["video"],
+                    "videoComment": stats["videoComment"]
                 },
                 "id": device_code
             }
             
-            # 将消息放入队列，由后台线程处理打印和发送（完全异步，不阻塞）
+            # 非阻塞方式放入队列（如果队列满就跳过，绝对不阻塞）
             if self._send_thread_running:
                 try:
-                    self._send_queue.put_nowait(message_data)
-                except queue.Full:
-                    # 队列满了，跳过这次发送（不影响主流程）
-                    pass
-                except Exception:
-                    # 忽略所有错误
+                    self._send_queue.put_nowait(message)
+                except (queue.Full, Exception):
+                    # 队列满或任何错误都直接忽略，不影响主流程
                     pass
         except Exception:
-            # 完全忽略所有错误，确保不影响主流程
+            # 任何错误都忽略，确保不影响主流程
             pass
     
     def increment_comment(self, count: int = 1):
@@ -195,8 +188,16 @@ class DataReporter:
             count: 增加的数量，默认为1
         """
         with self._lock:
+            old_value = self._stats["comment"]
             self._stats["comment"] += count
-        # 不自动触发报告，避免阻塞
+            if self._stats["comment"] > old_value:
+                # 在锁外触发报告，避免阻塞
+                need_report = True
+            else:
+                need_report = False
+        
+        if need_report:
+            self._check_and_report()
     
     def increment_follow(self, count: int = 1):
         """
@@ -206,8 +207,15 @@ class DataReporter:
             count: 增加的数量，默认为1
         """
         with self._lock:
+            old_value = self._stats["follow"]
             self._stats["follow"] += count
-        # 不自动触发报告，避免阻塞
+            if self._stats["follow"] > old_value:
+                need_report = True
+            else:
+                need_report = False
+        
+        if need_report:
+            self._check_and_report()
     
     def increment_like(self, count: int = 1):
         """
@@ -217,8 +225,15 @@ class DataReporter:
             count: 增加的数量，默认为1
         """
         with self._lock:
+            old_value = self._stats["like"]
             self._stats["like"] += count
-        # 不自动触发报告，避免阻塞
+            if self._stats["like"] > old_value:
+                need_report = True
+            else:
+                need_report = False
+        
+        if need_report:
+            self._check_and_report()
     
     def increment_url_fail(self, count: int = 1):
         """
@@ -228,8 +243,15 @@ class DataReporter:
             count: 增加的数量，默认为1
         """
         with self._lock:
+            old_value = self._stats["urlFail"]
             self._stats["urlFail"] += count
-        # 不自动触发报告，避免阻塞
+            if self._stats["urlFail"] > old_value:
+                need_report = True
+            else:
+                need_report = False
+        
+        if need_report:
+            self._check_and_report()
     
     def increment_url_ok(self, count: int = 1):
         """
@@ -239,8 +261,15 @@ class DataReporter:
             count: 增加的数量，默认为1
         """
         with self._lock:
+            old_value = self._stats["urlOk"]
             self._stats["urlOk"] += count
-        # 不自动触发报告，避免阻塞
+            if self._stats["urlOk"] > old_value:
+                need_report = True
+            else:
+                need_report = False
+        
+        if need_report:
+            self._check_and_report()
     
     def increment_video(self, count: int = 1):
         """
@@ -250,8 +279,15 @@ class DataReporter:
             count: 增加的数量，默认为1
         """
         with self._lock:
+            old_value = self._stats["video"]
             self._stats["video"] += count
-        # 不自动触发报告，避免阻塞
+            if self._stats["video"] > old_value:
+                need_report = True
+            else:
+                need_report = False
+        
+        if need_report:
+            self._check_and_report()
     
     def increment_video_comment(self, count: int = 1):
         """
@@ -261,8 +297,15 @@ class DataReporter:
             count: 增加的数量，默认为1
         """
         with self._lock:
+            old_value = self._stats["videoComment"]
             self._stats["videoComment"] += count
-        # 不自动触发报告，避免阻塞
+            if self._stats["videoComment"] > old_value:
+                need_report = True
+            else:
+                need_report = False
+        
+        if need_report:
+            self._check_and_report()
     
     def update_keywords_index(self, index: int):
         """
@@ -272,8 +315,15 @@ class DataReporter:
             index: 链接索引
         """
         with self._lock:
+            old_value = self._stats["keywordsIndex"]
             self._stats["keywordsIndex"] = index
-        # 不自动触发报告，避免阻塞
+            if self._stats["keywordsIndex"] != old_value:
+                need_report = True
+            else:
+                need_report = False
+        
+        if need_report:
+            self._check_and_report()
     
     def get_stats(self) -> Dict[str, Any]:
         """

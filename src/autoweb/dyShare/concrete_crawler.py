@@ -366,36 +366,10 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
     def _send_ws_message_for_reporter(self, message_dict):
         """
         供 DataReporter 调用的 WebSocket 消息发送方法
-        直接发送消息，不进行包装
+        使用与 LoginReq 完全相同的发送逻辑（直接调用 _send_ws_message）
         """
-        # 检查WebSocket客户端是否存在
-        if not self.ws_client:
-            return
-        
-        # 检查客户端状态
-        if self.ws_client.stop_requested or not self.ws_client._running:
-            return
-        
-        # 检查WebSocket连接状态
-        if not (hasattr(self.ws_client, 'ws') and self.ws_client.ws):
-            return
-        
-        # 获取正确的事件循环
-        event_loop = self.ws_client.event_loop
-        if event_loop is None:
-            event_loop = self.ws_loop
-        
-        if event_loop is None or not event_loop.is_running():
-            return
-        
-        # 发送消息（DataReporter 已经构造好完整格式，直接发送）
-        try:
-            asyncio.run_coroutine_threadsafe(
-                self.ws_client.send_queue.put(json.dumps(message_dict, ensure_ascii=False)),
-                event_loop
-            )
-        except Exception as e:
-            log.error(f"发送统计数据到服务器失败: {e}", exc_info=True)
+        # 直接使用 _send_ws_message 方法，确保发送逻辑完全一致
+        self._send_ws_message(message_dict)
 
     def _check_stop_signal(self):
         """检查是否收到停止信号"""
