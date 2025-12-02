@@ -17,6 +17,7 @@ class WSClient:
         self.ready_event = asyncio.Event()
         self.stop_requested = False  # 添加停止请求标志
         self.last_message_time = 0  # 上次收到消息的时间
+        self.event_loop = None  # 保存事件循环引用，用于跨线程发送消息
         # 指令处理回调字典：{cmd: handler_function}
         self.command_handlers: Dict[str, Callable[[Dict[str, Any]], None]] = {}
         # 停止信号回调
@@ -61,7 +62,7 @@ class WSClient:
 
     async def _receiver(self, websocket):
         """接收消息（使用 async for 方式，与 main.py 相同）"""
-        log.info("[WebSocket] 接收器已启动，开始监听消息...")
+        # log.info("[WebSocket] 接收器已启动，开始监听消息...")
         message_count = 0
         try:
             # 使用 async for 方式接收消息（与 main.py 中可工作的方式相同）
@@ -70,18 +71,16 @@ class WSClient:
                 if not self._running or self.stop_requested:
                     log.info(f"[WebSocket] 接收器检测到停止标志，退出循环（已接收 {message_count} 条消息）")
                     break
-                
+
                 msg = message
                 # 添加时间戳，确认消息接收时间
                 import datetime
                 timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-                log.info(f"[WebSocket] [{timestamp}] 收到第 {message_count} 条服务器消息: {msg}")
-                log.info(f"收到服务器消息: {msg}")
-                
+                log.info(f"[WebSocket]收到第 {message_count} 条服务器消息: {msg}")
+
                 try:
                     data = json.loads(msg)
-                    log.info(f"[WebSocket] 解析后的消息: {data}")
-                    log.info(f"解析后的消息: {data}")
+                    # log.info(f"解析后的消息: {data}")
                     
                     # 更新上次收到消息的时间
                     self.last_message_time = asyncio.get_event_loop().time()
@@ -91,22 +90,17 @@ class WSClient:
                         cmd = data.get("cmd")
                         data_value = data.get("data")
                         
-                        log.info(f"[WebSocket] 指令: cmd={cmd}, data={data_value}")
-                        log.info(f"指令: cmd={cmd}, data={data_value}")
-                        
-                        # 检查是否是停止信号（只处理特定格式）
+                        # 检查是否是停止信号（处理TypeStopReq或LoginRes stop）
                         is_stop_signal = False
-                        if cmd == "LoginRes" and data_value == "stop":
+                        if cmd == "TypeStopReq":
+                            is_stop_signal = True
+                        elif cmd == "LoginRes" and data_value == "stop":
                             is_stop_signal = True
                         
                         if is_stop_signal:
-                            log.info("✓ 检测到停止信号: cmd={}, data={}".format(cmd, data_value))
+                            log.info("检测到停止信号: cmd={}, data={}".format(cmd, data_value))
                             self.stop_requested = True
-                            log.info("✓ 已设置 stop_requested = True")
-                            # 通知应用程序需要停止
-                            log.info("✓ 正在调用停止信号处理器...")
                             self._handle_stop_signal()
-                            log.info("✓ 停止信号处理器已调用")
                             # 退出接收循环
                             break
                         else:
@@ -114,14 +108,13 @@ class WSClient:
                             if cmd and cmd in self.command_handlers:
                                 try:
                                     handler = self.command_handlers[cmd]
-                                    log.info(f"调用指令处理器: {cmd}")
                                     # 在事件循环中调用处理器（可能是同步函数）
                                     handler(data)
                                 except Exception as e:
                                     log.error(f"处理指令 {cmd} 时出错: {e}")
                             else:
                                 # 如果没有注册的处理器，记录日志
-                                log.info(f"收到未处理的指令: cmd={cmd}, data={data_value}")
+                                pass
                 except json.JSONDecodeError:
                     log.warning(f"收到非JSON消息: {msg}")
                 except Exception as e:
@@ -134,27 +127,26 @@ class WSClient:
 
     async def run(self):
         """运行WebSocket客户端（使用可以工作的方式）"""
-        log.info("[WebSocket] 开始运行 WebSocket 客户端...")
+        # log.info("[WebSocket] 开始运行 WebSocket 客户端...")
         self._running = True
         self.stop_requested = False
         self.last_message_time = asyncio.get_event_loop().time()  # 初始化时间
-        
+
         try:
             # 使用 async with 方式连接（这是可以工作的方式）
-            log.info(f"[WebSocket] 正在连接到服务器: {self.url}")
+            # log.info(f"[WebSocket] 正在连接到服务器: {self.url}")
             async with websockets.connect(self.url) as websocket:
                 self.ws = websocket
-                log.info("WebSocket 连接成功")
+                # log.info("WebSocket 连接成功")
                 
                 # 发送初始连接消息
                 try:
                     welcome_msg = {"type": "client_connected", "message": "客户端已连接"}
                     await websocket.send(json.dumps(welcome_msg, ensure_ascii=False))
-                    log.info("已发送初始连接消息")
                 except Exception as e:
                     log.warning(f"发送初始消息失败: {e}")
-                
-                log.info("[WebSocket] 开始监听消息...")
+
+                # log.info("[WebSocket] 开始监听消息...")
                 # 运行发送器和接收器（接收器需要传入 websocket 对象）
                 # 使用 gather 确保两个任务并行运行
                 try:
@@ -187,18 +179,18 @@ class WSClient:
             handler: 处理函数，接收指令数据字典作为参数
         """
         self.command_handlers[cmd] = handler
-        log.debug(f"已注册指令处理器: {cmd}")
-    
+        # log.debug(f"已注册指令处理器: {cmd}")
+
     def register_stop_signal_handler(self, handler: Callable[[], None]):
         """
         注册停止信号处理器
-        
+
         Args:
             handler: 处理函数，无参数
         """
         self.stop_signal_handler = handler
-        log.debug("已注册停止信号处理器")
-    
+        # log.debug("已注册停止信号处理器")
+
     def _handle_stop_signal(self):
         """处理停止信号"""
         log.info("_handle_stop_signal() 被调用")
@@ -212,7 +204,7 @@ class WSClient:
                 log.error(f"执行停止信号处理器时出错: {e}", exc_info=True)
         else:
             log.warning("停止信号处理器未注册！")
-    
+
     def _handle_connection_lost(self, reason: str):
         """处理连接断开"""
         log.error(f"WebSocket 连接断开: {reason}")
@@ -223,11 +215,11 @@ class WSClient:
                 self.stop_signal_handler()
             except Exception as e:
                 log.error(f"执行停止信号处理器时出错: {e}")
-        
+
     def is_stop_requested(self):
         """检查是否请求了停止"""
         return self.stop_requested
-        
+
     def is_heartbeat_timeout(self, timeout=3):
         """检查心跳是否超时"""
         return (asyncio.get_event_loop().time() - self.last_message_time) > timeout
@@ -237,22 +229,22 @@ class WSClient:
 def create_websocket_client(config):
     """
     创建WebSocket客户端的公共方法
-    
+
     Args:
-        config: 配置对象，需要包含WEBSOCKET_URL属性
-        
+        config: 配置对象，需要包含WEBSOCKET_URL和DEVICE_CODE属性
+
     Returns:
         WSClient: WebSocket客户端实例
     """
-    # 直接从配置中获取 WebSocket URL
-    ws_url = config.WEBSOCKET_URL
-    
+    # 从配置中获取 WebSocket URL 和设备码，并拼接成完整的URL
+    ws_url = f"{config.WEBSOCKET_URL}?id={config.DEVICE_CODE}"
+
     if not ws_url:
         raise Exception("WebSocket URL 未配置，请检查配置文件")
-    
+
     # 创建 WebSocket 客户端
     ws_client = WSClient(ws_url)
-    
+
     log.info(f"✓ WebSocket 客户端已创建，连接到: {ws_url}")
     return ws_client
 
@@ -260,25 +252,27 @@ def create_websocket_client(config):
 def start_websocket_client_in_thread(ws_client, on_stop_signal_received):
     """
     在独立线程中启动WebSocket客户端的公共方法
-    
+
     Args:
         ws_client: WebSocket客户端实例
         on_stop_signal_received: 停止信号回调函数
-        
+
     Returns:
         threading.Thread: WebSocket线程实例
     """
     import threading
-    
+
     # 注册停止信号处理器
     ws_client.register_stop_signal_handler(on_stop_signal_received)
-    
+
     # 在单独的线程中运行 WebSocket 客户端
     def run_ws_in_thread():
         """在独立线程中运行事件循环"""
         # 创建新的事件循环（确保独立运行）
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        # 保存事件循环引用到客户端实例，供主线程使用
+        ws_client.event_loop = loop
         try:
             # 在新的事件循环中运行
             loop.run_until_complete(ws_client.run())
@@ -286,14 +280,15 @@ def start_websocket_client_in_thread(ws_client, on_stop_signal_received):
             log.error(f"[WebSocket线程] 运行出错: {e}")
         finally:
             loop.close()
-    
+            ws_client.event_loop = None  # 清理引用
+
     # 启动后台线程（设置为非 daemon，确保能正常运行）
     ws_thread = threading.Thread(target=run_ws_in_thread, daemon=False, name="WebSocketThread")
     ws_thread.start()
-    
+
     # 等待 WebSocket 连接建立（给一点时间）
     import time
     time.sleep(2)
-    
-    log.info("✓ WebSocket 客户端已在独立线程中启动")
+
+    # log.info("✓ WebSocket 客户端已在独立线程中启动")
     return ws_thread

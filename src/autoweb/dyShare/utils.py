@@ -431,7 +431,7 @@ class DyShareUtils:
             return False
 
     def visit_user_profile(self, driver, main_window, avatar_element, wait_time, browser_number, browser_id="",
-                           profile_follow_probability=0.5, visit_min=2, visit_max=5):
+                           profile_follow_probability=0.5, visit_min=2, visit_max=5, reporter=None):
         """
         专门处理进入用户主页的逻辑
         返回: bool (是否成功执行了关注操作)
@@ -490,7 +490,9 @@ class DyShareUtils:
                     )
                     self.human_like_delay(0.5, 1.0, browser_number)
                     follow_button.click()
-                    self.output_json(0, "", "follow", browser_id, "")  # 传递browser_id参数
+                    # 更新关注计数
+                    if reporter:
+                        reporter.increment_follow()
                     self.debug_log("info", "关注成功", browser_number)
                     action_success = True
                     time.sleep(random.uniform(1, 2))
@@ -649,6 +651,7 @@ class DyShareUtils:
             comment_wait_max=12,
             visit_min=2,
             visit_max=5,
+            reporter=None,  # DataReporter 实例
     ):
         """重构后的评论处理函数"""
         browser_info = self.get_browser_info(browser_number)
@@ -684,11 +687,11 @@ class DyShareUtils:
                     keyword_matched = True
                     break
 
-        # 记录关键词日志
-        if keyword_matched:
+        # 记录关键词日志（仅DEBUG模式）
+        if keyword_matched and config.DEBUG:
             try:
                 snippet = comment_text[:100]
-                self.output_json(0, "", "search_keywords", browser_id, keywords=f"关键词匹配: {snippet}")
+                self.debug_log("info", f"关键词匹配: {snippet}", browser_number)
             except:
                 pass
 
@@ -702,7 +705,9 @@ class DyShareUtils:
                 )
                 self.human_like_delay(0.3, 0.8, browser_number)
                 web_driver.execute_script("arguments[0].click();", like_button)  # 使用JS点击更稳定
-                self.output_json(0, "", "like", browser_id)
+                # 更新点赞计数
+                if reporter:
+                    reporter.increment_like()
                 like_count += 1
                 time.sleep(random.uniform(0.5, 1.5))
             except Exception:
@@ -739,7 +744,7 @@ class DyShareUtils:
                     follow_prob = 1.0 if force_follow else profile_follow_probability
                     is_followed = self.visit_user_profile(web_driver, main_window, avatar, wait_time, browser_number,
                                                           browser_id,
-                                                          follow_prob, visit_min, visit_max)
+                                                          follow_prob, visit_min, visit_max, reporter)
                     if is_followed:
                         return "followed", like_count, 0
 
@@ -779,8 +784,9 @@ class DyShareUtils:
                 reply_success = self.reply_to_comment(web_driver, target_comment_now, reply_content, browser_number,
                                                       browser_id)
                 if reply_success:
-                    # 修改输出格式
-                    self.output_json(0, "", "comment", browser_id, comment_reply=reply_content)
+                    # 更新评论回复计数
+                    if reporter:
+                        reporter.increment_comment()
                     self.debug_log("info", f"成功回复评论，内容: {reply_content[:30]}...", browser_number)
                     reply_count = 1
             except Exception as e:
@@ -822,17 +828,28 @@ class DyShareUtils:
             visit_min=2,
             visit_max=5,
             url_index=None,
+            reporter=None,  # DataReporter 实例
     ):
         """
         运行完整的自动化流程
         """
         browser_info = self.get_browser_info(browser_number)
         self.debug_log("info", f"开始运行自动化流程，访问网页: {url}", browser_number)
-        self.check_stop_signal()
+        
+        # 在开始前检查停止信号
+        try:
+            self.check_stop_signal()
+        except KeyboardInterrupt:
+            self.debug_log("info", "收到停止信号，退出自动化流程", browser_number)
+            raise
 
         # 检查浏览器会话是否有效
         try:
+            # 在检查会话前先检查停止信号
+            self.check_stop_signal()
             driver.current_url  # 尝试获取当前URL来检查会话
+        except KeyboardInterrupt:
+            raise  # 重新抛出停止信号
         except Exception as e:
             if "invalid session id" in str(e):
                 log.error(f"{browser_info} 浏览器会话已失效: {e}")
@@ -869,9 +886,20 @@ class DyShareUtils:
         self.safe_check_license()
 
         try:
+            # 在访问网页前检查停止信号
+            self.check_stop_signal()
             self.debug_log("info", f"访问网页: {url}", browser_number)
+            
+            # 设置页面加载超时，避免无限等待
+            try:
+                driver.set_page_load_timeout(wait_time)
+            except:
+                pass  # 某些驱动可能不支持
+            
             driver.get(url)
 
+            # 在等待元素前检查停止信号
+            self.check_stop_signal()
             wait = WebDriverWait(driver, wait_time)
             wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 
@@ -919,12 +947,10 @@ class DyShareUtils:
 
                         if success:
                             video_comment_count += 1
-                            # 根据DEBUG模式输出
-                            if config.DEBUG:
-                                self.debug_log("info", f"视频留言成功: {comment_text[:30]}...", browser_number)
-                            else:
-                                # 非DEBUG模式只输出JSON
-                                self.output_json(0, "", "videoCommit", browser_id)
+                            # 更新视频留言计数
+                            if reporter:
+                                reporter.increment_video_comment()
+                            self.debug_log("info", f"视频留言成功: {comment_text[:30]}...", browser_number)
                         else:
                             self.debug_log("warning", "视频留言失败", browser_number)
                     else:
@@ -1004,6 +1030,7 @@ class DyShareUtils:
                         comment_wait_max,
                         visit_min,
                         visit_max,
+                        reporter,  # 传递 reporter
                     )
                     
                     # 更新回复评论计数
@@ -1095,23 +1122,37 @@ class DyShareUtils:
 
             self.debug_log("info", "所有评论处理完成", browser_number)
             
-            # 更新全局统计数据（使用锁保护）
+            # 更新统计数据到 DataReporter（批量更新后统一报告，避免频繁触发）
+            if reporter:
+                if video_followed_count > 0:
+                    reporter.increment_follow(video_followed_count)
+                if video_liked_count > 0:
+                    reporter.increment_like(video_liked_count)
+                if video_comment_reply_count > 0:
+                    reporter.increment_comment(video_comment_reply_count)
+                if video_comment_count > 0:
+                    reporter.increment_video_comment(video_comment_count)
+                # 视频处理完成后统一报告一次
+                reporter.force_report()
+            
+            # 更新全局统计数据（保留用于兼容）
             with self._stats_lock:
                 self.global_followed_count += video_followed_count
                 self.global_liked_count += video_liked_count
                 self.global_comment_reply_count += video_comment_reply_count
                 self.global_video_comment_count += video_comment_count
             
-            # 输出完成链接的统计数据
-            if url_index is not None:
-                count_array = [video_followed_count, video_liked_count, video_comment_reply_count]
-                self.output_json(0, "", "number", browser_id, url_index=url_index, count=count_array)
-            
             return True
 
+        except KeyboardInterrupt:
+            # 捕获停止信号，重新抛出
+            raise
         except LicenseException:
             raise
         except Exception as e:
+            # 检查是否是因为停止信号导致的异常
+            if self._stop_flag.is_set():
+                raise KeyboardInterrupt("收到全局停止信号")
             log.error(f"{browser_info} 程序执行出错: {e}")
             # 如果是外部异常（不是循环内捕获的），返回False让上层决定是否重启
             return False
@@ -1349,11 +1390,30 @@ class DyShareUtils:
             min_likes_per_video,
             max_likes_per_video,
             browser_number,
+            reporter=None,  # DataReporter 实例
             db_path=LINKS_DB_PATH,
     ):
         """持续处理循环 (优化版)"""
         browser_info = self.get_browser_info(browser_number)
         self.debug_log("info", "启动持续处理循环", browser_number)
+        
+        # 设置总链接数到 DataReporter
+        if reporter:
+            if config.URLS and len(config.URLS) > 0:
+                # 列表模式：总链接数为 URLS 列表长度
+                reporter.set_total_links(len(config.URLS))
+            else:
+                # 数据库模式：查询总链接数
+                try:
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM links")
+                    total_count = cursor.fetchone()[0]
+                    conn.close()
+                    reporter.set_total_links(total_count)
+                except Exception as e:
+                    log.warning(f"无法获取总链接数: {e}")
+                    reporter.set_total_links(0)
 
         # 变量初始化
         enable_follow = config.ENABLE_FOLLOW
@@ -1393,7 +1453,7 @@ class DyShareUtils:
                     driver = self.get_driver(browser_id, browser_number)
                     if driver is None:
                         log.error(f"{self.get_browser_info(browser_number)} 创建失败，30秒后重试")
-                        time.sleep(30)
+                        self.safe_sleep(30, browser_number=browser_number)
                         continue
 
                 # 2. 获取链接
@@ -1410,14 +1470,12 @@ class DyShareUtils:
 
                 self.debug_log("info", f"获取到新链接: {url}", browser_number)
                 
-                # 输出切换链接事件
-                self.output_json(0, "", "video", browser_id)
-                
-                # 更新全局打开的链接量
+                # 更新全局打开的链接量（保留用于兼容）
                 with self._stats_lock:
                     self.global_url_opened_count += 1
 
-                # 3. 执行任务
+                # 3. 执行任务（先执行任务，成功后再更新统计数据，避免阻塞）
+                self.debug_log("info", "准备执行自动化任务", browser_number)
                 retry_count = 0
                 while retry_count < 3:
                     # 检查是否收到停止信号
@@ -1426,25 +1484,37 @@ class DyShareUtils:
                         break
                         
                     try:
+                        # 每次执行前检查停止信号
+                        self.check_stop_signal()
+                        
                         # 每次执行前检查驱动是否存活
+                        self.debug_log("debug", "检查浏览器驱动状态", browser_number)
                         try:
                             _ = driver.window_handles
+                            self.debug_log("debug", "浏览器驱动状态正常", browser_number)
                         except:
                             raise Exception("disconnected: not connected to DevTools (Pre-check)")
 
+                        self.debug_log("info", f"开始调用 run_automation，URL: {url}", browser_number)
                         success = self.run_automation(
                             driver, url, wait_time, like_probability, visit_profile_probability,
                             profile_follow_probability, min_follows_per_video, max_follows_per_video,
                             min_likes_per_video, max_likes_per_video, browser_number, browser_id,
                             enable_follow, enable_profile_visit, enable_like, enable_search_keywords,
                             enable_comment_reply, comment_reply_probability, comment_wait_min, comment_wait_max,
-                            visit_min, visit_max, url_index
+                            visit_min, visit_max, url_index, reporter
                         )
+                        
+                        self.debug_log("info", f"run_automation 执行完成，结果: {success}", browser_number)
 
                         if success:
                             if link_id is not None:
                                 self.mark_link_as_completed(link_id, db_path)
-                            self.output_json(0, "", "url_ok", browser_id, url_index)
+                            # 更新统计数据（任务成功后更新，避免阻塞关键路径）
+                            if reporter:
+                                reporter.increment_video()
+                                reporter.update_keywords_index(url_index)
+                                reporter.increment_url_ok()
                             self.debug_log("info", f"链接处理成功: {url}", browser_number)
                             break  # 跳出重试循环
                         else:
@@ -1452,13 +1522,25 @@ class DyShareUtils:
                             # 直接标记为失败并跳出重试循环
                             if link_id is not None:
                                 self.mark_link_as_failed(link_id, db_path)
-                            self.output_json(1, "链接失效", "url_fail", browser_id, url_index)
+                            # 更新统计数据（任务失败后更新）
+                            if reporter:
+                                reporter.increment_video()
+                                reporter.update_keywords_index(url_index)
+                                reporter.increment_url_fail()
                             self.debug_log("error", f"{browser_info} 链接处理失败（链接失效）: {url}", browser_number)
                             break
 
+                    except KeyboardInterrupt:
+                        # 捕获停止信号，直接退出
+                        log.info(f"{browser_info} 收到停止信号，正在退出...")
+                        raise  # 重新抛出，让外层处理
                     except LicenseException:
                         raise  # 向上抛出退出
                     except Exception as e:
+                        # 检查是否是因为停止信号导致的异常
+                        if self._stop_flag.is_set():
+                            log.info(f"{browser_info} 检测到停止信号，正在退出...")
+                            raise KeyboardInterrupt("收到全局停止信号")
                         retry_count += 1
                         err_msg = str(e).lower()
                         log.error(f"{self.get_browser_info(browser_number)} 任务异常: {e}")
@@ -1478,10 +1560,16 @@ class DyShareUtils:
                         if retry_count >= 3:
                             if link_id is not None:
                                 self.mark_link_as_failed(link_id, db_path)
-                            self.output_json(1, "链接失效或多次重试失败", "url_fail", browser_id, url_index)
+                            # 更新失败URL计数
+                            if reporter:
+                                reporter.increment_video()
+                                reporter.update_keywords_index(url_index)
+                                reporter.increment_url_fail()
                             self.debug_log("error", f"{browser_info} 链接处理彻底失败: {url}", browser_number)
 
-                        time.sleep(5)
+                        # 在重试等待前检查停止信号
+                        self.check_stop_signal()
+                        self.safe_sleep(5, browser_number=browser_number)
                 
                 # 如果收到停止信号，退出循环
                 if self._stop_flag.is_set():
@@ -1498,16 +1586,9 @@ class DyShareUtils:
         except Exception as e:
             log.error(f"{browser_info} 程序异常退出: {e}")
         finally:
-            # 输出全局统计数据
-            with self._stats_lock:
-                count_array = [
-                    self.global_followed_count,
-                    self.global_liked_count,
-                    self.global_comment_reply_count,
-                    self.global_url_opened_count,
-                    self.global_video_comment_count
-                ]
-            self.output_json(0, "", "exit", browser_id, count=count_array)
+            # 强制输出最终统计数据
+            if reporter:
+                reporter.force_report()
             
             # 关闭浏览器
             if driver:
