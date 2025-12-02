@@ -6,10 +6,12 @@ class Base(BaseSettings):
     SIBERIAN_URL: str
     SIBERIAN_KEY: str
     DEVICE_CODE: str
-    PLATFORM: str
-
+    # WebSocket 配置
+    WEBSOCKET_URL: str  # WebSocket 服务器地址
+    PLATFORM: str # 设备码
 
 class KuSettings(Base):
+
     KEYWORDS: list = []
     MAX_SCROLL_VIDEO: list = [10, 20]
     MAX_COMMENT: list = [2, 15]
@@ -93,8 +95,6 @@ class KuSettings(Base):
     FOLLOW_PROBABILITY: float = 4
     COMMENT_KEYWORDS: list = []
 
-    # WebSocket 配置
-    WEBSOCKET_URL: str = "ws://192.168.2.9:11221/ws/?id=111222"  # WebSocket 服务器地址
 
 
 
