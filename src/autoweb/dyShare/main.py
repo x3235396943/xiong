@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-抖音自动化脚本 (已修复滚动逻辑 + 防休眠)
+抖音自动化脚本
 使用抽象类设计模式重构版本
 """
 
@@ -12,7 +12,7 @@ from .concrete_crawler import ConcreteDyShareCrawler
 
 
 class DouyinShareCrawler(AbstractCrawler):
-    """抖音分享爬虫主类"""
+    """抖音自动化主类"""
 
     async def start(self):
         """
