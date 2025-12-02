@@ -170,6 +170,7 @@ node_modules/
 .idea
 
 compose.override.yml
+test.ipynb
 
 # pixi environments
 .pixi/*
