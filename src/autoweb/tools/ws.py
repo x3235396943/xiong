@@ -16,8 +16,6 @@ class WSClient:
         self._running = False
         self.ready_event = asyncio.Event()
         self.stop_requested = False  # 添加停止请求标志
-        self.last_message_time = 0  # 上次收到消息的时间
-        self.event_loop = None  # 保存事件循环引用，用于跨线程发送消息
         # 指令处理回调字典：{cmd: handler_function}
         self.command_handlers: Dict[str, Callable[[Dict[str, Any]], None]] = {}
         # 停止信号回调
@@ -85,9 +83,6 @@ class WSClient:
                 try:
                     data = json.loads(msg)
                     # log.info(f"解析后的消息: {data}")
-                    
-                    # 更新上次收到消息的时间
-                    self.last_message_time = asyncio.get_event_loop().time()
                     
                     # 处理指令
                     if isinstance(data, dict):
@@ -192,12 +187,16 @@ class WSClient:
         # log.info("[WebSocket] 开始运行 WebSocket 客户端...")
         self._running = True
         self.stop_requested = False
-        self.last_message_time = asyncio.get_event_loop().time()  # 初始化时间
 
         try:
             # 使用 async with 方式连接（这是可以工作的方式）
+            # 并设置内置心跳机制：每10秒一个ping，5秒无pong断线
             # log.info(f"[WebSocket] 正在连接到服务器: {self.url}")
-            async with websockets.connect(self.url) as websocket:
+            async with websockets.connect(
+                self.url,
+                ping_interval=10,    # 每10秒一个ping
+                ping_timeout=5       # 5秒无pong断线
+            ) as websocket:
                 self.ws = websocket
                 # log.info("WebSocket 连接成功")
                 
@@ -281,10 +280,6 @@ class WSClient:
     def is_stop_requested(self):
         """检查是否请求了停止"""
         return self.stop_requested
-
-    def is_heartbeat_timeout(self, timeout=3):
-        """检查心跳是否超时"""
-        return (asyncio.get_event_loop().time() - self.last_message_time) > timeout
 
 
 # 公共方法，用于创建和启动WebSocket客户端

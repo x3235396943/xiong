@@ -27,9 +27,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         self.ws_client = None
         self.ws_thread = None  # WebSocket 运行线程
         self.ws_loop = None  # WebSocket 事件循环
-        # 心跳相关属性
-        self.last_heartbeat = time.time()
-        self.heartbeat_interval = 3  # 3秒心跳间隔
+        # 心跳相关属性（保留用于重连机制）
         self.max_reconnect_attempts = 3  # 最大重连次数
         self.reconnect_delay = 3  # 重连延迟（秒）
         # DataReporter 实例字典，每个浏览器ID对应一个实例
@@ -276,8 +274,6 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         else:
             log.warning("⚠ 等待 WebSocket 事件循环超时，消息发送可能失败")
             self.ws_loop = None
-
-        self.last_heartbeat = time.time()
 
     def _stop_websocket_client(self):
         """停止WebSocket客户端"""
