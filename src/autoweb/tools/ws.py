@@ -22,6 +22,10 @@ class WSClient:
         self.command_handlers: Dict[str, Callable[[Dict[str, Any]], None]] = {}
         # 停止信号回调
         self.stop_signal_handler: Optional[Callable[[], None]] = None
+        # 保存外部发送消息的函数引用
+        self.external_send_func: Optional[Callable[[Dict], None]] = None
+        # 保存配置更新回调函数
+        self.config_update_handler: Optional[Callable[[Dict], None]] = None
 
     async def connect(self):
         """连接WebSocket服务器（使用上下文管理器方式）"""
@@ -88,17 +92,16 @@ class WSClient:
                     # 处理指令
                     if isinstance(data, dict):
                         cmd = data.get("cmd")
-                        data_value = data.get("data")
-                        
+
                         # 检查是否是停止信号（处理TypeStopReq或LoginRes stop）
                         is_stop_signal = False
-                        if cmd == "TypeStopReq":
+                        if cmd == "StopReq":
                             is_stop_signal = True
-                        elif cmd == "LoginRes" and data_value == "stop":
-                            is_stop_signal = True
+                            # 当收到 TypeStopReq 时，使用外部函数发送响应
+                            self._send_response({"cmd": "StopRes"})
                         
                         if is_stop_signal:
-                            log.info("检测到停止信号: cmd={}, data={}".format(cmd, data_value))
+                            log.info("检测到停止信号: cmd={}".format(cmd))
                             self.stop_requested = True
                             self._handle_stop_signal()
                             # 退出接收循环
@@ -124,6 +127,63 @@ class WSClient:
                 log.error(f"接收消息时出错: {e}")
                 # 连接断开，触发停止信号
                 self._handle_connection_lost(f"接收消息失败: {e}")
+
+    def _send_response(self, response_data: dict):
+        """使用外部函数发送响应消息"""
+        try:
+            if self.external_send_func:
+                # 调用外部发送函数
+                self.external_send_func(response_data)
+                log.info(f"已通过外部函数发送响应消息: {response_data}")
+            else:
+                log.warning("外部发送函数未设置，无法发送响应消息")
+        except Exception as e:
+            log.error(f"通过外部函数发送响应消息失败: {e}")
+
+    def _handle_config_update(self, config_data: dict):
+        """处理配置更新指令"""
+        try:
+            log.info(f"收到配置更新指令: {config_data}")
+            if self.config_update_handler:
+                self.config_update_handler(config_data)
+                # 发送配置更新确认
+                self._send_response({
+                    "cmd": "ConfigUpdateAck",
+                    "data": {
+                        "status": "success",
+                        "message": "配置更新已应用"
+                    }
+                })
+            else:
+                log.warning("未注册配置更新处理器")
+                # 发送配置更新失败响应
+                self._send_response({
+                    "cmd": "ConfigUpdateAck",
+                    "data": {
+                        "status": "failed",
+                        "message": "未注册配置更新处理器"
+                    }
+                })
+        except Exception as e:
+            log.error(f"处理配置更新时出错: {e}")
+            # 发送配置更新失败响应
+            self._send_response({
+                "cmd": "ConfigUpdateAck",
+                "data": {
+                    "status": "failed",
+                    "message": f"配置更新失败: {str(e)}"
+                }
+            })
+
+    def set_external_send_func(self, send_func):
+        """设置外部发送函数"""
+        self.external_send_func = send_func
+        log.info("外部发送函数已设置")
+
+    def set_config_update_handler(self, handler: Callable[[Dict], None]):
+        """设置配置更新处理器"""
+        self.config_update_handler = handler
+        log.info("配置更新处理器已设置")
 
     async def run(self):
         """运行WebSocket客户端（使用可以工作的方式）"""

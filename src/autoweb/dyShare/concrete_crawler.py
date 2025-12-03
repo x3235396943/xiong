@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-抖音分享爬虫具体实现类
-继承抽象基类并实现所有抽象方法
-"""
-
 import sys
 import json
 import time
@@ -250,6 +242,10 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         # 创建WebSocket客户端
         self.ws_client = create_websocket_client(self.config)
+        
+        # 设置外部发送函数，用于处理 TypeStopReq 指令时发送响应
+        if self.ws_client:
+            self.ws_client.set_external_send_func(self._send_ws_message)
 
         # 在独立线程中启动WebSocket客户端
         self.ws_thread = start_websocket_client_in_thread(
