@@ -20,7 +20,8 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
     def __init__(self):
         """初始化具体实现"""
         super().__init__()
-        self.config = KuSettings()
+        from ..tools.config import config
+        self.config = config
         self.utils = DyShareUtils()
         self.license_manager = LicenseManager()
         self.ws_client = None
@@ -246,6 +247,8 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         # 设置外部发送函数，用于处理 TypeStopReq 指令时发送响应
         if self.ws_client:
             self.ws_client.set_external_send_func(self._send_ws_message)
+            # 设置配置更新处理器
+            self.ws_client.set_config_update_handler(self._handle_config_update)
 
         # 在独立线程中启动WebSocket客户端
         self.ws_thread = start_websocket_client_in_thread(
@@ -255,6 +258,8 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         # 注册指令处理器
         self.ws_client.register_command_handler("LoginRes", self._handle_login_res_command)
+        # 注册配置更新指令处理器
+        self.ws_client.register_command_handler("ConfigUpdate", self._handle_config_update_command)
 
         # 等待 WebSocket 线程启动并创建事件循环
         # 从客户端获取正确的事件循环引用（WebSocket 线程中的事件循环）
@@ -396,6 +401,27 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         # 这里可以处理其他 LoginRes 指令（非 stop）
         log.debug(f"收到 LoginRes 指令: {data}")
         # 可以根据 data 中的内容执行不同的操作
+
+    def _handle_config_update_command(self, data: dict):
+        """处理 ConfigUpdate 指令"""
+        # 从指令中提取配置数据
+        config_data = data.get("data", {})
+        # 调用配置更新处理方法
+        self._handle_config_update(config_data)
+
+    def _handle_config_update(self, config_data: dict):
+        """处理配置更新"""
+        from ..tools import log
+        try:
+            log.info(f"收到配置更新: {config_data}")
+            # 更新全局配置对象
+            from ..tools.config import config
+            config.update_from_dict(config_data)
+            log.info("配置已更新")
+            # 打印更新后的配置摘要
+            config.print_config_summary()
+        except Exception as e:
+            log.error(f"配置更新失败: {e}")
 
     def _reconnect_websocket(self):
         """重新连接WebSocket"""

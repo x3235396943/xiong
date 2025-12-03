@@ -1,17 +1,20 @@
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Dict, Any
 
 
 class Base(BaseSettings):
-    SIBERIAN_URL: str
-    SIBERIAN_KEY: str
-    DEVICE_CODE: str
-    # WebSocket 配置
-    WEBSOCKET_URL: str  # WebSocket 服务器地址
-    PLATFORM: str # 设备码
+    SIBERIAN_URL: str = "http://139.159.230.186/api/siberianNitraria/verifyActivate"
+    SIBERIAN_KEY: str = "kjG7GGbNDqvrHSZ1Zin5zvWVyBjkiiggCFiAVyC3AsQ="
+    DEVICE_CODE: str = "111222"
+    WEBSOCKET_URL: str = "ws://192.168.2.9:11221/ws/"
+    PLATFORM: str = "dys"
+
+    # 不从.env文件读取配置
+    model_config = SettingsConfigDict(extra="ignore")
+
 
 class KuSettings(Base):
-
     KEYWORDS: list = []
     MAX_SCROLL_VIDEO: list = [10, 20]
     MAX_COMMENT: list = [2, 15]
@@ -21,11 +24,11 @@ class KuSettings(Base):
     PROFILE_FOLLOW_PROBABILITY: int = 10  # 进入主页后关注的概率 (0-100)
     ENABLE_FOLLOW: bool = True  # 是否启用关注功能
     ENABLE_PROFILE_VISIT: bool = True  # 是否启用进入主页功能
-    ENABLE_LIKE: bool = False  # 是否启用点赞功能
-    ENABLE_SEARCH_KEYWORDS: bool = False  # 是否启用搜索关键字功能
-    ENABLE_COMMENT_REPLY: bool = False  # 是否启用评论回复功能
-    ENABLE_VIDEO_COMMENT: bool = False  # 是否启用视频留言功能
-    ENABLE_COMMENT_TEMPLATES: bool = False  # 是否启用评论话术功能
+    ENABLE_LIKE: bool = True  # 是否启用点赞功能
+    ENABLE_SEARCH_KEYWORDS: bool = True  # 是否启用搜索关键字功能
+    ENABLE_COMMENT_REPLY: bool = True  # 是否启用评论回复功能
+    ENABLE_VIDEO_COMMENT: bool = True  # 是否启用视频留言功能
+    ENABLE_COMMENT_TEMPLATES: bool = True  # 是否启用评论话术功能
     COMMENT_REPLIES: str = ""  # 回复评论的内容
     VIDEO_COMMENTS: str = ""  # 视频留言的内容
     COMMENT_FILTER_KEYWORDS: list = []  # 筛选评论区关键字
@@ -47,10 +50,10 @@ class KuSettings(Base):
     VISIT_MAX: int = 5  # 关注后最大等待时间（秒）
 
     # 留言/回复等待时间参数
-    VIDEO_REPLY_WAIT_MIN: int = 12  # 视频留言前最小等待时间（秒）
-    VIDEO_REPLY_WAIT_MAX: int = 12  # 视频留言前最大等待时间（秒）
-    COMMENT_WAIT_MIN: int = 12  # 评论回复前最小等待时间（秒）
-    COMMENT_WAIT_MAX: int = 12  # 评论回复前最大等待时间（秒）
+    VIDEO_REPLY_WAIT_MIN: int = 5  # 视频留言前最小等待时间（秒）
+    VIDEO_REPLY_WAIT_MAX: int = 8  # 视频留言前最大等待时间（秒）
+    COMMENT_WAIT_MIN: int = 5  # 评论回复前最小等待时间（秒）
+    COMMENT_WAIT_MAX: int = 8  # 评论回复前最大等待时间（秒）
 
     # 数据库路径
     LINKS_DB_PATH: str = "links.db"
@@ -63,7 +66,7 @@ class KuSettings(Base):
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = False  # 是否输出调试信息（打印所有配置参数）
 
-    BIT_BROWSER_IDS: list = []
+    BIT_BROWSER_IDS: list = ["4bbbe30c084a495796aaaff8a7082fda"]
 
     VERSION: str = "1.0.18"
 
@@ -95,12 +98,41 @@ class KuSettings(Base):
     FOLLOW_PROBABILITY: float = 4
     COMMENT_KEYWORDS: list = []
 
+    # 不从.env文件读取配置
+    model_config = SettingsConfigDict(extra="ignore")
+
+    def update_from_dict(self, config_dict: Dict[str, Any]):
+        """
+        从字典更新配置项
+        
+        Args:
+            config_dict: 包含配置项的字典
+        """
+        from . import log
+        for key, value in config_dict.items():
+            if hasattr(self, key):
+                old_value = getattr(self, key)
+                setattr(self, key, value)
+                # 记录配置变更日志
+                if old_value != value:
+                    log.info(f"配置变更: {key} 从 {old_value} 更新为 {value}")
+
+    def print_config_summary(self):
+        """
+        打印配置摘要信息
+        """
+        from . import log
+        log.info("当前配置摘要:")
+        log.info(f"  PLATFORM: {self.PLATFORM}")
+        log.info(f"  DEVICE_CODE: {self.DEVICE_CODE}")
+        log.info(f"  ENABLE_FOLLOW: {self.ENABLE_FOLLOW}")
+        log.info(f"  ENABLE_LIKE: {self.ENABLE_LIKE}")
+        log.info(f"  LIKE_PROBABILITY: {self.LIKE_PROBABILITY}")
+        log.info(f"  VISIT_ENABLE: {self.VISIT_ENABLE}")
+        log.info(f"  PROFILE_FOLLOW_PROBABILITY: {self.PROFILE_FOLLOW_PROBABILITY}")
 
 
-
-    model_config = SettingsConfigDict(extra="ignore", env_file=".env")
-
-
+# 创建全局配置实例
 config = KuSettings()  # type: ignore
 
 
@@ -251,7 +283,7 @@ from typing import Any
 #         return self.FOLLOW_PROBABILITY
 
 
-#     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
+#     model_config = SettingsConfigDict(extra="ignore")
 # 创建全局配置实例
 # 使用方式: from config import config
 # 然后通过 config.BITBROWSER_URL, config.KEYWORDS 等方式访问

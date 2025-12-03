@@ -25,13 +25,13 @@ from datetime import datetime
 import threading
 
 from ..tools import log, log2
-from ..tools.config import KuSettings
+from ..tools.config import config
 from ..tools.base import AbstractCrawler
 from ..tools.bit_api import openBrowser, closeBrowser
 from ..tools.verify import LicenseManager, LicenseException
 
 # 配置和全局变量
-config: KuSettings = KuSettings()  # type: ignore
+# config: KuSettings = KuSettings()  # type: ignore
 LINKS_DB_PATH = config.LINKS_DB_PATH
 
 # 全局变量定义
@@ -1410,21 +1410,6 @@ class DyShareUtils:
                     log.warning(f"无法获取总链接数: {e}")
                     reporter.set_total_links(0)
 
-        # 变量初始化
-        enable_follow = config.ENABLE_FOLLOW
-        enable_profile_visit = config.ENABLE_PROFILE_VISIT
-        enable_like = config.ENABLE_LIKE
-        enable_search_keywords = config.ENABLE_SEARCH_KEYWORDS
-        enable_comment_reply = config.ENABLE_COMMENT_REPLY
-        like_probability = like_probability / 100.0
-        visit_profile_probability = visit_profile_probability / 100.0
-        profile_follow_probability = profile_follow_probability / 100.0
-        comment_reply_probability = config.COMMENT_REPLY_PROBABILITY / 100.0
-        comment_wait_min = config.COMMENT_WAIT_MIN
-        comment_wait_max = config.COMMENT_WAIT_MAX
-        visit_min = config.VISIT_MIN
-        visit_max = config.VISIT_MAX
-
         # 验证一次卡密
         self.safe_check_license()
 
@@ -1437,6 +1422,22 @@ class DyShareUtils:
                 if self._stop_flag.is_set():
                     log.info(f"{browser_info} 收到全局停止信号，正在退出...")
                     break
+                    
+                # 每次循环都重新读取配置值，确保使用最新配置
+                enable_follow = config.ENABLE_FOLLOW
+                enable_profile_visit = config.ENABLE_PROFILE_VISIT
+                enable_like = config.ENABLE_LIKE
+                enable_search_keywords = config.ENABLE_SEARCH_KEYWORDS
+                enable_comment_reply = config.ENABLE_COMMENT_REPLY
+                # 注意：这些概率参数需要除以100转换为小数
+                like_probability_val = config.LIKE_PROBABILITY / 100.0
+                visit_profile_probability_val = config.VISIT_ENABLE / 100.0
+                profile_follow_probability_val = config.PROFILE_FOLLOW_PROBABILITY / 100.0
+                comment_reply_probability_val = config.COMMENT_REPLY_PROBABILITY / 100.0
+                comment_wait_min_val = config.COMMENT_WAIT_MIN
+                comment_wait_max_val = config.COMMENT_WAIT_MAX
+                visit_min_val = config.VISIT_MIN
+                visit_max_val = config.VISIT_MAX
                     
                 # 1. 驱动检查与创建
                 if driver is None:
@@ -1492,12 +1493,12 @@ class DyShareUtils:
 
                         self.debug_log("info", f"开始调用 run_automation，URL: {url}", browser_number)
                         success = self.run_automation(
-                            driver, url, wait_time, like_probability, visit_profile_probability,
-                            profile_follow_probability, min_follows_per_video, max_follows_per_video,
+                            driver, url, wait_time, like_probability_val, visit_profile_probability_val,
+                            profile_follow_probability_val, min_follows_per_video, max_follows_per_video,
                             min_likes_per_video, max_likes_per_video, browser_number, browser_id,
                             enable_follow, enable_profile_visit, enable_like, enable_search_keywords,
-                            enable_comment_reply, comment_reply_probability, comment_wait_min, comment_wait_max,
-                            visit_min, visit_max, url_index, reporter
+                            enable_comment_reply, comment_reply_probability_val, comment_wait_min_val, comment_wait_max_val,
+                            visit_min_val, visit_max_val, url_index, reporter
                         )
                         
                         self.debug_log("info", f"run_automation 执行完成，结果: {success}", browser_number)

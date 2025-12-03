@@ -145,6 +145,7 @@ class WSClient:
         try:
             log.info(f"收到配置更新指令: {config_data}")
             if self.config_update_handler:
+                log.info("调用配置更新处理器")
                 self.config_update_handler(config_data)
                 # 发送配置更新确认
                 self._send_response({
@@ -154,6 +155,7 @@ class WSClient:
                         "message": "配置更新已应用"
                     }
                 })
+                log.info("配置更新确认已发送")
             else:
                 log.warning("未注册配置更新处理器")
                 # 发送配置更新失败响应
