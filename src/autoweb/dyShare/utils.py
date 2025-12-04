@@ -821,6 +821,7 @@ class DyShareUtils:
             comment_wait_max=12,
             visit_min=2,
             visit_max=5,
+            url_index=None,
             reporter=None,  # DataReporter 实例
     ):
         """
