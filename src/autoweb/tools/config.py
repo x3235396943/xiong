@@ -97,9 +97,30 @@ class KuSettings(Base):
     COMMENT_KEYWORDS: list = []
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
-    # 不从.env文件读取配置
-    model_config = SettingsConfigDict(extra="ignore")
+    
+    @field_validator('MAX_FOLLOWS_PER_VIDEO', 'COMMENT_LIKE_COUNT_MAX', 'LIKE_WAIT_MAX', 
+                     'VISIT_MAX', 'VIDEO_REPLY_WAIT_MAX', 'COMMENT_WAIT_MAX')
+    @classmethod
+    def validate_min_max_pairs(cls, max_value, info):
+        # 定义需要验证的字段对：(min_field, max_field)
+        field_pairs = {
+            'MAX_FOLLOWS_PER_VIDEO': ('MIN_FOLLOWS_PER_VIDEO', 'MAX_FOLLOWS_PER_VIDEO'),
+            'COMMENT_LIKE_COUNT_MAX': ('COMMENT_LIKE_COUNT_MIN', 'COMMENT_LIKE_COUNT_MAX'),
+            'LIKE_WAIT_MAX': ('LIKE_WAIT_MIN', 'LIKE_WAIT_MAX'),
+            'VISIT_MAX': ('VISIT_MIN', 'VISIT_MAX'),
+            'VIDEO_REPLY_WAIT_MAX': ('VIDEO_REPLY_WAIT_MIN', 'VIDEO_REPLY_WAIT_MAX'),
+            'COMMENT_WAIT_MAX': ('COMMENT_WAIT_MIN', 'COMMENT_WAIT_MAX')
+        }
+        
+        field_name = info.field_name
+        if field_name in field_pairs:
+            min_field, max_field = field_pairs[field_name]
+            min_value = info.data.get(min_field)
+            if min_value is not None and min_value > max_value:
+                raise ValueError(f'{min_field} 不能大于 {max_field}')
+        return max_value
 
+    # 不从.env文件读取配置
     def update_from_dict(self, config_dict: Dict[str, Any]):
         """
         从字典更新配置项
