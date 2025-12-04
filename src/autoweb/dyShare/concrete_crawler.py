@@ -31,7 +31,17 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def initialize_config(self) -> None:
         """初始化配置"""
-        # 配置已在__init__中初始化
+        # 启动WebSocket客户端以接收服务器配置
+        self._start_websocket_client()
+        
+        # 等待服务器发送配置参数
+        try:
+            self.config.wait_for_initialization()
+        except TimeoutError as e:
+            log.error(f"配置初始化超时: {e}")
+            sys.exit(1)
+        
+        # 配置接收完成后继续其他初始化步骤
         pass
 
     def validate_license(self) -> bool:
@@ -40,9 +50,6 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def prepare_environment(self) -> None:
         """准备运行环境"""
-        # 启动WebSocket客户端
-        self._start_websocket_client()
-
         # 启动定期验证线程
         self.license_manager.start_periodic_check()
 

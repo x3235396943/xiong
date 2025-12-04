@@ -1,6 +1,7 @@
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Dict, Any
+import time
 
 
 class Base(BaseSettings):
@@ -13,6 +14,9 @@ class Base(BaseSettings):
 
 
 class KuSettings(Base):
+    # 添加一个标志用于等待配置初始化
+    _config_initialized: bool = False
+    
     KEYWORDS: list = []
     MAX_SCROLL_VIDEO: list = [10, 20]
     MAX_COMMENT: list = [2, 15]
@@ -136,6 +140,25 @@ class KuSettings(Base):
                 # 记录配置变更日志
                 if old_value != value:
                     log.info(f"配置变更: {key} 从 {old_value} 更新为 {value}")
+
+        # 标记配置已初始化完成
+        self._config_initialized = True
+
+    def wait_for_initialization(self, timeout: int = 300):
+        """
+        等待配置初始化完成
+        
+        Args:
+            timeout: 等待超时时间（秒），默认5分钟
+        """
+        from . import log
+        log.info("等待服务器配置初始化...")
+        start_time = time.time()
+        while not self._config_initialized:
+            if time.time() - start_time > timeout:
+                raise TimeoutError(f"等待服务器配置初始化超时 ({timeout}秒)")
+            time.sleep(0.1)  # 短暂休眠以减少CPU占用
+        log.info("服务器配置初始化完成")
 
     def print_config_summary(self):
         """
