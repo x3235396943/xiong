@@ -24,9 +24,8 @@ import sqlite3
 from datetime import datetime
 import threading
 
-from ..tools import log, log2
+from ..tools import log
 from ..tools.config import config
-from ..tools.base import AbstractCrawler
 from ..tools.bit_api import openBrowser, closeBrowser
 from ..tools.verify import LicenseManager, LicenseException
 
@@ -822,7 +821,6 @@ class DyShareUtils:
             comment_wait_max=12,
             visit_min=2,
             visit_max=5,
-            url_index=None,
             reporter=None,  # DataReporter 实例
     ):
         """

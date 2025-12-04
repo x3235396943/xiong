@@ -1,13 +1,9 @@
 import sys
 import json
 import time
-import random
 import concurrent.futures
 import asyncio
-import threading
-from ..tools.config import KuSettings
 from ..tools.verify import LicenseException, LicenseManager
-from ..tools.ws import WSClient
 from ..tools import log
 from ..tools.common import DataReporter
 from .base_crawler import BaseDyShareCrawler

@@ -8,11 +8,6 @@
 
 from abc import ABC, abstractmethod
 import sys
-import json
-import time
-import concurrent.futures
-from typing import List, Dict, Any, Optional
-
 
 class BaseDyShareCrawler(ABC):
     """抖音自动化抽象基类"""
