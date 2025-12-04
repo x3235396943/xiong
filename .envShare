@@ -51,10 +51,10 @@ LIKE_WAIT_MAX=10
 LIKE_PROBABILITY=5
 
 # 每条视频最少点赞数量
-COMMENT_LIKE_COUNT_MIN=2
+COMMENT_LIKE_COUNT_MIN=1
 
 # 每条视频最多点赞数量
-COMMENT_LIKE_COUNT_MAX=3
+COMMENT_LIKE_COUNT_MAX=2
 
 # 每条视频最少关注数量
 MIN_FOLLOWS_PER_VIDEO=1
@@ -99,7 +99,7 @@ VIDEO_COMMENTS=感谢&谢谢
 COMMENT_FILTER_KEYWORDS=["库"]
 
 # 本地导入的视频链接
-URLS=["3.38 i@P.Kw 09/26 yGV:/ 见面拿你十块钱，#你好我叫少司缘 cos  王者 少司缘  https://v.douyin.com/DSAOcoEF64s/ 复制此链接，打开Dou音搜索，直接观看视频！","https://v.douyin.com/XYrjay03T2Y/","https://v.douyin.com/yQ3LG6jX_ts/","https://v.douyin.com/X8qHJ4qnuS8/","https://v.douyin.com/LtRViqp5V7A/","https://v.douyin.com/0m9B7btWXCo/","https://v.douyin.com/T_SgWNGGt_4/"]
+URLS=["https://v.douyin.com/yQ3LG6jX_ts/","https://v.douyin.com/X8qHJ4qnuS8/","https://v.douyin.com/LtRViqp5V7A/","https://v.douyin.com/0m9B7btWXCo/","https://v.douyin.com/T_SgWNGGt_4/"]
 # 视频链接索引
 URL_INDEX=[0,1]
 
