@@ -4,11 +4,10 @@ import json
 from typing import Dict, Callable, Optional, Any
 from . import log, config
 import websockets
-from websockets.asyncio.client import ClientConnection
 
 
 class WSClient:
-    ws: ClientConnection
+    ws: Any
 
     def __init__(self, url: str):
         self.url = url
@@ -77,7 +76,6 @@ class WSClient:
                 msg = message
                 # 添加时间戳，确认消息接收时间
                 import datetime
-                timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
                 log.info(f"[WebSocket]收到第 {message_count} 条服务器消息: {msg}")
 
                 try:
