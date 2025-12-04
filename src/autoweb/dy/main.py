@@ -133,7 +133,7 @@ class DouyinCrawler(AbstractCrawler):
 
             # 暂无评论
             if len(commentList) == 1:
-                print("暂无评论")
+                log.debug("暂无评论")
                 break
 
             newList = commentList[startIndex:-1]
@@ -145,7 +145,7 @@ class DouyinCrawler(AbstractCrawler):
             # maxEnterHome = min(4, randint(0, newLen))
             # randomfollow = random.sample(range(0, newLen), maxEnterHome)
 
-            print(f"start loop...{startIndex} len {newLen}")
+            log.debug(f"start loop...{startIndex} len {newLen}")
             startIndex = len(commentList) - 1
             for _, comment in enumerate(newList):
                 # https://juejin.cn/post/7028451270029475847
@@ -164,7 +164,7 @@ class DouyinCrawler(AbstractCrawler):
                         and randint(1, 100) <= config.LIKE_PROBABILITY
                     )
                 ):
-                    print("点赞->", comment.text)
+                    log.debug("点赞->", comment.text)
                     try:
                         comment.find_element(
                             By.XPATH,
@@ -186,7 +186,7 @@ class DouyinCrawler(AbstractCrawler):
                     config.ENABLE_PROFILE_VISIT
                     and randint(1, 100) <= config.VISIT_ENABLE
                 ):
-                    print("进入主页->", comment.text)
+                    log.debug("进入主页->", comment.text)
                     try:
                         comment.find_element(
                             By.CSS_SELECTOR, ".comment-item-avatar a"
@@ -235,11 +235,11 @@ class DouyinCrawler(AbstractCrawler):
                                     By.CSS_SELECTOR, '[data-e2e="user-info-follow-btn"]'
                                 ),
                             )
-                            print("💗关注用户成功")
+                            log.debug("💗关注用户成功")
                             followIndex += 1
                             await self.ws.push({"follow": 1})
                         except NoSuchElementException:
-                            print("用户不存在")
+                            log.debug("用户不存在")
                         await sleep(randint(config.VISIT_MIN, config.VISIT_MAX))
                     driver.close()
                     driver.switch_to.window(driver.window_handles[0])
@@ -267,7 +267,7 @@ class DouyinCrawler(AbstractCrawler):
                 raise Exception("请至少传一个比特浏览器id")
 
             res = openBrowser(config.BIT_BROWSER_IDS[0])
-            print(res)
+            log.debug(res)
 
             chrome_options = webdriver.ChromeOptions()
             chrome_options.add_experimental_option(
