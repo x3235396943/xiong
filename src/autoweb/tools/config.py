@@ -1,16 +1,15 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Dict, Any
 
 
 class Base(BaseSettings):
-    SIBERIAN_URL: str = "http://139.159.230.186/api/siberianNitraria/verifyActivate"
-    SIBERIAN_KEY: str = "kjG7GGbNDqvrHSZ1Zin5zvWVyBjkiiggCFiAVyC3AsQ="
-    DEVICE_CODE: str = "111222"
-    WEBSOCKET_URL: str = "ws://192.168.2.9:11221/ws/"
-    PLATFORM: str = "dys"
-
-    # 不从.env文件读取配置
-    model_config = SettingsConfigDict(extra="ignore")
+    SIBERIAN_URL: str
+    SIBERIAN_KEY: str
+    DEVICE_CODE: str
+    # WebSocket 配置
+    WEBSOCKET_URL: str  # WebSocket 服务器地址
+    PLATFORM: str  # 设备码
 
 
 class KuSettings(Base):
@@ -65,7 +64,7 @@ class KuSettings(Base):
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = False  # 是否输出调试信息（打印所有配置参数）
 
-    BIT_BROWSER_IDS: list = ["4bbbe30c084a495796aaaff8a7082fda"]
+    BIT_BROWSER_IDS: list = []
 
     VERSION: str = "1.0.18"
 
@@ -97,13 +96,14 @@ class KuSettings(Base):
     FOLLOW_PROBABILITY: float = 4
     COMMENT_KEYWORDS: list = []
 
+    model_config = SettingsConfigDict(extra="ignore", env_file=".env")
     # 不从.env文件读取配置
     model_config = SettingsConfigDict(extra="ignore")
 
     def update_from_dict(self, config_dict: Dict[str, Any]):
         """
         从字典更新配置项
-        
+
         Args:
             config_dict: 包含配置项的字典
         """
@@ -133,160 +133,3 @@ class KuSettings(Base):
 
 # 创建全局配置实例
 config = KuSettings()  # type: ignore
-
-
-
-
-# import os
-# import json
-# import ast
-# from pathlib import Path
-# from typing import Any
-
-
-
-
-#     # ==================== 快手关键词配置 ====================
-#     # 搜索关键词列表，支持 JSON、Python 列表或逗号分隔字符串
-#     _search_keywords_source = _get_env_value('KEYWORDS', None)
-#     if isinstance(_search_keywords_source, list):
-#         KEYWORDS = [str(kw).strip() for kw in _search_keywords_source if str(kw).strip()]
-#     else:
-#         _search_keywords_env = str(_search_keywords_source or '')
-#         if _search_keywords_env.strip():
-#             KEYWORDS = _parse_list_env(_search_keywords_env, item_type=str)
-#             KEYWORDS = [kw.strip() for kw in KEYWORDS if kw.strip()]
-#         else:
-#             KEYWORDS = []
-
-
-
-#     # ==================== 评论区配置 ====================
-#     COMMENT_MIN_OPERATION_COUNT = _to_int(_get_env_value('COMMENT_MIN_OPERATION_COUNT', None), 3)
-#     COMMENT_MAX_OPERATION_COUNT = _to_int(_get_env_value('COMMENT_MAX_OPERATION_COUNT', None), 5)
-#     # 评论区数量判断
-#     COMMENT_MIN_ELEMENTS_COUNT = _to_int(_get_env_value('COMMENT_MIN_ELEMENTS_COUNT', None), 3)
-#     COMMENT_MAX_ELEMENTS_COUNT = _to_int(_get_env_value('COMMENT_MAX_ELEMENTS_COUNT', None), 5)
-
-#     # ==================== 快手关注配置 ====================
-#     FOLLOW_INTERVAL_MIN = _to_float(_get_env_value('FOLLOW_INTERVAL_MIN', None), 3)
-#     FOLLOW_INTERVAL_MAX = _to_float(_get_env_value('FOLLOW_INTERVAL_MAX', None), 10)
-#     FOLLOW_PROBABILITY = _to_float(_get_env_value('FOLLOW_PROBABILITY', None), 4)
-#     FOLLOW_COUNT_MIN = _to_int(_get_env_value('FOLLOW_COUNT_MIN', None), 170)
-
-#     # ==================== 快手视频数量配置 ====================
-#     VIDEOS_PER_LOOP_MIN = _to_int(_get_env_value('VIDEOS_PER_LOOP_MIN', None), 15)
-#     VIDEOS_PER_LOOP_MAX = _to_int(_get_env_value('VIDEOS_PER_LOOP_MAX', None), 30)
-
-#     # ==================== 网页链接内容 ====================
-#     WEB_LINK_CONTENT = str(_get_env_value('WEB_LINK_CONTENT', '') or '')
-
-#     # ==================== 快手视频URL配置 ====================
-#     # 优先使用 URLS 配置，如果没有则使用 KUAISHOU_VIDEO_URL（向后兼容）
-#     # 支持 JSON 格式、Python 列表或逗号分隔格式
-#     # 会自动去掉每个URL中?及其后面的参数
-#     _urls_source = _get_env_value('URLS', None)
-#     _video_urls_source = _get_env_value('KUAISHOU_VIDEO_URL', None)
-
-#     # 优先使用 URLS，如果没有则使用 KUAISHOU_VIDEO_URL
-#     _final_urls_source = _urls_source if _urls_source else _video_urls_source
-
-#     if isinstance(_final_urls_source, list):
-#         raw_video_urls = [str(url).strip() for url in _final_urls_source if str(url).strip()]
-#     else:
-#         raw_video_urls = _parse_list_env(str(_final_urls_source)) if _final_urls_source else []
-
-#     # 处理每个URL，去掉?及其后面的参数
-#     KUAISHOU_VIDEO_URL = []
-#     for url in raw_video_urls:
-#         url_str = str(url).strip()
-#         if url_str:
-#             # 找到?的位置，如果存在则截取?之前的部分
-#             if '?' in url_str:
-#                 url_str = url_str.split('?')[0]
-#             KUAISHOU_VIDEO_URL.append(url_str)
-
-#     # 同时提供 URLS 作为别名（与 KUAISHOU_VIDEO_URL 相同）
-#     URLS = KUAISHOU_VIDEO_URL
-
-
-#     @property
-#     def PROXY(self):
-#         """兼容旧属性名"""
-#         return self.NETWORK_PROXY
-
-#     @property
-#     def PROXIES(self):
-#         """兼容旧属性名"""
-#         return self.NETWORK_PROXIES
-
-#     @property
-#     def CHROMEDRIVER_PATH(self):
-#         """兼容旧属性名"""
-#         return self.DRIVER_CHROMEDRIVER_PATH
-
-#     @property
-#     def INPUT_DELAY_MIN(self):
-#         """兼容旧属性名"""
-#         return self.VIDEO_INPUT_DELAY_MIN
-
-#     @property
-#     def INPUT_DELAY_MAX(self):
-#         """兼容旧属性名"""
-#         return self.VIDEO_INPUT_DELAY_MAX
-
-#     @property
-#     def IMPLICIT_WAIT(self):
-#         """兼容旧属性名"""
-#         return self.VIDEO_IMPLICIT_WAIT
-
-#     @property
-#     def PAGE_LOAD_WAIT(self):
-#         """兼容旧属性名"""
-#         return self.VIDEO_PAGE_LOAD_WAIT
-
-#     @property
-#     def MAIN_LOOP_INTERVAL_MIN(self):
-#         """兼容旧属性名"""
-#         return self.VIDEO_MAIN_LOOP_INTERVAL_MIN
-
-#     @property
-#     def MAIN_LOOP_INTERVAL_MAX(self):
-#         """兼容旧属性名"""
-#         return self.VIDEO_MAIN_LOOP_INTERVAL_MAX
-
-#     @property
-#     def ACTION_INTERVAL_MIN(self):
-#         """兼容旧属性名"""
-#         return self.VIDEO_ACTION_INTERVAL_MIN
-
-#     @property
-#     def ACTION_INTERVAL_MAX(self):
-#         """兼容旧属性名"""
-#         return self.VIDEO_ACTION_INTERVAL_MAX
-
-#     @property
-#     def SCROLL_INTERVAL_MIN(self):
-#         """兼容旧属性名"""
-#         return self.VIDEO_SCROLL_INTERVAL_MIN
-
-#     @property
-#     def SCROLL_INTERVAL_MAX(self):
-#         """兼容旧属性名"""
-#         return self.VIDEO_SCROLL_INTERVAL_MAX
-
-
-#     @property
-#     def FOLLOW_L(self):
-#         """兼容旧属性名"""
-#         return self.FOLLOW_PROBABILITY
-
-
-#     model_config = SettingsConfigDict(extra="ignore")
-# 创建全局配置实例
-# 使用方式: from config import config
-# 然后通过 config.BITBROWSER_URL, config.KEYWORDS 等方式访问
-
-
-
-

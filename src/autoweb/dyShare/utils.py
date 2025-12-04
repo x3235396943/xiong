@@ -25,7 +25,7 @@ from datetime import datetime
 import threading
 
 from ..tools import log
-from ..tools.config import config
+from ..tools.config import config,KuSettings
 from ..tools.bit_api import openBrowser, closeBrowser
 from ..tools.verify import LicenseManager, LicenseException
 
@@ -1436,7 +1436,7 @@ class DyShareUtils:
                 comment_wait_max_val = config.COMMENT_WAIT_MAX
                 visit_min_val = config.VISIT_MIN
                 visit_max_val = config.VISIT_MAX
-                    
+
                 # 1. 驱动检查与创建
                 if driver is None:
                     # 树立项目规范，不主动关闭浏览器实例
