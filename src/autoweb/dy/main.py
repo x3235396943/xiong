@@ -75,8 +75,10 @@ class DouyinCrawler(AbstractCrawler):
             await sleep(4)
 
             try:
-                driver.find_element(By.CLASS_NAME, "semi-button-content").click()
-                await sleep(2)
+                driver.find_element(
+                    By.CSS_SELECTOR,
+                    '[data-e2e="recommend-guide-mask"] .semi-button-content',
+                ).click()
             except NoSuchElementException:
                 pass
             await self.traversal_video()
@@ -186,7 +188,7 @@ class DouyinCrawler(AbstractCrawler):
                     config.ENABLE_PROFILE_VISIT
                     and randint(1, 100) <= config.VISIT_ENABLE
                 ):
-                    log.debug("进入主页->", comment.text)
+                    log.debug(f"进入主页-> {comment.text}")
                     try:
                         comment.find_element(
                             By.CSS_SELECTOR, ".comment-item-avatar a"
