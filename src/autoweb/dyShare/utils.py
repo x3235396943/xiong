@@ -57,6 +57,7 @@ class DyShareUtils:
         self._url_list_lock = threading.Lock()
         self._stats_lock = threading.Lock()  # 保护全局统计变量的线程锁
         self._stop_flag = threading.Event()
+        self._browser_start_indices = {}  # 存储每个浏览器的起始索引
 
     # ----------------------------------------------------------------------
     # 工具函数
@@ -1288,13 +1289,31 @@ class DyShareUtils:
             log.error(f"{browser_info} 通过API强制关闭浏览器时出错: {e}")
 
     def reset_url_list_index(self):
-        """重置URL列表索引"""
+        """重置URL列表索引，并根据URL_INDEX配置设置各浏览器起始索引"""
         with self._url_list_lock:
             self._url_list_index = 0
+            # 初始化浏览器起始索引映射
+            self._browser_start_indices = {}
+            if config.URL_INDEX and isinstance(config.URL_INDEX, list):
+                for i, start_index in enumerate(config.URL_INDEX):
+                    if i < len(config.BIT_BROWSER_IDS):
+                        browser_id = config.BIT_BROWSER_IDS[i]
+                        self._browser_start_indices[browser_id] = start_index
+                        if config.DEBUG:
+                            log.info(f"浏览器 {browser_id} 起始索引设置为: {start_index}")
 
-    def get_next_link_from_list(self, urls_list):
+    def get_next_link_from_list(self, urls_list, browser_id=None):
         """从URL列表获取下一个待处理的链接（线程安全）"""
         with self._url_list_lock:
+            # 确定当前浏览器的起始索引
+            start_index = 0
+            if browser_id and browser_id in self._browser_start_indices:
+                start_index = self._browser_start_indices[browser_id]
+            
+            # 如果是第一次获取链接，使用起始索引
+            if self._url_list_index == 0 and start_index > 0:
+                self._url_list_index = start_index
+            
             while self._url_list_index < len(urls_list):
                 raw_url = urls_list[self._url_list_index]
                 url_index = self._url_list_index
@@ -1313,10 +1332,10 @@ class DyShareUtils:
 
             return None, None, None
 
-    def get_next_link(self, db_path=LINKS_DB_PATH):
+    def get_next_link(self, db_path=LINKS_DB_PATH, browser_id=None):
         """从数据库或列表获取下一个待处理的链接"""
         if config.URLS and len(config.URLS) > 0:
-            return self.get_next_link_from_list(config.URLS)
+            return self.get_next_link_from_list(config.URLS, browser_id)
         else:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
@@ -1373,19 +1392,19 @@ class DyShareUtils:
         conn.close()
 
     def continuous_processing_loop(
-            self,
-            browser_id,
-            wait_time,
-            like_probability,
-            visit_profile_probability,
-            profile_follow_probability,
-            min_follows_per_video,
-            max_follows_per_video,
-            min_likes_per_video,
-            max_likes_per_video,
-            browser_number,
-            reporter=None,  # DataReporter 实例
-            db_path=LINKS_DB_PATH,
+        self,
+        browser_id,
+        wait_time,
+        like_probability,
+        visit_profile_probability,
+        profile_follow_probability,
+        min_follows_per_video,
+        max_follows_per_video,
+        min_likes_per_video,
+        max_likes_per_video,
+        browser_number,
+        reporter=None,  # DataReporter 实例
+        db_path=LINKS_DB_PATH,
     ):
         """持续处理循环 (优化版)"""
         browser_info = self.get_browser_info(browser_number)
@@ -1452,7 +1471,7 @@ class DyShareUtils:
                         continue
 
                 # 2. 获取链接
-                link_id, url, url_index = self.get_next_link(db_path)
+                link_id, url, url_index = self.get_next_link(db_path, browser_id)
 
                 if url is None:
                     if config.URLS and len(config.URLS) > 0:
