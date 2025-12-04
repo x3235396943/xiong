@@ -24,9 +24,8 @@ import sqlite3
 from datetime import datetime
 import threading
 
-from ..tools import log, log2
+from ..tools import log
 from ..tools.config import KuSettings
-from ..tools.base import AbstractCrawler
 from ..tools.bit_api import openBrowser, closeBrowser
 from ..tools.verify import LicenseManager, LicenseException
 

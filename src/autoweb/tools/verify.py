@@ -5,8 +5,17 @@ import ujson
 
 from .config import config
 
+import threading
+import time
+import requests
+import os
+from . import log
 
-async def verify():
+from .web_client import WSClient
+
+
+async def verify(ws: WSClient):
+    await ws.ready_event.wait()
     async with aiohttp.ClientSession(json_serialize=ujson.dumps) as session:
         while True:
             async with session.post(
@@ -22,16 +31,9 @@ async def verify():
             await sleep(180)
 
 
-import threading
-import time
-import requests
-import os
-from . import log
-# from .config import config
-
-
 class LicenseException(Exception):
     """卡密验证异常类"""
+
     pass
 
 
@@ -70,7 +72,7 @@ class LicenseManager:
                     "siberian": self.key,
                     "deviceCode": self.code,
                 },
-                timeout=15  # 设置超时防止卡死
+                timeout=15,  # 设置超时防止卡死
             )
 
             # 解析响应
@@ -139,3 +141,4 @@ class LicenseManager:
     def stop_periodic_check(self):
         """停止后台检查线程"""
         self._stop_event.set()
+

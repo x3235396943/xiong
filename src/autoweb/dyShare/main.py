@@ -7,14 +7,13 @@
 """
 
 import sys
-from ..tools.base import AbstractCrawler
 from .concrete_crawler import ConcreteDyShareCrawler
 
 
-class DouyinShareCrawler(AbstractCrawler):
+class DouyinShareCrawler:
     """抖音自动化主类"""
 
-    async def start(self):
+    def start(self):
         """
         主函数 - 控制整体执行流程
         """
@@ -30,3 +29,4 @@ class DouyinShareCrawler(AbstractCrawler):
         except Exception as e:
             print(f"程序执行出错: {e}")
             sys.exit(1)
+

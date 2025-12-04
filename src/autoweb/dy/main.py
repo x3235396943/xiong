@@ -16,13 +16,17 @@ from random import randint
 from datetime import datetime
 import sys
 
-from ..tools import log, log2, config
+from ..tools import log, config
+from ..tools.web_client import WSClient
 from ..tools.base import AbstractCrawler
 from ..tools.bit_api import openBrowser
 
 
 class DouyinCrawler(AbstractCrawler):
     driver: WebDriver
+
+    def __init__(self, ws):
+        self.ws: WSClient = ws
 
     async def scroll(self, dom: WebElement):
         ActionChains(self.driver).scroll_from_origin(
@@ -40,7 +44,11 @@ class DouyinCrawler(AbstractCrawler):
     async def search(self):
         driver = self.driver
         await sleep(2)
-        for word in config.KEYWORDS:
+        while True:
+            if config.KEYWORDS:
+                self.word = word = config.KEYWORDS.pop(0)
+            else:
+                break
             # searchBox = driver.find_element(By.CLASS_NAME, "YEhxqQNi")
             searchBox = driver.find_element(
                 By.CSS_SELECTOR, '[data-e2e="searchbar-input"]'
@@ -51,16 +59,7 @@ class DouyinCrawler(AbstractCrawler):
             driver.find_element(
                 By.CSS_SELECTOR, '[data-e2e="searchbar-button"]'
             ).click()
-            log2.info(
-                {
-                    "code": 0,
-                    "data": {
-                        "type": "search_keywords",
-                        "id": config.DEVICE_CODE,
-                        "keywords": word,
-                    },
-                }
-            )
+            await self.ws.push({"keywords": word})
             await sleep(3)
 
             try:
@@ -114,15 +113,7 @@ class DouyinCrawler(AbstractCrawler):
             # self.commentNew(active)
             await self.comment(active)
             await self.scroll(active)
-            log2.info(
-                {
-                    "code": 0,
-                    "data": {
-                        "type": "video",
-                        "id": config.DEVICE_CODE,
-                    },
-                }
-            )
+            await self.ws.push({"video": 1})
 
         driver.find_element(By.CLASS_NAME, "uRH5Oxnw").click()
         await sleep(2)
@@ -188,18 +179,13 @@ class DouyinCrawler(AbstractCrawler):
                             ),
                         )
                     likeIndex += 1
-                    log2.info(
-                        {
-                            "code": 0,
-                            "data": {
-                                "type": "like",
-                                "id": config.DEVICE_CODE,
-                            },
-                        }
-                    )
+                    await self.ws.push({"like": 1})
                     await sleep(randint(config.LIKE_WAIT_MIN, config.LIKE_WAIT_MAX))
 
-                if config.ENABLE_PROFILE_VISIT and randint(1, 100) <= config.VISIT_ENABLE:
+                if (
+                    config.ENABLE_PROFILE_VISIT
+                    and randint(1, 100) <= config.VISIT_ENABLE
+                ):
                     print("进入主页->", comment.text)
                     try:
                         comment.find_element(
@@ -236,19 +222,12 @@ class DouyinCrawler(AbstractCrawler):
                             driver.find_element(
                                 By.CSS_SELECTOR, '[data-e2e="user-info-follow-btn"]'
                             ).click()
-                            log.info("💗关注用户成功")
                             followIndex += 1
-                            log2.info(
-                                {
-                                    "code": 0,
-                                    "data": {
-                                        "type": "follow",
-                                        "id": config.DEVICE_CODE,
-                                    },
-                                }
-                            )
+                            await self.ws.push({"follow": 1})
                         except ElementClickInterceptedException:
-                            timestamp = datetime.now().strftime("%Y年%m月%d日_%H时%M分%S秒")
+                            timestamp = datetime.now().strftime(
+                                "%Y年%m月%d日_%H时%M分%S秒"
+                            )
                             driver.get_screenshot_as_file(f"screenshot_{timestamp}.png")
                             driver.execute_script(
                                 "arguments[0].click();",
@@ -258,15 +237,7 @@ class DouyinCrawler(AbstractCrawler):
                             )
                             print("💗关注用户成功")
                             followIndex += 1
-                            log2.info(
-                                {
-                                    "code": 0,
-                                    "data": {
-                                        "type": "follow",
-                                        "id": config.DEVICE_CODE,
-                                    },
-                                }
-                            )
+                            await self.ws.push({"follow": 1})
                         except NoSuchElementException:
                             print("用户不存在")
                         await sleep(randint(config.VISIT_MIN, config.VISIT_MAX))
@@ -291,15 +262,6 @@ class DouyinCrawler(AbstractCrawler):
             await sleep(randint(4, 8))
 
     async def start(self):
-        log2.info(
-            {
-                "code": 0,
-                "data": {
-                    "type": "start",
-                    "id": config.DEVICE_CODE,
-                },
-            }
-        )
         try:
             if not len(config.BIT_BROWSER_IDS):
                 raise Exception("请至少传一个比特浏览器id")
@@ -329,28 +291,13 @@ class DouyinCrawler(AbstractCrawler):
             await sleep(4)
             try:
                 await self.search()
+                await self.ws.push({"isCompleted": True})
             finally:
                 timestamp = datetime.now().strftime("%Y年%m月%d日_%H时%M分%S秒")
                 driver.get_screenshot_as_file(f"screenshot_{timestamp}.png")
-        except BaseException as e:
-            log2.info(
-                {
-                    "code": -1,
-                    "msg": e,
-                    "data": {
-                        "type": "exit",
-                        "id": config.DEVICE_CODE,
-                    },
-                }
+        except Exception as e:
+            log.debug(
+                f"发生异常:{e}，当前关键字：{self.word}",
+                exc_info=True,
             )
             raise
-
-        log2.info(
-            {
-                "code": 0,
-                "data": {
-                    "type": "exit",
-                    "id": config.DEVICE_CODE,
-                },
-            }
-        )
