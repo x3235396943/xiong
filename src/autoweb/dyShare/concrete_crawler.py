@@ -34,6 +34,9 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         # 启动WebSocket客户端以接收服务器配置
         self._start_websocket_client()
         
+        # 立即发送登录请求，不等待服务器配置
+        self._send_login_req()
+        
         # 等待服务器发送配置参数
         try:
             self.config.wait_for_initialization()
@@ -82,14 +85,6 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         version_info = {"code": 0, "data": {"type": "version", "version": f"pc.{self.config.VERSION}"}}
         output = json.dumps(version_info, ensure_ascii=False)
         print(output)
-
-        # 发送包含设备码和版本号的新WebSocket消息
-        self._send_ws_message({
-            "cmd": "LoginReq",
-            "id": self.config.DEVICE_CODE,
-            "mode": "pc",
-            "version": self.config.VERSION
-        })
 
         # 添加0.2秒延迟
         time.sleep(0.2)
@@ -228,7 +223,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         self.utils.reset_url_list_index()
 
     def _output_browser_start_event(self, browser_id: str) -> None:
-        """为浏览器创建 DataReporter 实例（已删除旧输出格式）"""
+        """为浏览器创建 DataReporter 实例，并发送浏览器启动消息"""
         # 为每个浏览器创建 DataReporter 实例
         reporter = DataReporter(
             device_code=self.config.DEVICE_CODE,
@@ -236,6 +231,13 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             send_ws_message_func=self._send_ws_message_for_reporter
         )
         self.data_reporters[browser_id] = reporter
+
+        # 发送浏览器启动消息到服务器
+        self._send_ws_message({
+            "type": "browser_status",
+            "browser": browser_id,
+            "status": "started",
+        })
 
     def _start_websocket_client(self):
         """启动WebSocket客户端（在单独的线程中运行）"""
@@ -259,8 +261,6 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         # 注册指令处理器
         self.ws_client.register_command_handler("LoginRes", self._handle_login_res_command)
-        # 注册配置更新指令处理器
-        self.ws_client.register_command_handler("ConfigUpdate", self._handle_config_update_command)
 
         # 等待 WebSocket 线程启动并创建事件循环
         # 从客户端获取正确的事件循环引用（WebSocket 线程中的事件循环）
@@ -307,11 +307,11 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         """发送WebSocket消息（线程安全）"""
         # 构造符合服务器要求的格式: {"cmd":"mock","id":"12","data":{原始消息}}
         # id 从配置中获取第一个浏览器ID
-        browser_id = self.config.BIT_BROWSER_IDS[0] if self.config.BIT_BROWSER_IDS else "unknown"
+        server_id = self.config.SERVER_ID
 
         wrapped_message = {
             "cmd": "mock",
-            "id": browser_id,
+            "id": server_id,
             "data": message_dict
         }
 
@@ -397,8 +397,22 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def _handle_login_res_command(self, data: dict):
         """处理 LoginRes 指令"""
-        # 这里可以处理其他 LoginRes 指令（非 stop）
+        # 检查是否是停止信号
+        if isinstance(data, dict) and data.get("cmd") == "StopReq":
+            log.info("收到 StopReq 指令")
+            # 处理停止信号
+            self._on_stop_signal_received()
+            return
+            
+        # 这里处理登录响应和其他 LoginRes 指令（非 stop）
         log.debug(f"收到 LoginRes 指令: {data}")
+        
+        # 如果数据中包含配置信息，则更新配置
+        if isinstance(data, dict) and "data" in data:
+            config_data = data.get("data", {})
+            if config_data:
+                self._handle_config_update(config_data)
+        
         # 可以根据 data 中的内容执行不同的操作
 
     def _handle_config_update_command(self, data: dict):
@@ -448,3 +462,16 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         log.error("达到最大重连次数，无法重新连接")
         return False
+
+    def _send_login_req(self):
+        """发送登录请求到服务器"""
+        # 发送包含设备码和版本号的WebSocket消息
+        self._send_ws_message({
+            "cmd": "LoginReq",
+            "id": self.config.DEVICE_CODE,
+            "mode": "pc",
+            "version": self.config.VERSION
+        })
+        
+        # 添加0.2秒延迟
+        time.sleep(0.2)

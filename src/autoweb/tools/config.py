@@ -9,14 +9,16 @@ class Base(BaseSettings):
     SIBERIAN_KEY: str
     DEVICE_CODE: str
     # WebSocket 配置
-    WEBSOCKET_URL: str  # WebSocket 服务器地址
+    WS_URL: str  # WebSocket 服务器地址
     PLATFORM: str  # 设备码
+    # 服务器消息ID，用于发送消息到服务器时的标识符
+    SERVER_ID: str
 
 
 class KuSettings(Base):
     # 添加一个标志用于等待配置初始化
     _config_initialized: bool = False
-    
+
     KEYWORDS: list = []
     MAX_SCROLL_VIDEO: list = [10, 20]
     MAX_COMMENT: list = [2, 15]
@@ -101,8 +103,8 @@ class KuSettings(Base):
     COMMENT_KEYWORDS: list = []
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
-    
-    @field_validator('MAX_FOLLOWS_PER_VIDEO', 'COMMENT_LIKE_COUNT_MAX', 'LIKE_WAIT_MAX', 
+
+    @field_validator('MAX_FOLLOWS_PER_VIDEO', 'COMMENT_LIKE_COUNT_MAX', 'LIKE_WAIT_MAX',
                      'VISIT_MAX', 'VIDEO_REPLY_WAIT_MAX', 'COMMENT_WAIT_MAX')
     @classmethod
     def validate_min_max_pairs(cls, max_value, info):
@@ -115,7 +117,7 @@ class KuSettings(Base):
             'VIDEO_REPLY_WAIT_MAX': ('VIDEO_REPLY_WAIT_MIN', 'VIDEO_REPLY_WAIT_MAX'),
             'COMMENT_WAIT_MAX': ('COMMENT_WAIT_MIN', 'COMMENT_WAIT_MAX')
         }
-        
+
         field_name = info.field_name
         if field_name in field_pairs:
             min_field, max_field = field_pairs[field_name]
@@ -147,7 +149,7 @@ class KuSettings(Base):
     def wait_for_initialization(self, timeout: int = 300):
         """
         等待配置初始化完成
-        
+
         Args:
             timeout: 等待超时时间（秒），默认5分钟
         """
@@ -168,6 +170,7 @@ class KuSettings(Base):
         log.info("当前配置摘要:")
         log.info(f"  PLATFORM: {self.PLATFORM}")
         log.info(f"  DEVICE_CODE: {self.DEVICE_CODE}")
+        log.info(f"  SERVER_ID: {self.SERVER_ID}")
         log.info(f"  ENABLE_FOLLOW: {self.ENABLE_FOLLOW}")
         log.info(f"  ENABLE_LIKE: {self.ENABLE_LIKE}")
         log.info(f"  LIKE_PROBABILITY: {self.LIKE_PROBABILITY}")

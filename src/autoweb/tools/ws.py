@@ -292,7 +292,7 @@ def create_websocket_client(config):
         WSClient: WebSocket客户端实例
     """
     # 从配置中获取 WebSocket URL 和设备码，并拼接成完整的URL
-    ws_url = f"{config.WEBSOCKET_URL}?id={config.DEVICE_CODE}"
+    ws_url = f"{config.WS_URL}?id={config.DEVICE_CODE}"
 
     if not ws_url:
         raise Exception("WebSocket URL 未配置，请检查配置文件")

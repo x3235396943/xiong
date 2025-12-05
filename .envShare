@@ -15,10 +15,12 @@ SIBERIAN_URL="http://139.159.230.186/api/siberianNitraria/verifyActivate"
 SIBERIAN_KEY="kjG7GGbNDqvrHSZ1Zin5zvWVyBjkiiggCFiAVyC3AsQ="
 #SIBERIAN_KEY="NEW_KEY_123456"
 
-WEBSOCKET_URL="ws://192.168.2.9:11221/ws/"
+WS_URL="ws://192.168.2.9:11221/ws/"
 
 # 设备码
 DEVICE_CODE="111222"
+# 服务器消息ID（用于发送消息到服务器时的标识符）
+SERVER_ID="12"
 
 # 是否启用关注功能 (True/False)
 ENABLE_FOLLOW=True

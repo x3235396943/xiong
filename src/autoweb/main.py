@@ -58,7 +58,7 @@ def main():
         o = DouyinShareCrawler()
         o.start()
         return
-    manager = TaskManager(ws_url=config.WEBSOCKET_URL)
+    manager = TaskManager(ws_url=config.WS_URL)
     try:
         asyncio.run(manager.start())
     except KeyboardInterrupt:
