@@ -18,6 +18,12 @@ async def verify(ws: WSClient):
     await ws.ready_event.wait()
     async with aiohttp.ClientSession(json_serialize=ujson.dumps) as session:
         while True:
+            # 检查配置是否已设置
+            if not config.SIBERIAN_URL or not config.SIBERIAN_KEY:
+                log.warning("SIBERIAN_URL 或 SIBERIAN_KEY 未设置，跳过验证")
+                await sleep(180)
+                continue
+                
             async with session.post(
                 config.SIBERIAN_URL,
                 json={
@@ -53,8 +59,9 @@ class LicenseManager:
         self.code = os.environ.get("DEVICE_CODE") or getattr(config, "DEVICE_CODE", "")
 
         # 简单的配置检查
-        if not self.url or not self.key or not self.code:
-            log.warning("⚠️ 卡密配置可能缺失，请检查环境变量 (.env) 或配置文件")
+        if not self.code:
+            log.warning("⚠️ 设备码未配置，请检查环境变量 (.env) 或配置文件")
+        # 不再强制要求 SIBERIAN_URL 和 SIBERIAN_KEY 在启动时存在
 
     def _verify_logic(self):
         """
@@ -62,8 +69,12 @@ class LicenseManager:
         返回: (bool, msg)
         """
         try:
-            if not self.url:
-                return False, "未配置 SIBERIAN_URL"
+            # 检查必要参数是否存在
+            if not self.url or not self.key:
+                return False, "未配置 SIBERIAN_URL 或 SIBERIAN_KEY"
+
+            if not self.code:
+                return False, "未配置 DEVICE_CODE"
 
             # 发送请求
             response = requests.post(
@@ -109,6 +120,28 @@ class LicenseManager:
         """初始验证，通常在程序启动时调用"""
         if config.DEBUG:
             log.info("正在验证卡密...")
+        
+        # 等待直到从服务器接收到 SIBERIAN_URL 和 SIBERIAN_KEY
+        max_wait_time = 60  # 最多等待60秒
+        wait_interval = 1   # 每秒检查一次
+        waited_time = 0
+        
+        while (not self.url or not self.key) and waited_time < max_wait_time:
+            # 从配置中获取最新的 URL 和 KEY（可能已由服务器更新）
+            self.url = os.environ.get("SIBERIAN_URL") or getattr(config, "SIBERIAN_URL", "")
+            self.key = os.environ.get("SIBERIAN_KEY") or getattr(config, "SIBERIAN_KEY", "")
+            
+            if self.url and self.key:
+                break
+                
+            time.sleep(wait_interval)
+            waited_time += wait_interval
+            
+        # 如果仍然没有获取到 URL 和 KEY
+        if not self.url or not self.key:
+            log.error("❌ 未能从服务器获取卡密参数")
+            return False
+            
         is_valid, msg = self._verify_logic()
 
         if is_valid:
@@ -127,6 +160,10 @@ class LicenseManager:
         主线程在执行关键操作前调用此方法。
         如果后台线程检测到失效，这里会抛出异常，中断操作。
         """
+        # 如果 URL 或 KEY 未设置，则不进行验证
+        if not self.url or not self.key:
+            return
+            
         if not self._valid:
             raise LicenseException(f"License Invalid: {self._error_msg}")
 
@@ -141,4 +178,3 @@ class LicenseManager:
     def stop_periodic_check(self):
         """停止后台检查线程"""
         self._stop_event.set()
-

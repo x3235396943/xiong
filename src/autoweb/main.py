@@ -4,13 +4,13 @@ from .tools import verify, config, log
 from .tools.base import AbstractCrawler
 from .dy import DouyinCrawler
 from .dyShare import DouyinShareCrawler
-from .ks import KuaishouCrawler
+# from .ks import KuaishouCrawler
 
 from .tools.web_client import WSClient
 
 
 class TaskManager:
-    CRAWLERS = {"dy": DouyinCrawler, "ks": KuaishouCrawler}
+    CRAWLERS = {"dy": DouyinCrawler}#, "ks": KuaishouCrawler
 
     def __init__(self, ws_url: str):
         self.ws = WSClient(url=ws_url)

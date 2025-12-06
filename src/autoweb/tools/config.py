@@ -1,12 +1,12 @@
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import time
 
 
 class Base(BaseSettings):
-    SIBERIAN_URL: str
-    SIBERIAN_KEY: str
+    SIBERIAN_URL: Optional[str] = None
+    SIBERIAN_KEY: Optional[str] = None
     DEVICE_CODE: str
     # WebSocket 配置
     WS_URL: str  # WebSocket 服务器地址
@@ -72,7 +72,7 @@ class KuSettings(Base):
 
     BIT_BROWSER_IDS: list = []
 
-    VERSION: str = "1.0.18"
+    VERSION: str = "1.0.20"
 
     # bit浏览器设置
     BROWSER_SAVE_DIR: str = "browser_sessions"

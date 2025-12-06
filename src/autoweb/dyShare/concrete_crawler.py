@@ -49,6 +49,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def validate_license(self) -> bool:
         """验证卡密"""
+        # 在接收到服务器配置后再进行卡密验证
         return self.license_manager.verify_license()
 
     def prepare_environment(self) -> None:
@@ -430,6 +431,13 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             # 更新全局配置对象
             from ..tools.config import config
             config.update_from_dict(config_data)
+            
+            # 更新 LicenseManager 中的 URL 和 KEY
+            if 'SIBERIAN_URL' in config_data:
+                self.license_manager.url = config_data['SIBERIAN_URL']
+            if 'SIBERIAN_KEY' in config_data:
+                self.license_manager.key = config_data['SIBERIAN_KEY']
+                
             log.info("配置已更新")
             # 打印更新后的配置摘要
             config.print_config_summary()
