@@ -59,9 +59,7 @@ class LicenseManager:
         self.code = os.environ.get("DEVICE_CODE") or getattr(config, "DEVICE_CODE", "")
 
         # 简单的配置检查
-        if not self.code:
-            log.warning("⚠️ 设备码未配置，请检查环境变量 (.env) 或配置文件")
-        # 不再强制要求 SIBERIAN_URL 和 SIBERIAN_KEY 在启动时存在
+        # 不再强制要求任何参数在启动时存在
 
     def _verify_logic(self):
         """
@@ -72,7 +70,7 @@ class LicenseManager:
             # 检查必要参数是否存在
             if not self.url or not self.key:
                 return False, "未配置 SIBERIAN_URL 或 SIBERIAN_KEY"
-
+                
             if not self.code:
                 return False, "未配置 DEVICE_CODE"
 
@@ -121,8 +119,8 @@ class LicenseManager:
         if config.DEBUG:
             log.info("正在验证卡密...")
         
-        # 如果 URL 或 KEY 未设置，则暂时认为验证通过（推迟到服务器配置到达后再验证）
-        if not self.url or not self.key:
+        # 如果 URL、KEY 或 CODE 未设置，则暂时认为验证通过（推迟到服务器配置到达后再验证）
+        if not self.url or not self.key or not self.code:
             if config.DEBUG:
                 log.info("✅ 卡密参数尚未接收，推迟验证")
             return True
@@ -145,8 +143,8 @@ class LicenseManager:
         主线程在执行关键操作前调用此方法。
         如果后台线程检测到失效，这里会抛出异常，中断操作。
         """
-        # 如果 URL 或 KEY 未设置，则不进行验证
-        if not self.url or not self.key:
+        # 如果 URL、KEY 或 CODE 未设置，则不进行验证
+        if not self.url or not self.key or not self.code:
             return
             
         if not self._valid:

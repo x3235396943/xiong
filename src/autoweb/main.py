@@ -54,6 +54,12 @@ class TaskManager:
 
 
 def main():
+    # 默认执行抖音分享爬虫，无需检查 PLATFORM 配置
+    o = DouyinShareCrawler()
+    o.start()
+    return
+
+    # 保留原来的逻辑以防需要
     if config.PLATFORM == "dys":
         o = DouyinShareCrawler()
         o.start()

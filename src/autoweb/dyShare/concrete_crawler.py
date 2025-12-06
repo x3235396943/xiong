@@ -473,10 +473,16 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def _send_login_req(self):
         """发送登录请求到服务器"""
+        # 从WS_URL中提取id参数作为设备标识
+        from urllib.parse import urlparse, parse_qs
+        parsed_url = urlparse(self.config.WS_URL)
+        query_params = parse_qs(parsed_url.query)
+        device_id = query_params.get('id', [self.config.DEVICE_CODE])[0]
+        
         # 发送包含设备码和版本号的WebSocket消息
         self._send_ws_message({
             "cmd": "LoginReq",
-            "id": self.config.DEVICE_CODE,
+            "id": device_id,
             "mode": "pc",
             "version": self.config.VERSION
         })

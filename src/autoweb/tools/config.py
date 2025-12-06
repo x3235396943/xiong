@@ -7,12 +7,12 @@ import time
 class Base(BaseSettings):
     SIBERIAN_URL: Optional[str] = None
     SIBERIAN_KEY: Optional[str] = None
-    DEVICE_CODE: str
+    DEVICE_CODE: Optional[str] = None
     # WebSocket 配置
     WS_URL: str  # WebSocket 服务器地址
-    PLATFORM: str  # 设备码
+    PLATFORM: str = "dys"  # 设备码，默认为"dys"表示抖音分享
     # 服务器消息ID，用于发送消息到服务器时的标识符
-    SERVER_ID: str
+    SERVER_ID: str = "shebeiid"
 
 
 class KuSettings(Base):

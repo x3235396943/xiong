@@ -286,13 +286,13 @@ def create_websocket_client(config):
     创建WebSocket客户端的公共方法
 
     Args:
-        config: 配置对象，需要包含WEBSOCKET_URL和DEVICE_CODE属性
+        config: 配置对象，需要包含WEBSOCKET_URL属性
 
     Returns:
         WSClient: WebSocket客户端实例
     """
-    # 从配置中获取 WebSocket URL 和设备码，并拼接成完整的URL
-    ws_url = f"{config.WS_URL}?id={config.DEVICE_CODE}"
+    # 从配置中获取 WebSocket URL
+    ws_url = config.WS_URL
 
     if not ws_url:
         raise Exception("WebSocket URL 未配置，请检查配置文件")
