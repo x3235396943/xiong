@@ -121,26 +121,11 @@ class LicenseManager:
         if config.DEBUG:
             log.info("正在验证卡密...")
         
-        # 等待直到从服务器接收到 SIBERIAN_URL 和 SIBERIAN_KEY
-        max_wait_time = 60  # 最多等待60秒
-        wait_interval = 1   # 每秒检查一次
-        waited_time = 0
-        
-        while (not self.url or not self.key) and waited_time < max_wait_time:
-            # 从配置中获取最新的 URL 和 KEY（可能已由服务器更新）
-            self.url = os.environ.get("SIBERIAN_URL") or getattr(config, "SIBERIAN_URL", "")
-            self.key = os.environ.get("SIBERIAN_KEY") or getattr(config, "SIBERIAN_KEY", "")
-            
-            if self.url and self.key:
-                break
-                
-            time.sleep(wait_interval)
-            waited_time += wait_interval
-            
-        # 如果仍然没有获取到 URL 和 KEY
+        # 如果 URL 或 KEY 未设置，则暂时认为验证通过（推迟到服务器配置到达后再验证）
         if not self.url or not self.key:
-            log.error("❌ 未能从服务器获取卡密参数")
-            return False
+            if config.DEBUG:
+                log.info("✅ 卡密参数尚未接收，推迟验证")
+            return True
             
         is_valid, msg = self._verify_logic()
 
