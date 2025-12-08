@@ -1466,9 +1466,13 @@ class DyShareUtils:
                     self.debug_log("info", "正在创建新浏览器实例...", browser_number)
                     driver = self.get_driver(browser_id, browser_number)
                     if driver is None:
-                        log.error(f"{self.get_browser_info(browser_number)} 创建失败，30秒后重试")
-                        self.safe_sleep(30, browser_number=browser_number)
-                        continue
+                        log.error(f"{self.get_browser_info(browser_number)} 创建失败，程序即将退出")
+                        # 直接抛出异常而不是重试
+                        raise Exception("浏览器创建失败，无法继续执行")
+                        # 原来的重试代码已删除
+                        # log.error(f"{self.get_browser_info(browser_number)} 创建失败，30秒后重试")
+                        # self.safe_sleep(30, browser_number=browser_number)
+                        # continue
 
                 # 2. 获取链接
                 link_id, url, url_index = self.get_next_link(db_path, browser_id)

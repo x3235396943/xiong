@@ -45,7 +45,7 @@ class DataReporter:
             "urlOk": 0,             # 处理成功的URL数量
             "video": 0,             # 处理的链接数量
             "videoComment": 0,      # 视频留言数量
-            "keywordsIndex": -1,    # 当前处理的链接索引
+            "keywordsIndex": 0,    # 当前处理的链接索引
         }
         
         # 线程锁，保护统计数据

@@ -235,9 +235,10 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         # 发送浏览器启动消息到服务器
         self._send_ws_message({
-            "type": "browser_status",
-            "browser": browser_id,
-            "status": "started",
+            "browserId": browser_id,
+            "cmd": "RunStateReq",
+            "id": self.config.DEVICE_CODE,
+            "state": "running"
         })
 
     def _start_websocket_client(self):
@@ -437,7 +438,9 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
                 self.license_manager.url = config_data['SIBERIAN_URL']
             if 'SIBERIAN_KEY' in config_data:
                 self.license_manager.key = config_data['SIBERIAN_KEY']
-                
+            if 'DEVICE_CODE' in config_data:
+                self.license_manager.code = config_data['DEVICE_CODE']
+
             log.info("配置已更新")
             # 打印更新后的配置摘要
             config.print_config_summary()

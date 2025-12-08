@@ -10,7 +10,7 @@ class Base(BaseSettings):
     DEVICE_CODE: Optional[str] = None
     # WebSocket 配置
     WS_URL: str  # WebSocket 服务器地址
-    PLATFORM: str = "dys"  # 设备码，默认为"dys"表示抖音分享
+    PLATFORM: str = "dys"  # 设备码
     # 服务器消息ID，用于发送消息到服务器时的标识符
     SERVER_ID: str = "shebeiid"
 
