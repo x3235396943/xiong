@@ -33,17 +33,17 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         """初始化配置"""
         # 启动WebSocket客户端以接收服务器配置
         self._start_websocket_client()
-        
+
         # 立即发送登录请求，不等待服务器配置
         self._send_login_req()
-        
+
         # 等待服务器发送配置参数
         try:
             self.config.wait_for_initialization()
         except TimeoutError as e:
             log.error(f"配置初始化超时: {e}")
             sys.exit(1)
-        
+
         # 配置接收完成后继续其他初始化步骤
         pass
 
@@ -112,7 +112,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
                     self._output_browser_start_event(browser_id)
                     # 获取该浏览器的 DataReporter 实例
                     reporter = self.data_reporters.get(browser_id)
-                    
+
                     # 添加0.2秒延迟
                     time.sleep(0.2)
 
@@ -248,7 +248,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         # 创建WebSocket客户端
         self.ws_client = create_websocket_client(self.config)
-        
+
         # 设置外部发送函数，用于处理 TypeStopReq 指令时发送响应
         if self.ws_client:
             self.ws_client.set_external_send_func(self._send_ws_message)
@@ -319,40 +319,40 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         # 打印将要发送到服务器的消息
         log.info(f"发送到服务器的消息: {json.dumps(wrapped_message, ensure_ascii=False, indent=2)}")
-        
+
         # 检查WebSocket客户端是否存在
         if not self.ws_client:
             log.warning("WebSocket客户端未准备好，无法发送消息（ws_client 为 None）")
             return
-        
+
         # 检查客户端状态
         if self.ws_client.stop_requested:
             log.warning("WebSocket客户端已请求停止，无法发送消息")
             return
-        
+
         if not self.ws_client._running:
             log.warning("WebSocket客户端未运行，无法发送消息")
             return
-        
+
         # 检查WebSocket连接状态
         if not (hasattr(self.ws_client, 'ws') and self.ws_client.ws):
             log.warning("WebSocket连接对象不存在，无法发送消息")
             return
-        
+
         # 获取正确的事件循环（优先使用客户端的事件循环引用）
         event_loop = self.ws_client.event_loop
         if event_loop is None:
             # 如果客户端的事件循环为None，尝试使用保存的引用
             event_loop = self.ws_loop
-        
+
         if event_loop is None:
             log.warning("WebSocket事件循环未准备好，无法发送消息")
             return
-        
+
         if not event_loop.is_running():
             log.warning(f"WebSocket事件循环未运行，无法发送消息")
             return
-        
+
         # 使用正确的事件循环发送消息
         try:
             # 直接将消息放入发送队列，而不是等待future完成
@@ -364,7 +364,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             log.info("✓ 消息已放入发送队列")
         except Exception as e:
             log.error(f"发送WebSocket消息失败: {e}", exc_info=True)
-    
+
     def _send_ws_message_for_reporter(self, message_dict):
         """
         供 DataReporter 调用的 WebSocket 消息发送方法
@@ -405,16 +405,16 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             # 处理停止信号
             self._on_stop_signal_received()
             return
-            
+
         # 这里处理登录响应和其他 LoginRes 指令（非 stop）
         log.debug(f"收到 LoginRes 指令: {data}")
-        
+
         # 如果数据中包含配置信息，则更新配置
         if isinstance(data, dict) and "data" in data:
             config_data = data.get("data", {})
             if config_data:
                 self._handle_config_update(config_data)
-        
+
         # 可以根据 data 中的内容执行不同的操作
 
     def _handle_config_update_command(self, data: dict):
@@ -432,7 +432,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             # 更新全局配置对象
             from ..tools.config import config
             config.update_from_dict(config_data)
-            
+
             # 更新 LicenseManager 中的 URL 和 KEY
             if 'SIBERIAN_URL' in config_data:
                 self.license_manager.url = config_data['SIBERIAN_URL']
@@ -481,7 +481,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         parsed_url = urlparse(self.config.WS_URL)
         query_params = parse_qs(parsed_url.query)
         device_id = query_params.get('id', [self.config.DEVICE_CODE])[0]
-        
+
         # 发送包含设备码和版本号的WebSocket消息
         self._send_ws_message({
             "cmd": "LoginReq",
@@ -489,6 +489,6 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             "mode": "pc",
             "version": self.config.VERSION
         })
-        
+
         # 添加0.2秒延迟
         time.sleep(0.2)

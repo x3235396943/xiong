@@ -23,9 +23,9 @@ class KuSettings(Base):
     MAX_SCROLL_VIDEO: list = [10, 20]
     MAX_COMMENT: list = [2, 15]
 
-    LIKE_PROBABILITY: int = 30  # 点赞概率 (0-100)
-    VISIT_ENABLE: int = 10  # 进入主页的概率 (0-100)
-    PROFILE_FOLLOW_PROBABILITY: int = 10  # 进入主页后关注的概率 (0-100)
+    LIKE_PROBABILITY: Optional[int] = 30  # 点赞概率 (0-100)
+    VISIT_ENABLE: Optional[int] = 10  # 进入主页的概率 (0-100)
+    PROFILE_FOLLOW_PROBABILITY: Optional[int] = 10  # 进入主页后关注的概率 (0-100)
     ENABLE_FOLLOW: bool = True  # 是否启用关注功能
     ENABLE_PROFILE_VISIT: bool = True  # 是否启用进入主页功能
     ENABLE_LIKE: bool = True  # 是否启用点赞功能
@@ -74,7 +74,12 @@ class KuSettings(Base):
 
     VERSION: str = "1.0.20"
 
-    # bit浏览器设置
+
+
+
+
+
+    # 快手bit浏览器设置
     BROWSER_SAVE_DIR: str = "browser_sessions"
     BROWSER_MAX_WORKERS: int = 5
 

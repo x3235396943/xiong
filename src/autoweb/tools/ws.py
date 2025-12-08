@@ -4,6 +4,7 @@ import json
 from typing import Dict, Callable, Optional, Any
 from . import log, config
 import websockets
+from datetime import datetime
 
 
 class WSClient:
@@ -23,6 +24,27 @@ class WSClient:
         self.external_send_func: Optional[Callable[[Dict], None]] = None
         # 保存配置更新回调函数
         self.config_update_handler: Optional[Callable[[Dict], None]] = None
+        # 心跳任务引用
+        self.heartbeat_task = None
+        # 事件循环引用
+        self.event_loop = None
+        # 心跳响应超时计数器
+        self.heartbeat_timeout_count = 0
+        self.max_heartbeat_timeouts = 3  # 最大允许的心跳超时次数
+        # 心跳响应事件
+        self.pong_received = asyncio.Event()
+        # 从URL中提取设备ID
+        self.device_id = self._extract_device_id(url)
+
+    def _extract_device_id(self, url: str) -> str:
+        """从WebSocket URL中提取设备ID"""
+        try:
+            from urllib.parse import urlparse, parse_qs
+            parsed_url = urlparse(url)
+            query_params = parse_qs(parsed_url.query)
+            return query_params.get('id', ['unknown'])[0]
+        except Exception:
+            return 'unknown'
 
     async def connect(self):
         """连接WebSocket服务器（使用上下文管理器方式）"""
@@ -38,12 +60,73 @@ class WSClient:
     async def close(self):
         self._running = False
         self.stop_requested = True
+        # 取消心跳任务
+        if self.heartbeat_task:
+            self.heartbeat_task.cancel()
+            try:
+                await self.heartbeat_task
+            except asyncio.CancelledError:
+                pass
         if hasattr(self, 'ws') and self.ws:
             await self.ws.close()
 
     async def send(self, data: dict):
         if not self.stop_requested:
             await self.send_queue.put(json.dumps(data, ensure_ascii=False))
+
+    def _send_heartbeat_via_external(self):
+        """通过外部发送函数发送心跳消息"""
+        if self.external_send_func:
+            # 构造心跳消息，格式与运行状态消息相同
+            heartbeat_message = {
+                "cmd": "ping",
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            # 使用外部发送函数发送心跳消息
+            self.external_send_func(heartbeat_message)
+            log.info(f"[{datetime.now()}] 通过外部函数发送心跳包")
+            return True
+        else:
+            log.warning("外部发送函数未设置，无法发送心跳包")
+            return False
+
+    async def send_heartbeat(self):
+        """发送自定义心跳包并在没有响应时停止程序"""
+        while self._running and not self.stop_requested:
+            try:
+                # 通过外部发送函数发送心跳消息
+                if not self._send_heartbeat_via_external():
+                    log.error("无法发送心跳包，外部发送函数不可用")
+                    break
+
+                # 等待心跳响应事件（最多5秒）
+                try:
+                    await asyncio.wait_for(self.pong_received.wait(), timeout=5.0)
+                    log.info(f"[{datetime.now()}] 收到心跳响应")
+                    # 重置超时计数器和响应事件
+                    self.heartbeat_timeout_count = 0
+                    self.pong_received.clear()
+                except asyncio.TimeoutError:
+                    log.warning(f"[{datetime.now()}] 心跳响应超时")
+                    self.heartbeat_timeout_count += 1
+                    
+                    # 如果连续超时次数超过阈值，停止程序
+                    if self.heartbeat_timeout_count >= self.max_heartbeat_timeouts:
+                        log.error(f"心跳连续 {self.max_heartbeat_timeouts} 次超时，准备停止程序")
+                        self.stop_requested = True
+                        self._handle_connection_lost("心跳连续超时")
+                        break
+                
+                # 等待10秒后继续下一次心跳
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                # 任务被取消，正常退出
+                break
+            except Exception as e:
+                if self._running and not self.stop_requested:
+                    log.error(f"发送心跳包时出错: {e}")
+                break
 
     async def _sender(self):
         while self._running and not self.stop_requested:
@@ -75,12 +158,17 @@ class WSClient:
 
                 msg = message
                 # 添加时间戳，确认消息接收时间
-                import datetime
                 log.info(f"[WebSocket]收到第 {message_count} 条服务器消息: {msg}")
 
                 try:
                     data = json.loads(msg)
                     # log.info(f"解析后的消息: {data}")
+                    
+                    # 检查是否是心跳响应
+                    if isinstance(data, dict) and "cmd" in data and data["cmd"] == "pong":
+                        # 设置心跳响应事件
+                        self.pong_received.set()
+                        continue
                     
                     # 处理指令
                     if isinstance(data, dict):
@@ -185,25 +273,26 @@ class WSClient:
         # log.info("[WebSocket] 开始运行 WebSocket 客户端...")
         self._running = True
         self.stop_requested = False
+        # 保存事件循环引用
+        self.event_loop = asyncio.get_event_loop()
 
         try:
             # 使用 async with 方式连接（这是可以工作的方式）
-            # 并设置内置心跳机制：每10秒一个ping，5秒无pong断线
+            # 移除了内置心跳机制参数
             # log.info(f"[WebSocket] 正在连接到服务器: {self.url}")
-            async with websockets.connect(
-                self.url,
-                ping_interval=10,    # 每10秒一个ping
-                ping_timeout=5       # 5秒无pong断线
-            ) as websocket:
+            async with websockets.connect(self.url) as websocket:
                 self.ws = websocket
                 # log.info("WebSocket 连接成功")
                 
                 # 发送初始连接消息
                 try:
                     welcome_msg = {"type": "client_connected", "message": "客户端已连接"}
-                    await websocket.send(json.dumps(welcome_msg, ensure_ascii=False))
+                    await self.send(welcome_msg)
                 except Exception as e:
                     log.warning(f"发送初始消息失败: {e}")
+
+                # 启动自定义心跳任务
+                self.heartbeat_task = asyncio.create_task(self.send_heartbeat())
 
                 # log.info("[WebSocket] 开始监听消息...")
                 # 运行发送器和接收器（接收器需要传入 websocket 对象）
@@ -212,6 +301,7 @@ class WSClient:
                     await asyncio.gather(
                         self._sender(), 
                         self._receiver(websocket),
+                        self.heartbeat_task,
                         return_exceptions=True
                     )
                 except Exception as e:
