@@ -105,7 +105,7 @@ class DyShareUtils:
         return kws
 
     def parse_comment_replies(self):
-        """解析评论回复内容列表，使用 & 作为分隔符"""
+        """解析评论回复内容列表，使用 -&- 作为分隔符"""
         raw = getattr(config, 'COMMENT_REPLIES', '') or ''
         if not raw:
             return []
@@ -121,15 +121,15 @@ class DyShareUtils:
                 else:
                     replies = [s] if s else []
             except Exception:
-                # 不是JSON，按 & 分隔符分割
-                replies = [x.strip() for x in s.split("&") if x.strip()]
+                # 不是JSON，按 -&- 分隔符分割
+                replies = [x.strip() for x in s.split("-&-") if x.strip()]
         elif isinstance(raw, list):
             replies = [str(x).strip() for x in raw if str(x).strip()]
 
         return replies if replies else []
 
     def parse_video_comments(self):
-        """解析视频留言内容列表，使用 & 作为分隔符"""
+        """解析视频留言内容列表，使用 -&- 作为分隔符"""
         raw = getattr(config, 'VIDEO_COMMENTS', '') or ''
         if not raw:
             return []
@@ -145,8 +145,8 @@ class DyShareUtils:
                 else:
                     comments = [s] if s else []
             except Exception:
-                # 不是JSON，按 & 分隔符分割
-                comments = [x.strip() for x in s.split("&") if x.strip()]
+                # 不是JSON，按 -&- 分隔符分割
+                comments = [x.strip() for x in s.split("-&-") if x.strip()]
         elif isinstance(raw, list):
             comments = [str(x).strip() for x in raw if str(x).strip()]
 

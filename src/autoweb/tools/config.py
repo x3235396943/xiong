@@ -2,7 +2,6 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Dict, Any, Optional
 import time
-import threading
 
 
 class Base(BaseSettings):
@@ -75,7 +74,7 @@ class KuSettings(Base):
 
     BIT_BROWSER_IDS: list = []
 
-    VERSION: str = "1.0.20"
+    VERSION: str = "1.1.1"
 
 
 

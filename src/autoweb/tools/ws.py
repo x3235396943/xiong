@@ -234,33 +234,14 @@ class WSClient:
                 self.config_update_handler(config_data)
                 # 发送配置更新确认
                 self._send_response({
-                    "cmd": "ConfigUpdateAck",
-                    "data": {
-                        "status": "success",
-                        "message": "配置更新已应用"
-                    }
+                    "cmd": "PcDataRes",
+                    "code": 0
                 })
                 log.info("配置更新确认已发送")
             else:
                 log.warning("未注册配置更新处理器")
-                # 发送配置更新失败响应
-                self._send_response({
-                    "cmd": "ConfigUpdateAck",
-                    "data": {
-                        "status": "failed",
-                        "message": "未注册配置更新处理器"
-                    }
-                })
         except Exception as e:
             log.error(f"处理配置更新时出错: {e}")
-            # 发送配置更新失败响应
-            self._send_response({
-                "cmd": "ConfigUpdateAck",
-                "data": {
-                    "status": "failed",
-                    "message": f"配置更新失败: {str(e)}"
-                }
-            })
 
     def set_external_send_func(self, send_func):
         """设置外部发送函数"""
@@ -286,13 +267,6 @@ class WSClient:
             async with websockets.connect(self.url) as websocket:
                 self.ws = websocket
                 # log.info("WebSocket 连接成功")
-                
-                # 发送初始连接消息
-                try:
-                    welcome_msg = {"type": "client_connected", "message": "客户端已连接"}
-                    await self.send(welcome_msg)
-                except Exception as e:
-                    log.warning(f"发送初始消息失败: {e}")
 
                 # 启动自定义心跳任务
                 self.heartbeat_task = asyncio.create_task(self.send_heartbeat())

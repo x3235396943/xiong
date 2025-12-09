@@ -307,18 +307,9 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def _send_ws_message(self, message_dict):
         """发送WebSocket消息（线程安全）"""
-        # 构造符合服务器要求的格式: {"cmd":"mock","id":"12","data":{原始消息}}
-        # id 从配置中获取第一个浏览器ID
-        server_id = self.config.SERVER_ID
-
-        wrapped_message = {
-            "cmd": "mock",
-            "id": server_id,
-            "data": message_dict
-        }
-
+        # 直接发送消息，不再包装外层结构
         # 打印将要发送到服务器的消息
-        log.info(f"发送到服务器的消息: {json.dumps(wrapped_message, ensure_ascii=False, indent=2)}")
+        log.info(f"发送到服务器的消息: {json.dumps(message_dict, ensure_ascii=False, indent=2)}")
 
         # 检查WebSocket客户端是否存在
         if not self.ws_client:
@@ -358,7 +349,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             # 直接将消息放入发送队列，而不是等待future完成
             # 这样可以避免阻塞和超时问题
             asyncio.run_coroutine_threadsafe(
-                self.ws_client.send_queue.put(json.dumps(wrapped_message, ensure_ascii=False)),
+                self.ws_client.send_queue.put(json.dumps(message_dict, ensure_ascii=False)),
                 event_loop
             )
             log.info("✓ 消息已放入发送队列")
