@@ -98,6 +98,8 @@ class WSClient:
                 # 通过外部发送函数发送心跳消息
                 if not self._send_heartbeat_via_external():
                     log.error("无法发送心跳包，外部发送函数不可用")
+                    self.stop_requested = True
+                    self._handle_connection_lost("无法发送心跳包")
                     break
 
                 # 等待心跳响应事件（最多5秒）
@@ -126,6 +128,8 @@ class WSClient:
             except Exception as e:
                 if self._running and not self.stop_requested:
                     log.error(f"发送心跳包时出错: {e}")
+                    self.stop_requested = True
+                    self._handle_connection_lost(f"发送心跳包时出错: {e}")
                 break
 
     async def _sender(self):
@@ -269,7 +273,7 @@ class WSClient:
         log.info("配置更新处理器已设置")
 
     async def run(self):
-        """运行WebSocket客户端（使用可以工作的方式）"""
+        """运行WebSocket客户端"""
         # log.info("[WebSocket] 开始运行 WebSocket 客户端...")
         self._running = True
         self.stop_requested = False
@@ -277,8 +281,7 @@ class WSClient:
         self.event_loop = asyncio.get_event_loop()
 
         try:
-            # 使用 async with 方式连接（这是可以工作的方式）
-            # 移除了内置心跳机制参数
+            # 使用 async with 方式连接
             # log.info(f"[WebSocket] 正在连接到服务器: {self.url}")
             async with websockets.connect(self.url) as websocket:
                 self.ws = websocket
@@ -340,6 +343,17 @@ class WSClient:
         self.stop_signal_handler = handler
         # log.debug("已注册停止信号处理器")
 
+    def _handle_connection_lost(self, reason: str):
+        """处理连接断开"""
+        log.error(f"WebSocket 连接断开: {reason}")
+        self.stop_requested = True
+        # 连接断开时也触发停止信号，停止程序
+        if self.stop_signal_handler:
+            try:
+                self.stop_signal_handler()
+            except Exception as e:
+                log.error(f"执行停止信号处理器时出错: {e}")
+                
     def _handle_stop_signal(self):
         """处理停止信号"""
         log.info("_handle_stop_signal() 被调用")
@@ -353,17 +367,6 @@ class WSClient:
                 log.error(f"执行停止信号处理器时出错: {e}", exc_info=True)
         else:
             log.warning("停止信号处理器未注册！")
-
-    def _handle_connection_lost(self, reason: str):
-        """处理连接断开"""
-        log.error(f"WebSocket 连接断开: {reason}")
-        self.stop_requested = True
-        # 连接断开时也触发停止信号，停止程序
-        if self.stop_signal_handler:
-            try:
-                self.stop_signal_handler()
-            except Exception as e:
-                log.error(f"执行停止信号处理器时出错: {e}")
 
     def is_stop_requested(self):
         """检查是否请求了停止"""

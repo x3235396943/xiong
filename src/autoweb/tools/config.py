@@ -2,6 +2,7 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Dict, Any, Optional
 import time
+import threading
 
 
 class Base(BaseSettings):
@@ -18,6 +19,8 @@ class Base(BaseSettings):
 class KuSettings(Base):
     # 添加一个标志用于等待配置初始化
     _config_initialized: bool = False
+    # 添加停止信号标志
+    _stop_requested: bool = False
 
     KEYWORDS: list = []
     MAX_SCROLL_VIDEO: list = [10, 20]
@@ -162,10 +165,18 @@ class KuSettings(Base):
         log.info("等待服务器配置初始化...")
         start_time = time.time()
         while not self._config_initialized:
+            # 检查是否收到停止信号
+            if self._stop_requested:
+                raise KeyboardInterrupt("收到停止信号")
+            
             if time.time() - start_time > timeout:
                 raise TimeoutError(f"等待服务器配置初始化超时 ({timeout}秒)")
             time.sleep(0.1)  # 短暂休眠以减少CPU占用
         log.info("服务器配置初始化完成")
+        
+    def request_stop(self):
+        """请求停止等待"""
+        self._stop_requested = True
 
     def print_config_summary(self):
         """

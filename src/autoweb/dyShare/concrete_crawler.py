@@ -394,6 +394,8 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         log.info("=" * 50)
         # 设置停止标志，所有浏览器线程会检测到这个标志并退出
         self.utils._stop_flag.set()
+        # 同时通知配置等待停止
+        self.config.request_stop()
         log.info(f"✓ 已设置 _stop_flag，当前状态: {self.utils._stop_flag.is_set()}")
         log.info(f"✓ WebSocket stop_requested 状态: {self.ws_client.stop_requested if self.ws_client else 'N/A'}")
 
