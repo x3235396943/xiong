@@ -18,7 +18,24 @@ class WebSocketServer:
 
     async def _handle_login_request(self) -> None:
         """处理登录请求"""
-        config = KuSettings()
+        config = KuSettings(
+            PLATFORM="dy",
+            SIBERIAN_URL="http://139.159.230.186/api/siberianNitraria/verifyActivate",
+            SIBERIAN_KEY="2j2r6Jdr2Se/5Sv9n9H67xQOADQZ4ThV9jINpCYZbqY=",
+            # 搜索关键字
+            KEYWORDS=[
+                "猫咪",
+                "日本美女",
+                "俄罗斯美女",
+                "韩国美女",
+                "台湾美女",
+                "欧美美女",
+                "港台美女",
+                "素人美女",
+                "黑人美女",
+                "阿拉伯美女",
+            ]
+        )
         await self._send_json({"cmd": "LoginRes", "data": config.model_dump()})
 
     async def _process_message(self, data: dict) -> None:
