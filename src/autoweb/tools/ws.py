@@ -35,6 +35,8 @@ class WSClient:
         self.pong_received = asyncio.Event()
         # 从URL中提取设备ID
         self.device_id = self._extract_device_id(url)
+        # 心跳任务启动标志
+        self._heartbeat_started = False
 
     def _extract_device_id(self, url: str) -> str:
         """从WebSocket URL中提取设备ID"""
@@ -79,7 +81,7 @@ class WSClient:
         if self.external_send_func:
             # 构造心跳消息，格式与运行状态消息相同
             heartbeat_message = {
-                "cmd": "ping",
+                "cmd": "HeartbeatReq",
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             
@@ -169,7 +171,7 @@ class WSClient:
                     # log.info(f"解析后的消息: {data}")
                     
                     # 检查是否是心跳响应
-                    if isinstance(data, dict) and "cmd" in data and data["cmd"] == "pong":
+                    if isinstance(data, dict) and "cmd" in data and data["cmd"] == "HeartbeatRes":
                         # 设置心跳响应事件
                         self.pong_received.set()
                         continue
@@ -238,6 +240,12 @@ class WSClient:
                     "code": 0
                 })
                 log.info("配置更新确认已发送")
+                
+                # 配置更新完成后，启动心跳任务
+                if not hasattr(self, '_heartbeat_started') or not self._heartbeat_started:
+                    self.heartbeat_task = asyncio.create_task(self.send_heartbeat())
+                    self._heartbeat_started = True
+                    log.info("心跳任务已启动")
             else:
                 log.warning("未注册配置更新处理器")
         except Exception as e:
@@ -260,6 +268,9 @@ class WSClient:
         self.stop_requested = False
         # 保存事件循环引用
         self.event_loop = asyncio.get_event_loop()
+        
+        # 添加初始化完成标志
+        self._initialized = False
 
         try:
             # 使用 async with 方式连接
@@ -268,19 +279,29 @@ class WSClient:
                 self.ws = websocket
                 # log.info("WebSocket 连接成功")
 
-                # 启动自定义心跳任务
-                self.heartbeat_task = asyncio.create_task(self.send_heartbeat())
-
                 # log.info("[WebSocket] 开始监听消息...")
                 # 运行发送器和接收器（接收器需要传入 websocket 对象）
                 # 使用 gather 确保两个任务并行运行
                 try:
-                    await asyncio.gather(
-                        self._sender(), 
-                        self._receiver(websocket),
-                        self.heartbeat_task,
-                        return_exceptions=True
+                    # 先只运行发送器和接收器，暂不启动心跳任务
+                    done, pending = await asyncio.wait(
+                        [
+                            asyncio.create_task(self._sender()),
+                            asyncio.create_task(self._receiver(websocket)),
+                        ],
+                        return_when=asyncio.FIRST_COMPLETED,
                     )
+                    
+                    # 取消未完成的任务
+                    for task in pending:
+                        task.cancel()
+                        
+                    # 检查完成的任务是否有异常
+                    for task in done:
+                        exception = task.exception()
+                        if exception:
+                            raise exception
+                            
                 except Exception as e:
                     log.error(f"WebSocket 任务执行出错: {e}")
                     raise

@@ -11,8 +11,8 @@ class MyFormatter(logging.Formatter):
 
 
 def init_loging_config1():
-    # 创建logs目录（如果不存在）
-    logs_dir = "logs"
+    # 创建logs目录
+    logs_dir = "logs_path"
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)
 
