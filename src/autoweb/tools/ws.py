@@ -82,6 +82,7 @@ class WSClient:
             # 构造心跳消息，格式与运行状态消息相同
             heartbeat_message = {
                 "cmd": "HeartbeatReq",
+                "id": self.device_id,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             
