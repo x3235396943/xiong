@@ -186,7 +186,7 @@ class WSClient:
                         if cmd == "StopReq":
                             is_stop_signal = True
                             # 当收到 TypeStopReq 时，使用外部函数发送响应
-                            self._send_response({"cmd": "StopRes"})
+                            self._send_response({"cmd": "StopRes", "id": self.device_id})
                         
                         if is_stop_signal:
                             log.info("检测到停止信号: cmd={}".format(cmd))

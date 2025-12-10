@@ -199,7 +199,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def show_help(self) -> None:
         """显示帮助信息"""
-        print("使用方法: python DY_ku.py [run|add|look|clear]")
+        print("使用方法: pixi run web [run|add|look|clear]")
 
     def _prepare_url_list_mode(self) -> None:
         """准备URL列表模式"""
@@ -232,13 +232,16 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             send_ws_message_func=self._send_ws_message_for_reporter
         )
         self.data_reporters[browser_id] = reporter
-
+        if len(browser_id)==32:
+            sta = "running"
+        else:
+            sta = "error"
         # 发送浏览器启动消息到服务器
         self._send_ws_message({
             "browserId": browser_id,
             "cmd": "RunStateReq",
             "id": self.config.DEVICE_CODE,
-            "state": "running"
+            "state": sta
         })
 
     def _start_websocket_client(self):
@@ -314,6 +317,8 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         # 检查WebSocket客户端是否存在
         if not self.ws_client:
             log.warning("WebSocket客户端未准备好，无法发送消息（ws_client 为 None）")
+            # 一旦WebSocket客户端不存在，停止程序
+            self._on_stop_signal_received()
             return
 
         # 检查客户端状态
@@ -323,11 +328,15 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         if not self.ws_client._running:
             log.warning("WebSocket客户端未运行，无法发送消息")
+            # 一旦WebSocket客户端未运行，停止程序
+            self._on_stop_signal_received()
             return
 
         # 检查WebSocket连接状态
         if not (hasattr(self.ws_client, 'ws') and self.ws_client.ws):
             log.warning("WebSocket连接对象不存在，无法发送消息")
+            # 一旦WebSocket连接不存在，停止程序
+            self._on_stop_signal_received()
             return
 
         # 获取正确的事件循环（优先使用客户端的事件循环引用）
@@ -338,10 +347,14 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         if event_loop is None:
             log.warning("WebSocket事件循环未准备好，无法发送消息")
+            # 一旦事件循环未准备好，停止程序
+            self._on_stop_signal_received()
             return
 
         if not event_loop.is_running():
             log.warning(f"WebSocket事件循环未运行，无法发送消息")
+            # 一旦事件循环未运行，停止程序
+            self._on_stop_signal_received()
             return
 
         # 使用正确的事件循环发送消息
@@ -355,6 +368,8 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             log.info("✓ 消息已放入发送队列")
         except Exception as e:
             log.error(f"发送WebSocket消息失败: {e}", exc_info=True)
+            # 一旦发送消息失败，停止程序
+            self._on_stop_signal_received()
 
     def _send_ws_message_for_reporter(self, message_dict):
         """
