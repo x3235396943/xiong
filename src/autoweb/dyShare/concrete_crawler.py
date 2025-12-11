@@ -484,6 +484,13 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             self._on_stop_signal_received()
             return
 
+        # 检查是否是强制停止信号
+        if isinstance(data, dict) and data.get("cmd") == "StopPubForce":
+            log.info("收到 StopPubForce 指令")
+            # 处理强制停止信号，不发送任何信息到服务器
+            self._on_stop_signal_received()
+            return
+
         # 这里处理登录响应和其他 LoginRes 指令（非 stop）
         log.debug(f"收到 LoginRes 指令: {data}")
 

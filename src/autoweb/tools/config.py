@@ -74,7 +74,7 @@ class KuSettings(Base):
 
     BIT_BROWSER_IDS: list = []
 
-    VERSION: str = "1.1.2"
+    VERSION: str = "1.1.4"
 
 
 
