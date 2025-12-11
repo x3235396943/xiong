@@ -3,6 +3,7 @@ import json
 import time
 import concurrent.futures
 import asyncio
+from datetime import datetime
 from ..tools.verify import LicenseException, LicenseManager
 from ..tools import log
 from ..tools.common import DataReporter
@@ -26,6 +27,13 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         # 心跳相关属性（保留用于重连机制）
         self.max_reconnect_attempts = 3  # 最大重连次数
         self.reconnect_delay = 3  # 重连延迟（秒）
+        # 心跳任务引用
+        self.heartbeat_task = None
+        # 心跳响应超时计数器
+        self.heartbeat_timeout_count = 0
+        self.max_heartbeat_timeouts = 3  # 最大允许的心跳超时次数
+        # 心跳响应事件
+        self.pong_received = asyncio.Event()
         # DataReporter 实例字典，每个浏览器ID对应一个实例
         self.data_reporters = {}
 
@@ -244,6 +252,57 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             "state": sta
         })
 
+    def _send_heartbeat(self):
+        """发送心跳消息"""
+        # 发送心跳消息到服务器
+        self._send_ws_message({
+            "cmd": "HeartbeatReq",
+            "id": self.config.DEVICE_CODE,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+
+    def _handle_heartbeat_response(self, data: dict):
+        """处理心跳响应"""
+        if isinstance(data, dict) and data.get("cmd") == "HeartbeatRes":
+            self.pong_received.set()
+            self.heartbeat_timeout_count = 0
+            log.info(f"[{datetime.now()}] 收到心跳响应")
+
+    async def _heartbeat_task(self):
+        """心跳任务"""
+        while not self.utils._stop_flag.is_set():
+            try:
+                # 发送心跳
+                self._send_heartbeat()
+                
+                # 等待心跳响应（最多5秒）
+                try:
+                    await asyncio.wait_for(self.pong_received.wait(), timeout=5.0)
+                    # 重置超时计数器和响应事件
+                    self.heartbeat_timeout_count = 0
+                    self.pong_received.clear()
+                except asyncio.TimeoutError:
+                    log.warning(f"[{datetime.now()}] 心跳响应超时")
+                    self.heartbeat_timeout_count += 1
+                    
+                    # 如果连续超时次数超过阈值，停止程序
+                    if self.heartbeat_timeout_count >= self.max_heartbeat_timeouts:
+                        log.error(f"心跳连续 {self.max_heartbeat_timeouts} 次超时，准备停止程序")
+                        self.utils._stop_flag.set()
+                        # 通知WebSocket客户端停止
+                        if self.ws_client:
+                            self.ws_client.stop_requested = True
+                        break
+                
+                # 等待10秒后继续下一次心跳
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                # 任务被取消，正常退出
+                break
+            except Exception as e:
+                log.error(f"发送心跳包时出错: {e}")
+                break
+
     def _start_websocket_client(self):
         """启动WebSocket客户端（在单独的线程中运行）"""
         # 使用公共方法创建和启动WebSocket客户端
@@ -266,6 +325,8 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         # 注册指令处理器
         self.ws_client.register_command_handler("LoginRes", self._handle_login_res_command)
+        # 注册心跳响应处理器
+        self.ws_client.register_command_handler("HeartbeatRes", self._handle_heartbeat_response)
 
         # 等待 WebSocket 线程启动并创建事件循环
         # 从客户端获取正确的事件循环引用（WebSocket 线程中的事件循环）
@@ -283,9 +344,18 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             log.warning("⚠ 等待 WebSocket 事件循环超时，消息发送可能失败")
             self.ws_loop = None
 
+        # 启动心跳任务
+        if self.ws_loop and self.ws_loop.is_running():
+            self.heartbeat_task = asyncio.run_coroutine_threadsafe(self._heartbeat_task(), self.ws_loop)
+            log.info("心跳任务已启动")
+
     def _stop_websocket_client(self):
         """停止WebSocket客户端"""
         try:
+            # 取消心跳任务
+            if self.heartbeat_task:
+                self.heartbeat_task.cancel()
+            
             if self.ws_client:
                 # 设置停止标志
                 self.ws_client.stop_requested = True

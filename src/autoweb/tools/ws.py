@@ -24,19 +24,10 @@ class WSClient:
         self.external_send_func: Optional[Callable[[Dict], None]] = None
         # 保存配置更新回调函数
         self.config_update_handler: Optional[Callable[[Dict], None]] = None
-        # 心跳任务引用
-        self.heartbeat_task = None
         # 事件循环引用
         self.event_loop = None
-        # 心跳响应超时计数器
-        self.heartbeat_timeout_count = 0
-        self.max_heartbeat_timeouts = 3  # 最大允许的心跳超时次数
-        # 心跳响应事件
-        self.pong_received = asyncio.Event()
         # 从URL中提取设备ID
         self.device_id = self._extract_device_id(url)
-        # 心跳任务启动标志
-        self._heartbeat_started = False
 
     def _extract_device_id(self, url: str) -> str:
         """从WebSocket URL中提取设备ID"""
@@ -62,78 +53,12 @@ class WSClient:
     async def close(self):
         self._running = False
         self.stop_requested = True
-        # 取消心跳任务
-        if self.heartbeat_task:
-            self.heartbeat_task.cancel()
-            try:
-                await self.heartbeat_task
-            except asyncio.CancelledError:
-                pass
         if hasattr(self, 'ws') and self.ws:
             await self.ws.close()
 
     async def send(self, data: dict):
         if not self.stop_requested:
             await self.send_queue.put(json.dumps(data, ensure_ascii=False))
-
-    def _send_heartbeat_via_external(self):
-        """通过外部发送函数发送心跳消息"""
-        if self.external_send_func:
-            # 构造心跳消息，格式与运行状态消息相同
-            heartbeat_message = {
-                "cmd": "HeartbeatReq",
-                "id": self.device_id,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-            
-            # 使用外部发送函数发送心跳消息
-            self.external_send_func(heartbeat_message)
-            log.info(f"[{datetime.now()}] 通过外部函数发送心跳包")
-            return True
-        else:
-            log.warning("外部发送函数未设置，无法发送心跳包")
-            return False
-
-    async def send_heartbeat(self):
-        """发送自定义心跳包并在没有响应时停止程序"""
-        while self._running and not self.stop_requested:
-            try:
-                # 通过外部发送函数发送心跳消息
-                if not self._send_heartbeat_via_external():
-                    log.error("无法发送心跳包，外部发送函数不可用")
-                    self.stop_requested = True
-                    self._handle_connection_lost("无法发送心跳包")
-                    break
-
-                # 等待心跳响应事件（最多5秒）
-                try:
-                    await asyncio.wait_for(self.pong_received.wait(), timeout=5.0)
-                    log.info(f"[{datetime.now()}] 收到心跳响应")
-                    # 重置超时计数器和响应事件
-                    self.heartbeat_timeout_count = 0
-                    self.pong_received.clear()
-                except asyncio.TimeoutError:
-                    log.warning(f"[{datetime.now()}] 心跳响应超时")
-                    self.heartbeat_timeout_count += 1
-                    
-                    # 如果连续超时次数超过阈值，停止程序
-                    if self.heartbeat_timeout_count >= self.max_heartbeat_timeouts:
-                        log.error(f"心跳连续 {self.max_heartbeat_timeouts} 次超时，准备停止程序")
-                        self.stop_requested = True
-                        self._handle_connection_lost("心跳连续超时")
-                        break
-                
-                # 等待10秒后继续下一次心跳
-                await asyncio.sleep(10)
-            except asyncio.CancelledError:
-                # 任务被取消，正常退出
-                break
-            except Exception as e:
-                if self._running and not self.stop_requested:
-                    log.error(f"发送心跳包时出错: {e}")
-                    self.stop_requested = True
-                    self._handle_connection_lost(f"发送心跳包时出错: {e}")
-                break
 
     async def _sender(self):
         while self._running and not self.stop_requested:
@@ -150,6 +75,34 @@ class WSClient:
                     # 连接断开，触发停止信号
                     self._handle_connection_lost("发送消息失败")
                 break
+        
+        # 在退出循环前，确保队列中的关键消息（如 StopRes）被发送
+        # 最多等待1秒，确保关键消息能够发送
+        if self.stop_requested and not self.send_queue.empty():
+            log.info("检测到停止标志，等待队列中的关键消息发送完成...")
+            max_wait_time = 1.0  # 最多等待1秒
+            wait_interval = 0.1  # 每次检查间隔0.1秒
+            waited_time = 0.0
+            
+            while waited_time < max_wait_time and not self.send_queue.empty():
+                try:
+                    # 尝试获取并发送队列中的消息
+                    msg = await asyncio.wait_for(self.send_queue.get(), timeout=wait_interval)
+                    await self.ws.send(msg)
+                    log.info("✓ 已发送队列中的关键消息")
+                    waited_time = 0.0  # 重置等待时间，继续处理下一条消息
+                except asyncio.TimeoutError:
+                    # 超时，增加等待时间
+                    waited_time += wait_interval
+                    continue
+                except Exception as e:
+                    log.warning(f"发送队列中的关键消息时出错: {e}")
+                    break
+            
+            if not self.send_queue.empty():
+                log.warning(f"队列中仍有 {self.send_queue.qsize()} 条消息未发送")
+            else:
+                log.info("✓ 队列中的关键消息已全部发送完成")
 
     async def _receiver(self, websocket):
         """接收消息（使用 async for 方式，与 main.py 相同）"""
@@ -171,12 +124,6 @@ class WSClient:
                     data = json.loads(msg)
                     # log.info(f"解析后的消息: {data}")
                     
-                    # 检查是否是心跳响应
-                    if isinstance(data, dict) and "cmd" in data and data["cmd"] == "HeartbeatRes":
-                        # 设置心跳响应事件
-                        self.pong_received.set()
-                        continue
-                    
                     # 处理指令
                     if isinstance(data, dict):
                         cmd = data.get("cmd")
@@ -187,6 +134,11 @@ class WSClient:
                             is_stop_signal = True
                             # 当收到 TypeStopReq 时，使用外部函数发送响应
                             self._send_response({"cmd": "StopRes", "id": self.device_id})
+                            # 等待 StopRes 消息发送完成
+                            # 通过检查队列是否为空或等待一小段时间来确保消息被发送
+                            log.info("等待 StopRes 消息发送完成...")
+                            await self._wait_for_message_sent()
+                            log.info("✓ StopRes 消息已发送完成")
                         
                         if is_stop_signal:
                             log.info("检测到停止信号: cmd={}".format(cmd))
@@ -227,30 +179,45 @@ class WSClient:
                 log.warning("外部发送函数未设置，无法发送响应消息")
         except Exception as e:
             log.error(f"通过外部函数发送响应消息失败: {e}")
+    
+    async def _wait_for_message_sent(self, max_wait_time: float = 0.5):
+        """
+        等待消息发送完成
+        
+        Args:
+            max_wait_time: 最大等待时间（秒），默认0.5秒
+        """
+        wait_interval = 0.05  # 每次检查间隔50毫秒
+        waited_time = 0.0
+        
+        while waited_time < max_wait_time:
+            # 检查队列是否为空，如果为空说明消息已被取出（可能已发送或正在发送）
+            if self.send_queue.empty():
+                # 再等待一小段时间，确保消息真正发送到网络
+                await asyncio.sleep(0.1)
+                log.info("✓ 队列已空，消息应已发送")
+                return
+            
+            await asyncio.sleep(wait_interval)
+            waited_time += wait_interval
+        
+        # 如果等待超时，记录警告但继续执行
+        if not self.send_queue.empty():
+            log.warning(f"等待消息发送超时（{max_wait_time}秒），队列中仍有消息，但继续执行停止流程")
 
-    def _handle_config_update(self, config_data: dict):
-        """处理配置更新指令"""
-        try:
-            log.info(f"收到配置更新指令: {config_data}")
-            if self.config_update_handler:
-                log.info("调用配置更新处理器")
-                self.config_update_handler(config_data)
-                # 发送配置更新确认
-                self._send_response({
-                    "cmd": "PcDataRes",
-                    "code": 0
-                })
-                log.info("配置更新确认已发送")
-                
-                # 配置更新完成后，启动心跳任务
-                if not hasattr(self, '_heartbeat_started') or not self._heartbeat_started:
-                    self.heartbeat_task = asyncio.create_task(self.send_heartbeat())
-                    self._heartbeat_started = True
-                    log.info("心跳任务已启动")
-            else:
-                log.warning("未注册配置更新处理器")
-        except Exception as e:
-            log.error(f"处理配置更新时出错: {e}")
+    def _handle_stop_signal(self):
+        """处理停止信号"""
+        log.info("_handle_stop_signal() 被调用")
+        if self.stop_signal_handler:
+            log.info(f"停止信号处理器存在: {self.stop_signal_handler}")
+            try:
+                log.info("正在执行停止信号处理器...")
+                self.stop_signal_handler()
+                log.info("停止信号处理器执行完成")
+            except Exception as e:
+                log.error(f"执行停止信号处理器时出错: {e}", exc_info=True)
+        else:
+            log.warning("停止信号处理器未注册！")
 
     def set_external_send_func(self, send_func):
         """设置外部发送函数"""
@@ -284,7 +251,7 @@ class WSClient:
                 # 运行发送器和接收器（接收器需要传入 websocket 对象）
                 # 使用 gather 确保两个任务并行运行
                 try:
-                    # 先只运行发送器和接收器，暂不启动心跳任务
+                    # 运行发送器和接收器
                     done, pending = await asyncio.wait(
                         [
                             asyncio.create_task(self._sender()),
@@ -350,20 +317,6 @@ class WSClient:
             except Exception as e:
                 log.error(f"执行停止信号处理器时出错: {e}")
                 
-    def _handle_stop_signal(self):
-        """处理停止信号"""
-        log.info("_handle_stop_signal() 被调用")
-        if self.stop_signal_handler:
-            log.info(f"停止信号处理器存在: {self.stop_signal_handler}")
-            try:
-                log.info("正在执行停止信号处理器...")
-                self.stop_signal_handler()
-                log.info("停止信号处理器执行完成")
-            except Exception as e:
-                log.error(f"执行停止信号处理器时出错: {e}", exc_info=True)
-        else:
-            log.warning("停止信号处理器未注册！")
-
     def is_stop_requested(self):
         """检查是否请求了停止"""
         return self.stop_requested

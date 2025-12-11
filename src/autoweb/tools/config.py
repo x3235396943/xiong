@@ -25,7 +25,7 @@ class KuSettings(Base):
     MAX_SCROLL_VIDEO: list = [10, 20]
     MAX_COMMENT: list = [2, 15]
 
-    LIKE_PROBABILITY: Optional[int] = 30  # 点赞概率 (0-100)
+    LIKE_PROBABILITY: Optional[int] = 8  # 点赞概率 (0-100)
     VISIT_ENABLE: Optional[int] = 10  # 进入主页的概率 (0-100)
     PROFILE_FOLLOW_PROBABILITY: Optional[int] = 10  # 进入主页后关注的概率 (0-100)
     ENABLE_FOLLOW: bool = True  # 是否启用关注功能
@@ -40,7 +40,7 @@ class KuSettings(Base):
     COMMENT_FILTER_KEYWORDS: list = []  # 筛选评论区关键字
 
     # 新增的概率参数
-    COMMENT_REPLY_PROBABILITY: int = 5  # 评论回复概率 (0-100)
+    COMMENT_REPLY_PROBABILITY: int = 1  # 评论回复概率 (0-100)
     VIDEO_REPLY_RATE: int = 20  # 视频留言概率 (0-100)
 
     MIN_FOLLOWS_PER_VIDEO: int = 5  # 每条视频最少关注数量
@@ -74,7 +74,7 @@ class KuSettings(Base):
 
     BIT_BROWSER_IDS: list = []
 
-    VERSION: str = "1.1.1"
+    VERSION: str = "1.1.2"
 
 
 
