@@ -12,6 +12,7 @@ class Base(BaseSettings):
     WS_URL: str  # WebSocket 服务器地址
     PLATFORM: str
     RUN_MODE: str
+    LOGS_PATH: str
     # 服务器消息ID，用于发送消息到服务器时的标识符
     SERVER_ID: str = "shebeiid"
 

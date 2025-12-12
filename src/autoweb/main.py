@@ -55,15 +55,18 @@ class TaskManager:
 
 def main():
     # 保留原来的逻辑以防需要
-    if config.PLATFORM == "dys":
+    if config.PLATFORM == "dy" and config.RUN_MODE == "share":
         o = DouyinShareCrawler()
         o.start()
         return
+
     manager = TaskManager(ws_url=config.WS_URL)
     try:
         asyncio.run(manager.start())
     except KeyboardInterrupt:
         print("✅ Ctrl+C 终止")
+    except Exception as e:
+        log.debug(e, exc_info=True)
 
 
 if __name__ == "__main__":
