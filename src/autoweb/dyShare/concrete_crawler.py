@@ -1,21 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-抖音分享爬虫具体实现类
-继承抽象基类并实现所有抽象方法
-"""
-
 import sys
 import json
 import time
-import random
 import concurrent.futures
 import asyncio
-import threading
-from ..tools.config import KuSettings
+from datetime import datetime
 from ..tools.verify import LicenseException, LicenseManager
-from ..tools.ws import WSClient
 from ..tools import log
 from ..tools.common import DataReporter
 from .base_crawler import BaseDyShareCrawler
@@ -28,34 +17,51 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
     def __init__(self):
         """初始化具体实现"""
         super().__init__()
-        self.config = KuSettings()
+        from ..tools.config import config
+        self.config = config
         self.utils = DyShareUtils()
         self.license_manager = LicenseManager()
         self.ws_client = None
         self.ws_thread = None  # WebSocket 运行线程
         self.ws_loop = None  # WebSocket 事件循环
-        # 心跳相关属性
-        self.last_heartbeat = time.time()
-        self.heartbeat_interval = 3  # 3秒心跳间隔
+        # 心跳相关属性（保留用于重连机制）
         self.max_reconnect_attempts = 3  # 最大重连次数
         self.reconnect_delay = 3  # 重连延迟（秒）
+        # 心跳任务引用
+        self.heartbeat_task = None
+        # 心跳响应超时计数器
+        self.heartbeat_timeout_count = 0
+        self.max_heartbeat_timeouts = 3  # 最大允许的心跳超时次数
+        # 心跳响应事件
+        self.pong_received = asyncio.Event()
         # DataReporter 实例字典，每个浏览器ID对应一个实例
         self.data_reporters = {}
 
     def initialize_config(self) -> None:
         """初始化配置"""
-        # 配置已在__init__中初始化
+        # 启动WebSocket客户端以接收服务器配置
+        self._start_websocket_client()
+
+        # 立即发送登录请求，不等待服务器配置
+        self._send_login_req()
+
+        # 等待服务器发送配置参数
+        try:
+            self.config.wait_for_initialization()
+        except TimeoutError as e:
+            log.error(f"配置初始化超时: {e}")
+            sys.exit(1)
+
+        # 配置接收完成后继续其他初始化步骤
         pass
 
     def validate_license(self) -> bool:
         """验证卡密"""
+        # 在接收到服务器配置后再进行卡密验证
         return self.license_manager.verify_license()
 
     def prepare_environment(self) -> None:
         """准备运行环境"""
-        # 启动WebSocket客户端
-        self._start_websocket_client()
-
         # 启动定期验证线程
         self.license_manager.start_periodic_check()
 
@@ -89,14 +95,6 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         output = json.dumps(version_info, ensure_ascii=False)
         print(output)
 
-        # 发送包含设备码和版本号的新WebSocket消息
-        self._send_ws_message({
-            "cmd": "LoginReq",
-            "id": self.config.DEVICE_CODE,
-            "mode": "pc",
-            "version": self.config.VERSION
-        })
-
         # 添加0.2秒延迟
         time.sleep(0.2)
 
@@ -122,7 +120,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
                     self._output_browser_start_event(browser_id)
                     # 获取该浏览器的 DataReporter 实例
                     reporter = self.data_reporters.get(browser_id)
-                    
+
                     # 添加0.2秒延迟
                     time.sleep(0.2)
 
@@ -209,7 +207,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def show_help(self) -> None:
         """显示帮助信息"""
-        print("使用方法: python DY_ku.py [run|add|look|clear]")
+        print("使用方法: pixi run web [run|add|look|clear]")
 
     def _prepare_url_list_mode(self) -> None:
         """准备URL列表模式"""
@@ -234,7 +232,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         self.utils.reset_url_list_index()
 
     def _output_browser_start_event(self, browser_id: str) -> None:
-        """为浏览器创建 DataReporter 实例（已删除旧输出格式）"""
+        """为浏览器创建 DataReporter 实例，并发送浏览器启动消息"""
         # 为每个浏览器创建 DataReporter 实例
         reporter = DataReporter(
             device_code=self.config.DEVICE_CODE,
@@ -242,6 +240,68 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             send_ws_message_func=self._send_ws_message_for_reporter
         )
         self.data_reporters[browser_id] = reporter
+        if len(browser_id)==32:
+            sta = "running"
+        else:
+            sta = "error"
+        # 发送浏览器启动消息到服务器
+        self._send_ws_message({
+            "browserId": browser_id,
+            "cmd": "RunStateReq",
+            "id": self.config.DEVICE_CODE,
+            "state": sta
+        })
+
+    def _send_heartbeat(self):
+        """发送心跳消息"""
+        # 发送心跳消息到服务器
+        self._send_ws_message({
+            "cmd": "HeartbeatReq",
+            "id": self.config.DEVICE_CODE,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+
+    def _handle_heartbeat_response(self, data: dict):
+        """处理心跳响应"""
+        if isinstance(data, dict) and data.get("cmd") == "HeartbeatRes":
+            self.pong_received.set()
+            self.heartbeat_timeout_count = 0
+            log.info(f"[{datetime.now()}] 收到心跳响应")
+
+    async def _heartbeat_task(self):
+        """心跳任务"""
+        while not self.utils._stop_flag.is_set():
+            try:
+                # 发送心跳
+                self._send_heartbeat()
+                
+                # 等待心跳响应（最多5秒）
+                try:
+                    await asyncio.wait_for(self.pong_received.wait(), timeout=5.0)
+                    # 重置超时计数器和响应事件
+                    self.heartbeat_timeout_count = 0
+                    self.pong_received.clear()
+                except asyncio.TimeoutError:
+                    log.warning(f"[{datetime.now()}] 心跳响应超时")
+                    self.heartbeat_timeout_count += 1
+                    
+                    # 如果连续超时次数超过阈值，停止程序
+                    if self.heartbeat_timeout_count >= self.max_heartbeat_timeouts:
+                        log.error(f"心跳连续 {self.max_heartbeat_timeouts} 次超时，准备停止程序")
+                        self.utils._stop_flag.set()
+                        # 通知WebSocket客户端停止
+                        if self.ws_client:
+                            self.ws_client.stop_requested = True
+                        break
+                
+                # 等待10秒后继续下一次心跳
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                # 任务被取消，正常退出
+                break
+            except Exception as e:
+                log.error(f"发送心跳包时出错: {e}")
+                break
 
     def _start_websocket_client(self):
         """启动WebSocket客户端（在单独的线程中运行）"""
@@ -251,6 +311,12 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         # 创建WebSocket客户端
         self.ws_client = create_websocket_client(self.config)
 
+        # 设置外部发送函数，用于处理 TypeStopReq 指令时发送响应
+        if self.ws_client:
+            self.ws_client.set_external_send_func(self._send_ws_message)
+            # 设置配置更新处理器
+            self.ws_client.set_config_update_handler(self._handle_config_update)
+
         # 在独立线程中启动WebSocket客户端
         self.ws_thread = start_websocket_client_in_thread(
             self.ws_client,
@@ -259,6 +325,8 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         # 注册指令处理器
         self.ws_client.register_command_handler("LoginRes", self._handle_login_res_command)
+        # 注册心跳响应处理器
+        self.ws_client.register_command_handler("HeartbeatRes", self._handle_heartbeat_response)
 
         # 等待 WebSocket 线程启动并创建事件循环
         # 从客户端获取正确的事件循环引用（WebSocket 线程中的事件循环）
@@ -276,11 +344,18 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             log.warning("⚠ 等待 WebSocket 事件循环超时，消息发送可能失败")
             self.ws_loop = None
 
-        self.last_heartbeat = time.time()
+        # 启动心跳任务
+        if self.ws_loop and self.ws_loop.is_running():
+            self.heartbeat_task = asyncio.run_coroutine_threadsafe(self._heartbeat_task(), self.ws_loop)
+            log.info("心跳任务已启动")
 
     def _stop_websocket_client(self):
         """停止WebSocket客户端"""
         try:
+            # 取消心跳任务
+            if self.heartbeat_task:
+                self.heartbeat_task.cancel()
+            
             if self.ws_client:
                 # 设置停止标志
                 self.ws_client.stop_requested = True
@@ -305,64 +380,67 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def _send_ws_message(self, message_dict):
         """发送WebSocket消息（线程安全）"""
-        # 构造符合服务器要求的格式: {"cmd":"mock","id":"12","data":{原始消息}}
-        # id 从配置中获取第一个浏览器ID
-        browser_id = self.config.BIT_BROWSER_IDS[0] if self.config.BIT_BROWSER_IDS else "unknown"
-
-        wrapped_message = {
-            "cmd": "mock",
-            "id": browser_id,
-            "data": message_dict
-        }
-
+        # 直接发送消息，不再包装外层结构
         # 打印将要发送到服务器的消息
-        log.info(f"发送到服务器的消息: {json.dumps(wrapped_message, ensure_ascii=False, indent=2)}")
-        
+        log.info(f"发送到服务器的消息: {json.dumps(message_dict, ensure_ascii=False, indent=2)}")
+
         # 检查WebSocket客户端是否存在
         if not self.ws_client:
             log.warning("WebSocket客户端未准备好，无法发送消息（ws_client 为 None）")
+            # 一旦WebSocket客户端不存在，停止程序
+            self._on_stop_signal_received()
             return
-        
+
         # 检查客户端状态
         if self.ws_client.stop_requested:
             log.warning("WebSocket客户端已请求停止，无法发送消息")
             return
-        
+
         if not self.ws_client._running:
             log.warning("WebSocket客户端未运行，无法发送消息")
+            # 一旦WebSocket客户端未运行，停止程序
+            self._on_stop_signal_received()
             return
-        
+
         # 检查WebSocket连接状态
         if not (hasattr(self.ws_client, 'ws') and self.ws_client.ws):
             log.warning("WebSocket连接对象不存在，无法发送消息")
+            # 一旦WebSocket连接不存在，停止程序
+            self._on_stop_signal_received()
             return
-        
+
         # 获取正确的事件循环（优先使用客户端的事件循环引用）
         event_loop = self.ws_client.event_loop
         if event_loop is None:
             # 如果客户端的事件循环为None，尝试使用保存的引用
             event_loop = self.ws_loop
-        
+
         if event_loop is None:
             log.warning("WebSocket事件循环未准备好，无法发送消息")
+            # 一旦事件循环未准备好，停止程序
+            self._on_stop_signal_received()
             return
-        
+
         if not event_loop.is_running():
             log.warning(f"WebSocket事件循环未运行，无法发送消息")
+            # 一旦事件循环未运行，停止程序
+            self._on_stop_signal_received()
             return
-        
+
         # 使用正确的事件循环发送消息
         try:
             # 直接将消息放入发送队列，而不是等待future完成
             # 这样可以避免阻塞和超时问题
             asyncio.run_coroutine_threadsafe(
-                self.ws_client.send_queue.put(json.dumps(wrapped_message, ensure_ascii=False)),
+                self.ws_client.send_queue.put(json.dumps(message_dict, ensure_ascii=False)),
                 event_loop
             )
             log.info("✓ 消息已放入发送队列")
         except Exception as e:
             log.error(f"发送WebSocket消息失败: {e}", exc_info=True)
-    
+            # 一旦发送消息失败，停止程序
+            self._on_stop_signal_received()
+
     def _send_ws_message_for_reporter(self, message_dict):
         """
         供 DataReporter 调用的 WebSocket 消息发送方法
@@ -392,14 +470,67 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         log.info("=" * 50)
         # 设置停止标志，所有浏览器线程会检测到这个标志并退出
         self.utils._stop_flag.set()
+        # 同时通知配置等待停止
+        self.config.request_stop()
         log.info(f"✓ 已设置 _stop_flag，当前状态: {self.utils._stop_flag.is_set()}")
         log.info(f"✓ WebSocket stop_requested 状态: {self.ws_client.stop_requested if self.ws_client else 'N/A'}")
 
     def _handle_login_res_command(self, data: dict):
         """处理 LoginRes 指令"""
-        # 这里可以处理其他 LoginRes 指令（非 stop）
+        # 检查是否是停止信号
+        if isinstance(data, dict) and data.get("cmd") == "StopReq":
+            log.info("收到 StopReq 指令")
+            # 处理停止信号
+            self._on_stop_signal_received()
+            return
+
+        # 检查是否是强制停止信号
+        if isinstance(data, dict) and data.get("cmd") == "StopPubForce":
+            log.info("收到 StopPubForce 指令")
+            # 处理强制停止信号，不发送任何信息到服务器
+            self._on_stop_signal_received()
+            return
+
+        # 这里处理登录响应和其他 LoginRes 指令（非 stop）
         log.debug(f"收到 LoginRes 指令: {data}")
+
+        # 如果数据中包含配置信息，则更新配置
+        if isinstance(data, dict) and "data" in data:
+            config_data = data.get("data", {})
+            if config_data:
+                self._handle_config_update(config_data)
+
         # 可以根据 data 中的内容执行不同的操作
+
+    def _handle_config_update_command(self, data: dict):
+        """处理 ConfigUpdate 指令"""
+        # 从指令中提取配置数据
+        config_data = data.get("data", {})
+        # 调用配置更新处理方法
+        self._handle_config_update(config_data)
+
+    def _handle_config_update(self, config_data: dict):
+        """处理配置更新"""
+        from ..tools import log
+        try:
+            log.info(f"收到配置更新: {config_data}")
+            # 更新全局配置对象
+            from ..tools.config import config
+            config.update_from_dict(config_data)
+
+            # 更新 LicenseManager 中的 URL 和 KEY
+            if 'SIBERIAN_URL' in config_data:
+                self.license_manager.url = config_data['SIBERIAN_URL']
+            if 'SIBERIAN_KEY' in config_data:
+                self.license_manager.key = config_data['SIBERIAN_KEY']
+            if 'DEVICE_CODE' in config_data:
+                self.license_manager.code = config_data['DEVICE_CODE']
+
+            log.info("配置已更新")
+            # 打印更新后的配置摘要
+            config.print_config_summary()
+        except Exception as e:
+            log.error(f"配置更新失败: {e}")
 
     def _reconnect_websocket(self):
         """重新连接WebSocket"""
@@ -427,3 +558,22 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         log.error("达到最大重连次数，无法重新连接")
         return False
+
+    def _send_login_req(self):
+        """发送登录请求到服务器"""
+        # 从WS_URL中提取id参数作为设备标识
+        from urllib.parse import urlparse, parse_qs
+        parsed_url = urlparse(self.config.WS_URL)
+        query_params = parse_qs(parsed_url.query)
+        device_id = query_params.get('id', [self.config.DEVICE_CODE])[0]
+
+        # 发送包含设备码和版本号的WebSocket消息
+        self._send_ws_message({
+            "cmd": "LoginReq",
+            "id": device_id,
+            "mode": "pc",
+            "version": self.config.VERSION
+        })
+
+        # 添加0.2秒延迟
+        time.sleep(0.2)

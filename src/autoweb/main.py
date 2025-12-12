@@ -4,13 +4,13 @@ from .tools import verify, config, log
 from .tools.base import AbstractCrawler
 from .dy import DouyinCrawler
 from .dyShare import DouyinShareCrawler
-from .ks import KuaishouCrawler
+# from .ks import KuaishouCrawler
 
 from .tools.web_client import WSClient
 
 
 class TaskManager:
-    CRAWLERS = {"dy": DouyinCrawler, "ks": KuaishouCrawler}
+    CRAWLERS = {"dy": DouyinCrawler}#, "ks": KuaishouCrawler
 
     def __init__(self, ws_url: str):
         self.ws = WSClient(url=ws_url)
@@ -54,11 +54,17 @@ class TaskManager:
 
 
 def main():
+    # 默认执行抖音分享爬虫，无需检查 PLATFORM 配置
+    o = DouyinShareCrawler()
+    o.start()
+    return
+
+    # 保留原来的逻辑以防需要
     if config.PLATFORM == "dys":
         o = DouyinShareCrawler()
         o.start()
         return
-    manager = TaskManager(ws_url=config.WEBSOCKET_URL)
+    manager = TaskManager(ws_url=config.WS_URL)
     try:
         asyncio.run(manager.start())
     except KeyboardInterrupt:

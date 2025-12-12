@@ -25,12 +25,12 @@ from datetime import datetime
 import threading
 
 from ..tools import log
-from ..tools.config import KuSettings
+from ..tools.config import config,KuSettings
 from ..tools.bit_api import openBrowser, closeBrowser
 from ..tools.verify import LicenseManager, LicenseException
 
 # 配置和全局变量
-config: KuSettings = KuSettings()  # type: ignore
+# config: KuSettings = KuSettings()  # type: ignore
 LINKS_DB_PATH = config.LINKS_DB_PATH
 
 # 全局变量定义
@@ -57,6 +57,7 @@ class DyShareUtils:
         self._url_list_lock = threading.Lock()
         self._stats_lock = threading.Lock()  # 保护全局统计变量的线程锁
         self._stop_flag = threading.Event()
+        self._browser_start_indices = {}  # 存储每个浏览器的起始索引
 
     # ----------------------------------------------------------------------
     # 工具函数
@@ -104,7 +105,7 @@ class DyShareUtils:
         return kws
 
     def parse_comment_replies(self):
-        """解析评论回复内容列表，使用 & 作为分隔符"""
+        """解析评论回复内容列表，使用 -&- 作为分隔符"""
         raw = getattr(config, 'COMMENT_REPLIES', '') or ''
         if not raw:
             return []
@@ -120,15 +121,15 @@ class DyShareUtils:
                 else:
                     replies = [s] if s else []
             except Exception:
-                # 不是JSON，按 & 分隔符分割
-                replies = [x.strip() for x in s.split("&") if x.strip()]
+                # 不是JSON，按 -&- 分隔符分割
+                replies = [x.strip() for x in s.split("-&-") if x.strip()]
         elif isinstance(raw, list):
             replies = [str(x).strip() for x in raw if str(x).strip()]
 
         return replies if replies else []
 
     def parse_video_comments(self):
-        """解析视频留言内容列表，使用 & 作为分隔符"""
+        """解析视频留言内容列表，使用 -&- 作为分隔符"""
         raw = getattr(config, 'VIDEO_COMMENTS', '') or ''
         if not raw:
             return []
@@ -144,8 +145,8 @@ class DyShareUtils:
                 else:
                     comments = [s] if s else []
             except Exception:
-                # 不是JSON，按 & 分隔符分割
-                comments = [x.strip() for x in s.split("&") if x.strip()]
+                # 不是JSON，按 -&- 分隔符分割
+                comments = [x.strip() for x in s.split("-&-") if x.strip()]
         elif isinstance(raw, list):
             comments = [str(x).strip() for x in raw if str(x).strip()]
 
@@ -801,26 +802,26 @@ class DyShareUtils:
             self,
             driver,
             url,
-            wait_time=10,
-            like_probability=0.5,
-            visit_profile_probability=0.3,
-            profile_follow_probability=0.5,
-            min_follows_per_video=5,
-            max_follows_per_video=15,
-            min_likes_per_video=5,
-            max_likes_per_video=15,
-            browser_number=None,
-            browser_id="",
-            enable_follow=True,
-            enable_profile_visit=True,
-            enable_like=True,
-            enable_search_keywords=False,
-            enable_comment_reply=False,
-            comment_reply_probability=0.05,
-            comment_wait_min=12,
-            comment_wait_max=12,
-            visit_min=2,
-            visit_max=5,
+            wait_time,
+            like_probability,
+            visit_profile_probability,
+            profile_follow_probability,
+            min_follows_per_video,
+            max_follows_per_video,
+            min_likes_per_video,
+            max_likes_per_video,
+            browser_number,
+            browser_id,
+            enable_follow,
+            enable_profile_visit,
+            enable_like,
+            enable_search_keywords,
+            enable_comment_reply,
+            comment_reply_probability,
+            comment_wait_min,
+            comment_wait_max,
+            visit_min,
+            visit_max,
             url_index=None,
             reporter=None,  # DataReporter 实例
     ):
@@ -1288,13 +1289,31 @@ class DyShareUtils:
             log.error(f"{browser_info} 通过API强制关闭浏览器时出错: {e}")
 
     def reset_url_list_index(self):
-        """重置URL列表索引"""
+        """重置URL列表索引，并根据URL_INDEX配置设置各浏览器起始索引"""
         with self._url_list_lock:
             self._url_list_index = 0
+            # 初始化浏览器起始索引映射
+            self._browser_start_indices = {}
+            if config.URL_INDEX and isinstance(config.URL_INDEX, list):
+                for i, start_index in enumerate(config.URL_INDEX):
+                    if i < len(config.BIT_BROWSER_IDS):
+                        browser_id = config.BIT_BROWSER_IDS[i]
+                        self._browser_start_indices[browser_id] = start_index
+                        if config.DEBUG:
+                            log.info(f"浏览器 {browser_id} 起始索引设置为: {start_index}")
 
-    def get_next_link_from_list(self, urls_list):
+    def get_next_link_from_list(self, urls_list, browser_id=None):
         """从URL列表获取下一个待处理的链接（线程安全）"""
         with self._url_list_lock:
+            # 确定当前浏览器的起始索引
+            start_index = 0
+            if browser_id and browser_id in self._browser_start_indices:
+                start_index = self._browser_start_indices[browser_id]
+            
+            # 如果是第一次获取链接，使用起始索引
+            if self._url_list_index == 0 and start_index > 0:
+                self._url_list_index = start_index
+            
             while self._url_list_index < len(urls_list):
                 raw_url = urls_list[self._url_list_index]
                 url_index = self._url_list_index
@@ -1313,10 +1332,10 @@ class DyShareUtils:
 
             return None, None, None
 
-    def get_next_link(self, db_path=LINKS_DB_PATH):
+    def get_next_link(self, db_path=LINKS_DB_PATH, browser_id=None):
         """从数据库或列表获取下一个待处理的链接"""
         if config.URLS and len(config.URLS) > 0:
-            return self.get_next_link_from_list(config.URLS)
+            return self.get_next_link_from_list(config.URLS, browser_id)
         else:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
@@ -1373,19 +1392,19 @@ class DyShareUtils:
         conn.close()
 
     def continuous_processing_loop(
-            self,
-            browser_id,
-            wait_time,
-            like_probability,
-            visit_profile_probability,
-            profile_follow_probability,
-            min_follows_per_video,
-            max_follows_per_video,
-            min_likes_per_video,
-            max_likes_per_video,
-            browser_number,
-            reporter=None,  # DataReporter 实例
-            db_path=LINKS_DB_PATH,
+        self,
+        browser_id,
+        wait_time,
+        like_probability,
+        visit_profile_probability,
+        profile_follow_probability,
+        min_follows_per_video,
+        max_follows_per_video,
+        min_likes_per_video,
+        max_likes_per_video,
+        browser_number,
+        reporter=None,  # DataReporter 实例
+        db_path=LINKS_DB_PATH,
     ):
         """持续处理循环 (优化版)"""
         browser_info = self.get_browser_info(browser_number)
@@ -1409,21 +1428,6 @@ class DyShareUtils:
                     log.warning(f"无法获取总链接数: {e}")
                     reporter.set_total_links(0)
 
-        # 变量初始化
-        enable_follow = config.ENABLE_FOLLOW
-        enable_profile_visit = config.ENABLE_PROFILE_VISIT
-        enable_like = config.ENABLE_LIKE
-        enable_search_keywords = config.ENABLE_SEARCH_KEYWORDS
-        enable_comment_reply = config.ENABLE_COMMENT_REPLY
-        like_probability = like_probability / 100.0
-        visit_profile_probability = visit_profile_probability / 100.0
-        profile_follow_probability = profile_follow_probability / 100.0
-        comment_reply_probability = config.COMMENT_REPLY_PROBABILITY / 100.0
-        comment_wait_min = config.COMMENT_WAIT_MIN
-        comment_wait_max = config.COMMENT_WAIT_MAX
-        visit_min = config.VISIT_MIN
-        visit_max = config.VISIT_MAX
-
         # 验证一次卡密
         self.safe_check_license()
 
@@ -1437,6 +1441,22 @@ class DyShareUtils:
                     log.info(f"{browser_info} 收到全局停止信号，正在退出...")
                     break
                     
+                # 每次循环都重新读取配置值，确保使用最新配置
+                enable_follow = config.ENABLE_FOLLOW
+                enable_profile_visit = config.ENABLE_PROFILE_VISIT
+                enable_like = config.ENABLE_LIKE
+                enable_search_keywords = config.ENABLE_SEARCH_KEYWORDS
+                enable_comment_reply = config.ENABLE_COMMENT_REPLY
+                # 注意：这些概率参数需要除以100转换为小数
+                like_probability_val = config.LIKE_PROBABILITY / 100.0
+                visit_profile_probability_val = config.VISIT_ENABLE / 100.0
+                profile_follow_probability_val = config.PROFILE_FOLLOW_PROBABILITY / 100.0
+                comment_reply_probability_val = config.COMMENT_REPLY_PROBABILITY / 100.0
+                comment_wait_min_val = config.COMMENT_WAIT_MIN
+                comment_wait_max_val = config.COMMENT_WAIT_MAX
+                visit_min_val = config.VISIT_MIN
+                visit_max_val = config.VISIT_MAX
+
                 # 1. 驱动检查与创建
                 if driver is None:
                     # 树立项目规范，不主动关闭浏览器实例
@@ -1446,12 +1466,16 @@ class DyShareUtils:
                     self.debug_log("info", "正在创建新浏览器实例...", browser_number)
                     driver = self.get_driver(browser_id, browser_number)
                     if driver is None:
-                        log.error(f"{self.get_browser_info(browser_number)} 创建失败，30秒后重试")
-                        self.safe_sleep(30, browser_number=browser_number)
-                        continue
+                        log.error(f"{self.get_browser_info(browser_number)} 创建失败，程序即将退出")
+                        # 直接抛出异常而不是重试
+                        raise Exception("浏览器创建失败，无法继续执行")
+                        # 原来的重试代码已删除
+                        # log.error(f"{self.get_browser_info(browser_number)} 创建失败，30秒后重试")
+                        # self.safe_sleep(30, browser_number=browser_number)
+                        # continue
 
                 # 2. 获取链接
-                link_id, url, url_index = self.get_next_link(db_path)
+                link_id, url, url_index = self.get_next_link(db_path, browser_id)
 
                 if url is None:
                     if config.URLS and len(config.URLS) > 0:
@@ -1491,12 +1515,12 @@ class DyShareUtils:
 
                         self.debug_log("info", f"开始调用 run_automation，URL: {url}", browser_number)
                         success = self.run_automation(
-                            driver, url, wait_time, like_probability, visit_profile_probability,
-                            profile_follow_probability, min_follows_per_video, max_follows_per_video,
+                            driver, url, wait_time, like_probability_val, visit_profile_probability_val,
+                            profile_follow_probability_val, min_follows_per_video, max_follows_per_video,
                             min_likes_per_video, max_likes_per_video, browser_number, browser_id,
                             enable_follow, enable_profile_visit, enable_like, enable_search_keywords,
-                            enable_comment_reply, comment_reply_probability, comment_wait_min, comment_wait_max,
-                            visit_min, visit_max, url_index, reporter
+                            enable_comment_reply, comment_reply_probability_val, comment_wait_min_val, comment_wait_max_val,
+                            visit_min_val, visit_max_val, url_index, reporter
                         )
                         
                         self.debug_log("info", f"run_automation 执行完成，结果: {success}", browser_number)

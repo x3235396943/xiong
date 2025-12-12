@@ -4,11 +4,11 @@ import json
 from typing import Dict, Callable, Optional, Any
 from . import log, config
 import websockets
-from websockets.asyncio.client import ClientConnection
+from datetime import datetime
 
 
 class WSClient:
-    ws: ClientConnection
+    ws: Any
 
     def __init__(self, url: str):
         self.url = url
@@ -16,12 +16,28 @@ class WSClient:
         self._running = False
         self.ready_event = asyncio.Event()
         self.stop_requested = False  # 添加停止请求标志
-        self.last_message_time = 0  # 上次收到消息的时间
-        self.event_loop = None  # 保存事件循环引用，用于跨线程发送消息
         # 指令处理回调字典：{cmd: handler_function}
         self.command_handlers: Dict[str, Callable[[Dict[str, Any]], None]] = {}
         # 停止信号回调
         self.stop_signal_handler: Optional[Callable[[], None]] = None
+        # 保存外部发送消息的函数引用
+        self.external_send_func: Optional[Callable[[Dict], None]] = None
+        # 保存配置更新回调函数
+        self.config_update_handler: Optional[Callable[[Dict], None]] = None
+        # 事件循环引用
+        self.event_loop = None
+        # 从URL中提取设备ID
+        self.device_id = self._extract_device_id(url)
+
+    def _extract_device_id(self, url: str) -> str:
+        """从WebSocket URL中提取设备ID"""
+        try:
+            from urllib.parse import urlparse, parse_qs
+            parsed_url = urlparse(url)
+            query_params = parse_qs(parsed_url.query)
+            return query_params.get('id', ['unknown'])[0]
+        except Exception:
+            return 'unknown'
 
     async def connect(self):
         """连接WebSocket服务器（使用上下文管理器方式）"""
@@ -59,6 +75,34 @@ class WSClient:
                     # 连接断开，触发停止信号
                     self._handle_connection_lost("发送消息失败")
                 break
+        
+        # 在退出循环前，确保队列中的关键消息（如 StopRes）被发送
+        # 最多等待1秒，确保关键消息能够发送
+        if self.stop_requested and not self.send_queue.empty():
+            log.info("检测到停止标志，等待队列中的关键消息发送完成...")
+            max_wait_time = 1.0  # 最多等待1秒
+            wait_interval = 0.1  # 每次检查间隔0.1秒
+            waited_time = 0.0
+            
+            while waited_time < max_wait_time and not self.send_queue.empty():
+                try:
+                    # 尝试获取并发送队列中的消息
+                    msg = await asyncio.wait_for(self.send_queue.get(), timeout=wait_interval)
+                    await self.ws.send(msg)
+                    log.info("✓ 已发送队列中的关键消息")
+                    waited_time = 0.0  # 重置等待时间，继续处理下一条消息
+                except asyncio.TimeoutError:
+                    # 超时，增加等待时间
+                    waited_time += wait_interval
+                    continue
+                except Exception as e:
+                    log.warning(f"发送队列中的关键消息时出错: {e}")
+                    break
+            
+            if not self.send_queue.empty():
+                log.warning(f"队列中仍有 {self.send_queue.qsize()} 条消息未发送")
+            else:
+                log.info("✓ 队列中的关键消息已全部发送完成")
 
     async def _receiver(self, websocket):
         """接收消息（使用 async for 方式，与 main.py 相同）"""
@@ -74,31 +118,30 @@ class WSClient:
 
                 msg = message
                 # 添加时间戳，确认消息接收时间
-                import datetime
-                timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
                 log.info(f"[WebSocket]收到第 {message_count} 条服务器消息: {msg}")
 
                 try:
                     data = json.loads(msg)
                     # log.info(f"解析后的消息: {data}")
                     
-                    # 更新上次收到消息的时间
-                    self.last_message_time = asyncio.get_event_loop().time()
-                    
                     # 处理指令
                     if isinstance(data, dict):
                         cmd = data.get("cmd")
-                        data_value = data.get("data")
-                        
+
                         # 检查是否是停止信号（处理TypeStopReq或LoginRes stop）
                         is_stop_signal = False
-                        if cmd == "TypeStopReq":
+                        if cmd == "StopReq":
                             is_stop_signal = True
-                        elif cmd == "LoginRes" and data_value == "stop":
-                            is_stop_signal = True
+                            # 当收到 TypeStopReq 时，使用外部函数发送响应
+                            self._send_response({"cmd": "StopRes", "id": self.device_id})
+                            # 等待 StopRes 消息发送完成
+                            # 通过检查队列是否为空或等待一小段时间来确保消息被发送
+                            log.info("等待 StopRes 消息发送完成...")
+                            await self._wait_for_message_sent()
+                            log.info("✓ StopRes 消息已发送完成")
                         
                         if is_stop_signal:
-                            log.info("检测到停止信号: cmd={}, data={}".format(cmd, data_value))
+                            log.info("检测到停止信号: cmd={}".format(cmd))
                             self.stop_requested = True
                             self._handle_stop_signal()
                             # 退出接收循环
@@ -125,36 +168,108 @@ class WSClient:
                 # 连接断开，触发停止信号
                 self._handle_connection_lost(f"接收消息失败: {e}")
 
+    def _send_response(self, response_data: dict):
+        """使用外部函数发送响应消息"""
+        try:
+            if self.external_send_func:
+                # 调用外部发送函数
+                self.external_send_func(response_data)
+                log.info(f"已通过外部函数发送响应消息: {response_data}")
+            else:
+                log.warning("外部发送函数未设置，无法发送响应消息")
+        except Exception as e:
+            log.error(f"通过外部函数发送响应消息失败: {e}")
+    
+    async def _wait_for_message_sent(self, max_wait_time: float = 0.5):
+        """
+        等待消息发送完成
+        
+        Args:
+            max_wait_time: 最大等待时间（秒），默认0.5秒
+        """
+        wait_interval = 0.05  # 每次检查间隔50毫秒
+        waited_time = 0.0
+        
+        while waited_time < max_wait_time:
+            # 检查队列是否为空，如果为空说明消息已被取出（可能已发送或正在发送）
+            if self.send_queue.empty():
+                # 再等待一小段时间，确保消息真正发送到网络
+                await asyncio.sleep(0.1)
+                log.info("✓ 队列已空，消息应已发送")
+                return
+            
+            await asyncio.sleep(wait_interval)
+            waited_time += wait_interval
+        
+        # 如果等待超时，记录警告但继续执行
+        if not self.send_queue.empty():
+            log.warning(f"等待消息发送超时（{max_wait_time}秒），队列中仍有消息，但继续执行停止流程")
+
+    def _handle_stop_signal(self):
+        """处理停止信号"""
+        log.info("_handle_stop_signal() 被调用")
+        if self.stop_signal_handler:
+            log.info(f"停止信号处理器存在: {self.stop_signal_handler}")
+            try:
+                log.info("正在执行停止信号处理器...")
+                self.stop_signal_handler()
+                log.info("停止信号处理器执行完成")
+            except Exception as e:
+                log.error(f"执行停止信号处理器时出错: {e}", exc_info=True)
+        else:
+            log.warning("停止信号处理器未注册！")
+
+    def set_external_send_func(self, send_func):
+        """设置外部发送函数"""
+        self.external_send_func = send_func
+        log.info("外部发送函数已设置")
+
+    def set_config_update_handler(self, handler: Callable[[Dict], None]):
+        """设置配置更新处理器"""
+        self.config_update_handler = handler
+        log.info("配置更新处理器已设置")
+
     async def run(self):
-        """运行WebSocket客户端（使用可以工作的方式）"""
+        """运行WebSocket客户端"""
         # log.info("[WebSocket] 开始运行 WebSocket 客户端...")
         self._running = True
         self.stop_requested = False
-        self.last_message_time = asyncio.get_event_loop().time()  # 初始化时间
+        # 保存事件循环引用
+        self.event_loop = asyncio.get_event_loop()
+        
+        # 添加初始化完成标志
+        self._initialized = False
 
         try:
-            # 使用 async with 方式连接（这是可以工作的方式）
+            # 使用 async with 方式连接
             # log.info(f"[WebSocket] 正在连接到服务器: {self.url}")
             async with websockets.connect(self.url) as websocket:
                 self.ws = websocket
                 # log.info("WebSocket 连接成功")
-                
-                # 发送初始连接消息
-                try:
-                    welcome_msg = {"type": "client_connected", "message": "客户端已连接"}
-                    await websocket.send(json.dumps(welcome_msg, ensure_ascii=False))
-                except Exception as e:
-                    log.warning(f"发送初始消息失败: {e}")
 
                 # log.info("[WebSocket] 开始监听消息...")
                 # 运行发送器和接收器（接收器需要传入 websocket 对象）
                 # 使用 gather 确保两个任务并行运行
                 try:
-                    await asyncio.gather(
-                        self._sender(), 
-                        self._receiver(websocket),
-                        return_exceptions=True
+                    # 运行发送器和接收器
+                    done, pending = await asyncio.wait(
+                        [
+                            asyncio.create_task(self._sender()),
+                            asyncio.create_task(self._receiver(websocket)),
+                        ],
+                        return_when=asyncio.FIRST_COMPLETED,
                     )
+                    
+                    # 取消未完成的任务
+                    for task in pending:
+                        task.cancel()
+                        
+                    # 检查完成的任务是否有异常
+                    for task in done:
+                        exception = task.exception()
+                        if exception:
+                            raise exception
+                            
                 except Exception as e:
                     log.error(f"WebSocket 任务执行出错: {e}")
                     raise
@@ -191,20 +306,6 @@ class WSClient:
         self.stop_signal_handler = handler
         # log.debug("已注册停止信号处理器")
 
-    def _handle_stop_signal(self):
-        """处理停止信号"""
-        log.info("_handle_stop_signal() 被调用")
-        if self.stop_signal_handler:
-            log.info(f"停止信号处理器存在: {self.stop_signal_handler}")
-            try:
-                log.info("正在执行停止信号处理器...")
-                self.stop_signal_handler()
-                log.info("停止信号处理器执行完成")
-            except Exception as e:
-                log.error(f"执行停止信号处理器时出错: {e}", exc_info=True)
-        else:
-            log.warning("停止信号处理器未注册！")
-
     def _handle_connection_lost(self, reason: str):
         """处理连接断开"""
         log.error(f"WebSocket 连接断开: {reason}")
@@ -215,14 +316,10 @@ class WSClient:
                 self.stop_signal_handler()
             except Exception as e:
                 log.error(f"执行停止信号处理器时出错: {e}")
-
+                
     def is_stop_requested(self):
         """检查是否请求了停止"""
         return self.stop_requested
-
-    def is_heartbeat_timeout(self, timeout=3):
-        """检查心跳是否超时"""
-        return (asyncio.get_event_loop().time() - self.last_message_time) > timeout
 
 
 # 公共方法，用于创建和启动WebSocket客户端
@@ -231,13 +328,13 @@ def create_websocket_client(config):
     创建WebSocket客户端的公共方法
 
     Args:
-        config: 配置对象，需要包含WEBSOCKET_URL和DEVICE_CODE属性
+        config: 配置对象，需要包含WEBSOCKET_URL属性
 
     Returns:
         WSClient: WebSocket客户端实例
     """
-    # 从配置中获取 WebSocket URL 和设备码，并拼接成完整的URL
-    ws_url = f"{config.WEBSOCKET_URL}?id={config.DEVICE_CODE}"
+    # 从配置中获取 WebSocket URL
+    ws_url = config.WS_URL
 
     if not ws_url:
         raise Exception("WebSocket URL 未配置，请检查配置文件")
