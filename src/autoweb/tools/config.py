@@ -1,35 +1,27 @@
+import re
+import os
+import sys
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Dict, Any, Optional
 import time
 
 
-class Base(BaseSettings):
-    SIBERIAN_URL: Optional[str] = None
-    SIBERIAN_KEY: Optional[str] = None
-    DEVICE_CODE: Optional[str] = None  # 设备码
-    # WebSocket 配置
-    WS_URL: str  # WebSocket 服务器地址
-    PLATFORM: str
-    RUN_MODE: str
-    LOGS_PATH: str
-    # 服务器消息ID，用于发送消息到服务器时的标识符
-    SERVER_ID: str = "shebeiid"
+# 定义需要验证的字段对
+field_pairs = {
+    "MAX_FOLLOWS_PER_VIDEO": "MIN_FOLLOWS_PER_VIDEO",
+    "COMMENT_LIKE_COUNT_MAX": "COMMENT_LIKE_COUNT_MIN",
+    "LIKE_WAIT_MAX": "LIKE_WAIT_MIN",
+    "VISIT_MAX": "VISIT_MIN",
+    "VIDEO_REPLY_WAIT_MAX": "VIDEO_REPLY_WAIT_MIN",
+    "COMMENT_WAIT_MAX": "COMMENT_WAIT_MIN",
+}
 
 
-class KuSettings(Base):
-    # 添加一个标志用于等待配置初始化
-    _config_initialized: bool = False
-    # 添加停止信号标志
-    _stop_requested: bool = False
-
-    KEYWORDS: list = []
-    MAX_SCROLL_VIDEO: list = [10, 20]
-    MAX_COMMENT: list = [2, 15]
-
-    LIKE_PROBABILITY: Optional[int] = 8  # 点赞概率 (0-100)
-    VISIT_ENABLE: Optional[int] = 10  # 进入主页的概率 (0-100)
-    PROFILE_FOLLOW_PROBABILITY: Optional[int] = 10  # 进入主页后关注的概率 (0-100)
+class ShareConfig(BaseSettings):
+    LIKE_PROBABILITY: int | None = 8  # 点赞概率 (0-100)
+    VISIT_ENABLE: int | None = 10  # 进入主页的概率 (0-100)
+    PROFILE_FOLLOW_PROBABILITY: int | None = 10  # 进入主页后关注的概率 (0-100)
     ENABLE_FOLLOW: bool = True  # 是否启用关注功能
     ENABLE_PROFILE_VISIT: bool = True  # 是否启用进入主页功能
     ENABLE_LIKE: bool = True  # 是否启用点赞功能
@@ -63,6 +55,35 @@ class KuSettings(Base):
     COMMENT_WAIT_MIN: int = 5  # 评论回复前最小等待时间（秒）
     COMMENT_WAIT_MAX: int = 8  # 评论回复前最大等待时间（秒）
 
+    BIT_BROWSER_IDS: list = []
+
+    @field_validator(*field_pairs.keys())
+    @classmethod
+    def validate_min_max_pairs(cls, max_value, info):
+        max_name = info.field_name
+        min_name = field_pairs[max_name]
+        if info.data.get(min_name) > max_value:
+            raise ValueError(f"{min_name} 不能大于 {max_name}")
+        return max_value
+
+
+class KuSettings(ShareConfig):
+    # 添加一个标志用于等待配置初始化
+    _config_initialized: bool = False
+    # 添加停止信号标志
+    _stop_requested: bool = False
+
+    SIBERIAN_URL: Optional[str] = None
+    SIBERIAN_KEY: Optional[str] = None
+    DEVICE_CODE: Optional[str] = None  # 设备码
+    # WebSocket 配置
+    WS_URL: str  # WebSocket 服务器地址
+    PLATFORM: str
+    RUN_MODE: str
+    LOGS_PATH: str
+    # 服务器消息ID，用于发送消息到服务器时的标识符
+    SERVER_ID: str = "shebeiid"
+
     # 数据库路径
     LINKS_DB_PATH: str = "links.db"
     # 本地导入链接
@@ -73,8 +94,6 @@ class KuSettings(Base):
     WAIT_TIME: int = 10  # 等待元素出现的时间（秒）
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = False  # 是否输出调试信息（打印所有配置参数）
-
-    BIT_BROWSER_IDS: list = []
 
     VERSION: str = "1.1.4"
 
@@ -107,37 +126,6 @@ class KuSettings(Base):
     COMMENT_KEYWORDS: list = []
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
-
-    @field_validator(
-        "MAX_FOLLOWS_PER_VIDEO",
-        "COMMENT_LIKE_COUNT_MAX",
-        "LIKE_WAIT_MAX",
-        "VISIT_MAX",
-        "VIDEO_REPLY_WAIT_MAX",
-        "COMMENT_WAIT_MAX",
-    )
-    @classmethod
-    def validate_min_max_pairs(cls, max_value, info):
-        # 定义需要验证的字段对：(min_field, max_field)
-        field_pairs = {
-            "MAX_FOLLOWS_PER_VIDEO": ("MIN_FOLLOWS_PER_VIDEO", "MAX_FOLLOWS_PER_VIDEO"),
-            "COMMENT_LIKE_COUNT_MAX": (
-                "COMMENT_LIKE_COUNT_MIN",
-                "COMMENT_LIKE_COUNT_MAX",
-            ),
-            "LIKE_WAIT_MAX": ("LIKE_WAIT_MIN", "LIKE_WAIT_MAX"),
-            "VISIT_MAX": ("VISIT_MIN", "VISIT_MAX"),
-            "VIDEO_REPLY_WAIT_MAX": ("VIDEO_REPLY_WAIT_MIN", "VIDEO_REPLY_WAIT_MAX"),
-            "COMMENT_WAIT_MAX": ("COMMENT_WAIT_MIN", "COMMENT_WAIT_MAX"),
-        }
-
-        field_name = info.field_name
-        if field_name in field_pairs:
-            min_field, max_field = field_pairs[field_name]
-            min_value = info.data.get(min_field)
-            if min_value is not None and min_value > max_value:
-                raise ValueError(f"{min_field} 不能大于 {max_field}")
-        return max_value
 
     # 不从.env文件读取配置
     def update_from_dict(self, config_dict: Dict[str, Any]):
@@ -204,3 +192,51 @@ class KuSettings(Base):
 
 # 创建全局配置实例
 config = KuSettings()  # type: ignore
+
+
+class Base(BaseSettings):
+    PLATFORM: str
+    RUN_MODE: str
+    DEVICE_CODE: str
+    WS_URL: str
+    LOGS_PATH: str
+    CONNECT_KEY: str
+    VERSION: str | None
+    DEBUG: bool = False
+    HEADLESS: bool = True
+
+    model_config = SettingsConfigDict(extra="ignore", env_file=".env")
+
+
+class PcConfig(ShareConfig):
+    SIBERIAN_URL: str
+    SIBERIAN_KEY: str
+
+    KEYWORDS: list = []
+    MAX_SCROLL_VIDEO: list = [10, 20]
+    MAX_COMMENT: list = [2, 15]
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+
+def extract_version() -> str | None:
+    """
+    提取出的版本号
+    """
+    if getattr(sys, "frozen", False):
+        # 打包后的环境
+        executable_path = sys.executable
+    else:
+        # 开发环境
+        executable_path = __file__
+
+    # 获取文件名（不含路径）
+    filename = os.path.basename(executable_path)
+    match = re.search(r"(\d+\.\d+\.\d+(?:\.\d+)*)", filename)
+    if match:
+        return match.group(1)
+
+    return None
+
+
+env = Base(VERSION=extract_version())  # type: ignore

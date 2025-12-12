@@ -1,7 +1,7 @@
 from aiohttp import web, WSMsgType
 from aiohttp.web import WebSocketResponse
 
-from .tools import KuSettings
+from .tools import PcConfig
 
 
 class WebSocketServer:
@@ -18,8 +18,7 @@ class WebSocketServer:
 
     async def _handle_login_request(self) -> None:
         """处理登录请求"""
-        config = KuSettings(
-            PLATFORM="dy",
+        config = PcConfig(
             SIBERIAN_URL="http://139.159.230.186/api/siberianNitraria/verifyActivate",
             SIBERIAN_KEY="2j2r6Jdr2Se/5Sv9n9H67xQOADQZ4ThV9jINpCYZbqY=",
             # 搜索关键字
@@ -34,7 +33,10 @@ class WebSocketServer:
                 "素人美女",
                 "黑人美女",
                 "阿拉伯美女",
-            ]
+            ],
+            VIDEO_COMMENTS="|".join(["6"]),
+            COMMENT_REPLIES="|".join(["6"]),
+            COMMENT_FILTER_KEYWORDS=["美女"],
         )
         await self._send_json({"cmd": "LoginRes", "data": config.model_dump()})
 
