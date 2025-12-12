@@ -23,7 +23,7 @@ async def verify(ws: WSClient):
                 log.warning("SIBERIAN_URL 或 SIBERIAN_KEY 未设置，跳过验证")
                 await sleep(180)
                 continue
-                
+
             async with session.post(
                 config.SIBERIAN_URL,
                 json={
@@ -70,7 +70,7 @@ class LicenseManager:
             # 检查必要参数是否存在
             if not self.url or not self.key:
                 return False, "未配置 SIBERIAN_URL 或 SIBERIAN_KEY"
-                
+
             if not self.code:
                 return False, "未配置 DEVICE_CODE"
 
@@ -118,13 +118,13 @@ class LicenseManager:
         """初始验证，通常在程序启动时调用"""
         if config.DEBUG:
             log.info("正在验证卡密...")
-        
+
         # 如果 URL、KEY 或 CODE 未设置，则暂时认为验证通过（推迟到服务器配置到达后再验证）
         if not self.url or not self.key or not self.code:
             if config.DEBUG:
                 log.info("✅ 卡密参数尚未接收，推迟验证")
             return True
-            
+
         is_valid, msg = self._verify_logic()
 
         if is_valid:
@@ -146,7 +146,7 @@ class LicenseManager:
         # 如果 URL、KEY 或 CODE 未设置，则不进行验证
         if not self.url or not self.key or not self.code:
             return
-            
+
         if not self._valid:
             raise LicenseException(f"License Invalid: {self._error_msg}")
 
@@ -161,3 +161,4 @@ class LicenseManager:
     def stop_periodic_check(self):
         """停止后台检查线程"""
         self._stop_event.set()
+

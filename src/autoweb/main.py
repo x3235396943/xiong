@@ -10,7 +10,7 @@ from .tools.web_client import WSClient
 
 
 class TaskManager:
-    CRAWLERS = {"dy": DouyinCrawler}#, "ks": KuaishouCrawler
+    CRAWLERS = {"dy": DouyinCrawler}  # , "ks": KuaishouCrawler
 
     def __init__(self, ws_url: str):
         self.ws = WSClient(url=ws_url)
@@ -46,19 +46,14 @@ class TaskManager:
         for task in done:
             exc = task.exception()
             if exc:
-                log.debug(exc, exc_info=True)
-                await self.ws.send(
-                    {"cmd": "ErrReq", "id": config.BIT_BROWSER_IDS[0], "logs": exc}
-                )
+                await self.ws.send({"cmd": "ErrReq", "logs": exc})
+                await self.ws.close()
                 raise exc
+        else:
+            await self.ws.close()
 
 
 def main():
-    # 默认执行抖音分享爬虫，无需检查 PLATFORM 配置
-    o = DouyinShareCrawler()
-    o.start()
-    return
-
     # 保留原来的逻辑以防需要
     if config.PLATFORM == "dys":
         o = DouyinShareCrawler()
@@ -73,3 +68,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -7,10 +7,11 @@ import time
 class Base(BaseSettings):
     SIBERIAN_URL: Optional[str] = None
     SIBERIAN_KEY: Optional[str] = None
-    DEVICE_CODE: Optional[str] = None   # 设备码
+    DEVICE_CODE: Optional[str] = None  # 设备码
     # WebSocket 配置
     WS_URL: str  # WebSocket 服务器地址
-    PLATFORM: str = "dys"
+    PLATFORM: str
+    RUN_MODE: str
     # 服务器消息ID，用于发送消息到服务器时的标识符
     SERVER_ID: str = "shebeiid"
 
@@ -76,11 +77,6 @@ class KuSettings(Base):
 
     VERSION: str = "1.1.4"
 
-
-
-
-
-
     # 快手bit浏览器设置
     BROWSER_SAVE_DIR: str = "browser_sessions"
     BROWSER_MAX_WORKERS: int = 5
@@ -111,18 +107,27 @@ class KuSettings(Base):
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
 
-    @field_validator('MAX_FOLLOWS_PER_VIDEO', 'COMMENT_LIKE_COUNT_MAX', 'LIKE_WAIT_MAX',
-                     'VISIT_MAX', 'VIDEO_REPLY_WAIT_MAX', 'COMMENT_WAIT_MAX')
+    @field_validator(
+        "MAX_FOLLOWS_PER_VIDEO",
+        "COMMENT_LIKE_COUNT_MAX",
+        "LIKE_WAIT_MAX",
+        "VISIT_MAX",
+        "VIDEO_REPLY_WAIT_MAX",
+        "COMMENT_WAIT_MAX",
+    )
     @classmethod
     def validate_min_max_pairs(cls, max_value, info):
         # 定义需要验证的字段对：(min_field, max_field)
         field_pairs = {
-            'MAX_FOLLOWS_PER_VIDEO': ('MIN_FOLLOWS_PER_VIDEO', 'MAX_FOLLOWS_PER_VIDEO'),
-            'COMMENT_LIKE_COUNT_MAX': ('COMMENT_LIKE_COUNT_MIN', 'COMMENT_LIKE_COUNT_MAX'),
-            'LIKE_WAIT_MAX': ('LIKE_WAIT_MIN', 'LIKE_WAIT_MAX'),
-            'VISIT_MAX': ('VISIT_MIN', 'VISIT_MAX'),
-            'VIDEO_REPLY_WAIT_MAX': ('VIDEO_REPLY_WAIT_MIN', 'VIDEO_REPLY_WAIT_MAX'),
-            'COMMENT_WAIT_MAX': ('COMMENT_WAIT_MIN', 'COMMENT_WAIT_MAX')
+            "MAX_FOLLOWS_PER_VIDEO": ("MIN_FOLLOWS_PER_VIDEO", "MAX_FOLLOWS_PER_VIDEO"),
+            "COMMENT_LIKE_COUNT_MAX": (
+                "COMMENT_LIKE_COUNT_MIN",
+                "COMMENT_LIKE_COUNT_MAX",
+            ),
+            "LIKE_WAIT_MAX": ("LIKE_WAIT_MIN", "LIKE_WAIT_MAX"),
+            "VISIT_MAX": ("VISIT_MIN", "VISIT_MAX"),
+            "VIDEO_REPLY_WAIT_MAX": ("VIDEO_REPLY_WAIT_MIN", "VIDEO_REPLY_WAIT_MAX"),
+            "COMMENT_WAIT_MAX": ("COMMENT_WAIT_MIN", "COMMENT_WAIT_MAX"),
         }
 
         field_name = info.field_name
@@ -130,7 +135,7 @@ class KuSettings(Base):
             min_field, max_field = field_pairs[field_name]
             min_value = info.data.get(min_field)
             if min_value is not None and min_value > max_value:
-                raise ValueError(f'{min_field} 不能大于 {max_field}')
+                raise ValueError(f"{min_field} 不能大于 {max_field}")
         return max_value
 
     # 不从.env文件读取配置
@@ -142,6 +147,7 @@ class KuSettings(Base):
             config_dict: 包含配置项的字典
         """
         from . import log
+
         for key, value in config_dict.items():
             if hasattr(self, key):
                 old_value = getattr(self, key)
@@ -161,18 +167,19 @@ class KuSettings(Base):
             timeout: 等待超时时间（秒），默认5分钟
         """
         from . import log
+
         log.info("等待服务器配置初始化...")
         start_time = time.time()
         while not self._config_initialized:
             # 检查是否收到停止信号
             if self._stop_requested:
                 raise KeyboardInterrupt("收到停止信号")
-            
+
             if time.time() - start_time > timeout:
                 raise TimeoutError(f"等待服务器配置初始化超时 ({timeout}秒)")
             time.sleep(0.1)  # 短暂休眠以减少CPU占用
         log.info("服务器配置初始化完成")
-        
+
     def request_stop(self):
         """请求停止等待"""
         self._stop_requested = True
@@ -182,6 +189,7 @@ class KuSettings(Base):
         打印配置摘要信息
         """
         from . import log
+
         log.info("当前配置摘要:")
         log.info(f"  PLATFORM: {self.PLATFORM}")
         log.info(f"  DEVICE_CODE: {self.DEVICE_CODE}")
