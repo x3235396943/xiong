@@ -292,6 +292,8 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
                         # 通知WebSocket客户端停止
                         if self.ws_client:
                             self.ws_client.stop_requested = True
+                        # 确保调用停止信号处理函数来释放资源
+                        self._on_stop_signal_received()
                         break
                 
                 # 等待10秒后继续下一次心跳
@@ -370,9 +372,9 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
                     # 在事件循环中关闭连接
                     asyncio.run_coroutine_threadsafe(self.ws_client.close(), event_loop)
 
-            # 等待 WebSocket 线程结束（最多等待2秒）
+            # 等待 WebSocket 线程结束（最多等待5秒）
             if self.ws_thread is not None and self.ws_thread.is_alive():
-                self.ws_thread.join(timeout=2.0)
+                self.ws_thread.join(timeout=5.0)
 
             log.info("WebSocket客户端已关闭")
         except Exception as e:
