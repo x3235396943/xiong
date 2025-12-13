@@ -3,7 +3,7 @@ from asyncio import sleep
 import aiohttp
 import ujson
 
-from .config import config
+from .config import get_config
 
 import threading
 import time
@@ -16,6 +16,7 @@ from .web_client import WSClient
 
 async def verify(ws: WSClient):
     await ws.ready_event.wait()
+    config = get_config()
     async with aiohttp.ClientSession(json_serialize=ujson.dumps) as session:
         while True:
             # 检查配置是否已设置
@@ -52,6 +53,10 @@ class LicenseManager:
         self._valid = True
         self._error_msg = ""
         self._stop_event = threading.Event()
+        
+        # 延迟导入 config 以避免循环依赖
+        from .config import get_config
+        config = get_config()
 
         # 优先从环境变量获取，如果没有则从 config 配置获取
         self.url = os.environ.get("SIBERIAN_URL") or getattr(config, "SIBERIAN_URL", "")
@@ -116,6 +121,7 @@ class LicenseManager:
 
     def verify_license(self):
         """初始验证，通常在程序启动时调用"""
+        config = get_config()
         if config.DEBUG:
             log.info("正在验证卡密...")
 

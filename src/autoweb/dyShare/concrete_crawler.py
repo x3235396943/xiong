@@ -17,8 +17,8 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
     def __init__(self):
         """初始化具体实现"""
         super().__init__()
-        from ..tools.config import config
-        self.config = config
+        from ..tools.config import get_config
+        self.config = get_config()
         self.utils = DyShareUtils()
         self.license_manager = LicenseManager()
         self.ws_client = None
@@ -494,7 +494,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             return
 
         # 这里处理登录响应和其他 LoginRes 指令（非 stop）
-        log.debug(f"收到 LoginRes 指令: {data}")
+        # log.debug(f"收到 LoginRes 指令: {data}")
 
         # 如果数据中包含配置信息，则更新配置
         if isinstance(data, dict) and "data" in data:
@@ -517,7 +517,8 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         try:
             log.info(f"收到配置更新: {config_data}")
             # 更新全局配置对象
-            from ..tools.config import config
+            from ..tools.config import get_config
+            config = get_config()
             config.update_from_dict(config_data)
 
             # 更新 LicenseManager 中的 URL 和 KEY

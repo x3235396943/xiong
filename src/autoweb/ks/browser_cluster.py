@@ -5,7 +5,7 @@ from .selenium_browser import SeleniumBrowser
 import time
 from functools import partial
 from ..tools import log as logger
-from ..tools import config
+from ..tools.config import get_config
 
 class BrowserCluster:
     """浏览器集群控制类：用一个线程控制多个浏览器"""
@@ -508,4 +508,6 @@ class BrowserCluster:
 #   cluster.open_browsers(["浏览器ID"])
 
 # 初始化浏览器集群
-cluster = BrowserCluster(max_workers=config.BROWSER_MAX_WORKERS)
+def get_cluster():
+    config = get_config()
+    return BrowserCluster(max_workers=config.BROWSER_MAX_WORKERS)

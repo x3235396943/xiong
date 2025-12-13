@@ -40,6 +40,9 @@ no_new_comments_count = 0
 global_followed_count = 0
 
 # 实例化卡密管理器
+# 延迟导入 config 以避免循环依赖
+from ..tools.config import get_config
+config = get_config()
 li = LicenseManager()
 
 
@@ -1391,22 +1394,17 @@ class DyShareUtils:
         conn.commit()
         conn.close()
 
-    def continuous_processing_loop(
-        self,
-        browser_id,
-        wait_time,
-        like_probability,
-        visit_profile_probability,
-        profile_follow_probability,
-        min_follows_per_video,
-        max_follows_per_video,
-        min_likes_per_video,
-        max_likes_per_video,
-        browser_number,
-        reporter=None,  # DataReporter 实例
-        db_path=LINKS_DB_PATH,
-    ):
-        """持续处理循环 (优化版)"""
+    def continuous_processing_loop(self, browser_id, wait_time, like_probability,
+                                   visit_profile_probability, profile_follow_probability,
+                                   min_follows_per_video, max_follows_per_video,
+                                   min_likes_per_video, max_likes_per_video,
+                                   browser_number=None, reporter=None, db_path=None):
+        """
+        持续处理循环
+        """
+        from ..tools.config import get_config
+        config = get_config()
+        
         browser_info = self.get_browser_info(browser_number)
         self.debug_log("info", "启动持续处理循环", browser_number)
         

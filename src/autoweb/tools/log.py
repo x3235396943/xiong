@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from datetime import datetime
-from .config import config
+from .config import get_config
 
 
 class MyFormatter(logging.Formatter):
@@ -22,6 +22,9 @@ def init_loging_config():
     )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+    
+    # 延迟获取配置，避免在配置初始化前访问
+    config = get_config()
 
     logs_dir = config.LOGS_PATH
     if not os.path.exists(logs_dir):

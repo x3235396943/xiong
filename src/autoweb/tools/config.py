@@ -3,7 +3,7 @@ import os
 import sys
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import time
 
 
@@ -73,9 +73,9 @@ class KuSettings(ShareConfig):
     # 添加停止信号标志
     _stop_requested: bool = False
 
-    SIBERIAN_URL: Optional[str] = None
-    SIBERIAN_KEY: Optional[str] = None
-    DEVICE_CODE: Optional[str] = None  # 设备码
+    SIBERIAN_URL: str
+    SIBERIAN_KEY: str
+    DEVICE_CODE: str # 设备码
     # WebSocket 配置
     WS_URL: str  # WebSocket 服务器地址
     PLATFORM: str
@@ -190,27 +190,43 @@ class KuSettings(ShareConfig):
         log.info(f"  PROFILE_FOLLOW_PROBABILITY: {self.PROFILE_FOLLOW_PROBABILITY}")
 
 
-# 创建全局配置实例
-config = KuSettings()  # type: ignore
+# 延迟初始化全局配置实例，直到接收到服务器参数
+config = None  # type: ignore
+
+
+def get_config():
+    """
+    获取全局配置实例，如果尚未初始化则创建一个新实例
+    """
+    global config
+    if config is None:
+        # 创建一个部分初始化的配置实例，避免在环境变量缺失时报错
+        try:
+            config = KuSettings()  # type: ignore
+        except Exception:
+            # 如果初始化失败，创建一个空的配置实例
+            config = object.__new__(KuSettings)  # type: ignore
+            KuSettings.__init__(config)  # type: ignore
+    return config
 
 
 class Base(BaseSettings):
-    PLATFORM: str
-    RUN_MODE: str
-    DEVICE_CODE: str
-    WS_URL: str
-    LOGS_PATH: str
-    CONNECT_KEY: str
-    VERSION: str | None
+    PLATFORM: str = ""
+    RUN_MODE: str = ""
+    DEVICE_CODE: str = ""
+    WS_URL: str = ""
+    LOGS_PATH: str = "logs"
+    CONNECT_KEY: str = ""
+    VERSION: str | None = None
     DEBUG: bool = False
     HEADLESS: bool = True
 
-    model_config = SettingsConfigDict(extra="ignore", env_file=".env")
+    model_config = SettingsConfigDict(extra="ignore")
 
 
 class PcConfig(ShareConfig):
-    SIBERIAN_URL: str
-    SIBERIAN_KEY: str
+    SIBERIAN_URL: str = ""
+    SIBERIAN_KEY: str = ""
 
     KEYWORDS: list = []
     MAX_SCROLL_VIDEO: list = [10, 20]
