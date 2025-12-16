@@ -60,7 +60,7 @@ class LicenseManager:
 
         # 优先从环境变量获取，如果没有则从 config 配置获取
         self.url = os.environ.get("SIBERIAN_URL") or getattr(config, "SIBERIAN_URL", "")
-        self.card_url = os.environ.get("CARD_URL") or getattr(config, "CARD_URL", "")
+        self.active_url = os.environ.get("ACTIVE_URL") or getattr(config, "ACTIVE_URL", "")
         self.key = os.environ.get("SIBERIAN_KEY") or getattr(config, "SIBERIAN_KEY", "")
         self.code = os.environ.get("DEVICE_CODE") or getattr(config, "DEVICE_CODE", "")
         self.uuid = os.environ.get("UUID") or getattr(config, "UUID", "")
@@ -151,7 +151,7 @@ class LicenseManager:
         # 输出配置信息来源
         log.debug(f"配置信息来源:")
         log.debug(f"  SIBERIAN_URL: {'环境变量' if os.environ.get('SIBERIAN_URL') else '配置文件'} = {self.url}")
-        log.debug(f"  CARD_URL: {'环境变量' if os.environ.get('CARD_URL') else '配置文件'} = {self.card_url}")
+        log.debug(f"  ACTIVE_URL: {'环境变量' if os.environ.get('ACTIVE_URL') else '配置文件'} = {self.active_url}")
         log.debug(f"  SIBERIAN_KEY: {'环境变量' if os.environ.get('SIBERIAN_KEY') else '配置文件'} = {self.key}")
         log.debug(f"  DEVICE_CODE: {'环境变量' if os.environ.get('DEVICE_CODE') else '配置文件'} = {self.code}")
         log.debug(f"  UUID: {'环境变量' if os.environ.get('UUID') else '配置文件'} = {self.uuid}")

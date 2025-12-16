@@ -72,7 +72,7 @@ class KuSettings(ShareConfig):
     _config_initialized: bool = False
     # 添加停止信号标志
     _stop_requested: bool = False
-    CARD_URL:str #开始卡密验证地址
+    ACTIVE_URL:str #开始卡密验证地址
     SIBERIAN_URL: Union[str, None] = None
     SIBERIAN_KEY: Union[str, None] = None
     DEVICE_CODE: Union[str, None] = None  # 设备码
