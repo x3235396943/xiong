@@ -81,9 +81,9 @@ class LicenseManager:
                 return False, "未配置 DEVICE_CODE"
 
             # 准备URL和数据
-            if is_initial and self.card_url and self.uuid:
-                # 初始验证使用CARD_URL并发送UUID
-                url = self.card_url
+            if is_initial and self.active_url and self.uuid:
+                # 初始验证使用ACTIVE_URL并发送UUID
+                url = self.active_url
                 payload = {
                     "siberian": self.key,
                     "deviceCode": self.code,
