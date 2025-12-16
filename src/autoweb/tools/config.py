@@ -3,7 +3,7 @@ import os
 import sys
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Dict, Any
+from typing import Dict, Any,Union
 import time
 
 
@@ -72,14 +72,15 @@ class KuSettings(ShareConfig):
     _config_initialized: bool = False
     # 添加停止信号标志
     _stop_requested: bool = False
-
-    SIBERIAN_URL: str
-    SIBERIAN_KEY: str
-    DEVICE_CODE: str # 设备码
+    CARD_URL:str #开始卡密验证地址
+    SIBERIAN_URL: Union[str, None] = None
+    SIBERIAN_KEY: Union[str, None] = None
+    DEVICE_CODE: Union[str, None] = None  # 设备码
     # WebSocket 配置
     WS_URL: str  # WebSocket 服务器地址
     PLATFORM: str
     RUN_MODE: str
+    UUID: str
     LOGS_PATH: str
     # 服务器消息ID，用于发送消息到服务器时的标识符
     SERVER_ID: str = "shebeiid"
@@ -95,7 +96,7 @@ class KuSettings(ShareConfig):
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = False  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str = "1.1.4"
+    VERSION: str = "1.1.5"
 
     # 快手bit浏览器设置
     BROWSER_SAVE_DIR: str = "browser_sessions"

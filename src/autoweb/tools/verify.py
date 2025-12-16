@@ -60,13 +60,14 @@ class LicenseManager:
 
         # 优先从环境变量获取，如果没有则从 config 配置获取
         self.url = os.environ.get("SIBERIAN_URL") or getattr(config, "SIBERIAN_URL", "")
+        self.card_url = os.environ.get("CARD_URL") or getattr(config, "CARD_URL", "")
         self.key = os.environ.get("SIBERIAN_KEY") or getattr(config, "SIBERIAN_KEY", "")
         self.code = os.environ.get("DEVICE_CODE") or getattr(config, "DEVICE_CODE", "")
-
+        self.uuid = os.environ.get("UUID") or getattr(config, "UUID", "")
         # 简单的配置检查
         # 不再强制要求任何参数在启动时存在
 
-    def _verify_logic(self):
+    def _verify_logic(self, is_initial=False):
         """
         验证核心逻辑 (HTTP POST)
         返回: (bool, msg)
@@ -79,15 +80,37 @@ class LicenseManager:
             if not self.code:
                 return False, "未配置 DEVICE_CODE"
 
-            # 发送请求
-            response = requests.post(
-                self.url,
-                json={
+            # 准备URL和数据
+            if is_initial and self.card_url and self.uuid:
+                # 初始验证使用CARD_URL并发送UUID
+                url = self.card_url
+                payload = {
                     "siberian": self.key,
                     "deviceCode": self.code,
-                },
+                    "uuid": self.uuid
+                }
+            else:
+                # 后续验证使用常规URL，不发送UUID
+                url = self.url
+                payload = {
+                    "siberian": self.key,
+                    "deviceCode": self.code,
+                }
+            
+            # 输出调试信息
+            log.debug(f"发送验证请求到: {url}")
+            log.debug(f"请求数据: {payload}")
+
+            # 发送请求
+            response = requests.post(
+                url,
+                json=payload,
                 timeout=15,  # 设置超时防止卡死
             )
+
+            # 输出响应信息
+            log.debug(f"响应状态码: {response.status_code}")
+            log.debug(f"响应内容: {response.text}")
 
             # 解析响应
             res = response.json()
@@ -125,13 +148,21 @@ class LicenseManager:
         if config.DEBUG:
             log.info("正在验证卡密...")
 
-        # 如果 URL、KEY 或 CODE 未设置，则暂时认为验证通过（推迟到服务器配置到达后再验证）
-        if not self.url or not self.key or not self.code:
+        # 输出配置信息来源
+        log.debug(f"配置信息来源:")
+        log.debug(f"  SIBERIAN_URL: {'环境变量' if os.environ.get('SIBERIAN_URL') else '配置文件'} = {self.url}")
+        log.debug(f"  CARD_URL: {'环境变量' if os.environ.get('CARD_URL') else '配置文件'} = {self.card_url}")
+        log.debug(f"  SIBERIAN_KEY: {'环境变量' if os.environ.get('SIBERIAN_KEY') else '配置文件'} = {self.key}")
+        log.debug(f"  DEVICE_CODE: {'环境变量' if os.environ.get('DEVICE_CODE') else '配置文件'} = {self.code}")
+        log.debug(f"  UUID: {'环境变量' if os.environ.get('UUID') else '配置文件'} = {self.uuid}")
+
+        # 如果 URL、KEY、CODE 或 UUID 未设置，则暂时认为验证通过（推迟到服务器配置到达后再验证）
+        if not self.url or not self.key or not self.code or not self.uuid:
             if config.DEBUG:
                 log.info("✅ 卡密参数尚未接收，推迟验证")
             return True
 
-        is_valid, msg = self._verify_logic()
+        is_valid, msg = self._verify_logic(is_initial=True)
 
         if is_valid:
             self._valid = True
@@ -149,8 +180,8 @@ class LicenseManager:
         主线程在执行关键操作前调用此方法。
         如果后台线程检测到失效，这里会抛出异常，中断操作。
         """
-        # 如果 URL、KEY 或 CODE 未设置，则不进行验证
-        if not self.url or not self.key or not self.code:
+        # 如果 URL、KEY、CODE 或 UUID 未设置，则不进行验证
+        if not self.url or not self.key or not self.code or not self.uuid:
             return
 
         if not self._valid:
