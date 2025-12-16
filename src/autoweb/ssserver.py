@@ -37,6 +37,7 @@ class WebSocketServer:
             VIDEO_COMMENTS="|".join(["6"]),
             COMMENT_REPLIES="|".join(["6"]),
             COMMENT_FILTER_KEYWORDS=["美女"],
+            BIT_BROWSER_IDS=["57bd9953b5364d3db5c4ac7cfbb9a1b3"]
         )
         await self._send_json({"cmd": "LoginRes", "data": config.model_dump()})
 
