@@ -27,7 +27,7 @@ class DouyinCrawler(AbstractCrawler):
 
     def __init__(self, ws):
         self.ws: WSClient = ws
-
+        self.word = None  # 初始化 word 属性
     async def scroll(self, dom: WebElement):
         ActionChains(self.driver).scroll_from_origin(
             ScrollOrigin.from_element(dom), 0, 200
@@ -45,8 +45,8 @@ class DouyinCrawler(AbstractCrawler):
         driver = self.driver
         await sleep(2)
         while True:
-            if config.KEYWORDS:
-                self.word = word = config.KEYWORDS.pop(0)
+            if self.ws.config.KEYWORDS:
+                self.word = word = self.ws.config.KEYWORDS.pop(0)
             else:
                 break
             # searchBox = driver.find_element(By.CLASS_NAME, "YEhxqQNi")
@@ -59,7 +59,7 @@ class DouyinCrawler(AbstractCrawler):
             driver.find_element(
                 By.CSS_SELECTOR, '[data-e2e="searchbar-button"]'
             ).click()
-            await self.ws.push({"keywords": word})
+            await self.ws.push(keywords=word)
             await sleep(3)
 
             try:
@@ -85,7 +85,7 @@ class DouyinCrawler(AbstractCrawler):
 
     async def traversal_video(self):
         driver = self.driver
-        MAX_SCROLL_VIDEO = randint(*config.MAX_SCROLL_VIDEO)
+        MAX_SCROLL_VIDEO = randint(*self.ws.config.MAX_SCROLL_VIDEO)
         for _ in range(MAX_SCROLL_VIDEO):
             try:
                 active = driver.find_element(
@@ -115,7 +115,7 @@ class DouyinCrawler(AbstractCrawler):
             # self.commentNew(active)
             await self.comment(active)
             await self.scroll(active)
-            await self.ws.push({"video": 1})
+            await self.ws.push(video=1)
 
         driver.find_element(By.CLASS_NAME, "uRH5Oxnw").click()
         await sleep(2)
@@ -126,9 +126,9 @@ class DouyinCrawler(AbstractCrawler):
         startIndex = 0
         followIndex = 0
         likeIndex = 0
-        maxFollow = randint(config.MIN_FOLLOWS_PER_VIDEO, config.MAX_FOLLOWS_PER_VIDEO)
-        maxLike = randint(config.COMMENT_LIKE_COUNT_MIN, config.COMMENT_LIKE_COUNT_MAX)
-        for _ in range(randint(*config.MAX_COMMENT)):
+        maxFollow = randint(self.ws.config.MIN_FOLLOWS_PER_VIDEO, self.ws.config.MAX_FOLLOWS_PER_VIDEO)
+        maxLike = randint(self.ws.config.COMMENT_LIKE_COUNT_MIN, self.ws.config.COMMENT_LIKE_COUNT_MAX)
+        for _ in range(randint(*self.ws.config.MAX_COMMENT)):
             commentList = active.find_elements(
                 By.CSS_SELECTOR, '[data-e2e="comment-list"] > div'
             )
@@ -154,24 +154,26 @@ class DouyinCrawler(AbstractCrawler):
                 # comment.click()
                 # await sleep(1)
                 commentOk = False
-                if config.ENABLE_SEARCH_KEYWORDS and comment.text:
-                    for li in config.COMMENT_FILTER_KEYWORDS:
+                if self.ws.config.ENABLE_SEARCH_KEYWORDS and comment.text:
+                    for li in self.ws.config.COMMENT_FILTER_KEYWORDS:
                         if li in comment.text:
                             commentOk = True
                             break
-                if config.ENABLE_LIKE and (
+                if self.ws.config.ENABLE_LIKE and (
                     commentOk
                     or (
                         likeIndex < maxLike
-                        and randint(1, 100) <= config.LIKE_PROBABILITY
+                        and randint(1, 100) <= self.ws.config.LIKE_PROBABILITY
                     )
                 ):
-                    log.debug("点赞->", comment.text)
+                    log.debug(f"点赞-> {comment.text}")
                     try:
-                        comment.find_element(
+                        like_button = comment.find_element(
                             By.XPATH,
-                            ".//div[contains(@class, 'comment-item-stats-container')]/div[1]/p[1]",
-                        ).click()
+                            ".//div[contains(@class, 'comment-item-stats-container')]/div[1]/p[1]"
+                        )
+                        await sleep(0.5)
+                        like_button.click()
                     except ElementClickInterceptedException:
                         driver.execute_script(
                             "arguments[0].click();",
@@ -181,18 +183,20 @@ class DouyinCrawler(AbstractCrawler):
                             ),
                         )
                     likeIndex += 1
-                    await self.ws.push({"like": 1})
-                    await sleep(randint(config.LIKE_WAIT_MIN, config.LIKE_WAIT_MAX))
+                    await self.ws.push(like=1)
+                    await sleep(randint(self.ws.config.LIKE_WAIT_MIN, self.ws.config.LIKE_WAIT_MAX))
 
                 if (
-                    config.ENABLE_PROFILE_VISIT
-                    and randint(1, 100) <= config.VISIT_ENABLE
+                    self.ws.config.ENABLE_PROFILE_VISIT
+                    and randint(1, 100) <= self.ws.config.VISIT_ENABLE
                 ):
                     log.debug(f"进入主页-> {comment.text}")
                     try:
-                        comment.find_element(
+                        avatar_link = comment.find_element(
                             By.CSS_SELECTOR, ".comment-item-avatar a"
-                        ).click()
+                        )
+                        await sleep(0.5)
+                        avatar_link.click()
                     except ElementClickInterceptedException:
                         driver.execute_script(
                             "arguments[0].click();",
@@ -216,16 +220,16 @@ class DouyinCrawler(AbstractCrawler):
                     await sleep(randint(7, 15))
 
                     if (
-                        config.ENABLE_FOLLOW
+                        self.ws.config.ENABLE_FOLLOW
                         and followIndex < maxFollow
-                        and randint(1, 100) <= config.PROFILE_FOLLOW_PROBABILITY
+                        and randint(1, 100) <= self.ws.config.PROFILE_FOLLOW_PROBABILITY
                     ):
                         try:
                             driver.find_element(
                                 By.CSS_SELECTOR, '[data-e2e="user-info-follow-btn"]'
                             ).click()
                             followIndex += 1
-                            await self.ws.push({"follow": 1})
+                            await self.ws.push(follow=1)
                         except ElementClickInterceptedException:
                             timestamp = datetime.now().strftime(
                                 "%Y年%m月%d日_%H时%M分%S秒"
@@ -239,10 +243,10 @@ class DouyinCrawler(AbstractCrawler):
                             )
                             log.debug("💗关注用户成功")
                             followIndex += 1
-                            await self.ws.push({"follow": 1})
+                            await self.ws.push(follow=1)
                         except NoSuchElementException:
                             log.debug("用户不存在")
-                        await sleep(randint(config.VISIT_MIN, config.VISIT_MAX))
+                        await sleep(randint(self.ws.config.VISIT_MIN, self.ws.config.VISIT_MAX))
                     driver.close()
                     driver.switch_to.window(driver.window_handles[0])
 
@@ -265,10 +269,12 @@ class DouyinCrawler(AbstractCrawler):
 
     async def start(self):
         try:
-            if not len(config.BIT_BROWSER_IDS):
+            # 等待配置初始化完成
+            await self.ws.ready_event.wait()
+            if not len(self.ws.config.BIT_BROWSER_IDS):
                 raise Exception("请至少传一个比特浏览器id")
 
-            res = openBrowser(config.BIT_BROWSER_IDS[0])
+            res = openBrowser(self.ws.config.BIT_BROWSER_IDS[0])
             log.debug(res)
 
             chrome_options = webdriver.ChromeOptions()
@@ -293,7 +299,7 @@ class DouyinCrawler(AbstractCrawler):
             await sleep(4)
             try:
                 await self.search()
-                await self.ws.push({"isCompleted": True})
+                await self.ws.push(isCompleted=True)
             finally:
                 timestamp = datetime.now().strftime("%Y年%m月%d日_%H时%M分%S秒")
                 driver.get_screenshot_as_file(f"screenshot_{timestamp}.png")

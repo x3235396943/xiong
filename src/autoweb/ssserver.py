@@ -37,8 +37,10 @@ class WebSocketServer:
             VIDEO_COMMENTS="|".join(["6"]),
             COMMENT_REPLIES="|".join(["6"]),
             COMMENT_FILTER_KEYWORDS=["美女"],
-            BIT_BROWSER_IDS=["57bd9953b5364d3db5c4ac7cfbb9a1b3"]
+            BIT_BROWSER_IDS=["57bd9953b5364d3db5c4ac7cfbb9a1b3"],
         )
+        config_data = config.model_dump()
+        print("发送的配置数据:", config_data)
         await self._send_json({"cmd": "LoginRes", "data": config.model_dump()})
 
     async def _process_message(self, data: dict) -> None:
@@ -54,6 +56,8 @@ class WebSocketServer:
             await self._send_json({"cmd": "RunStateRes", "data": {}})
         elif cmd == "DeviceDataReq":
             await self._send_json({"cmd": "DeviceDataRes", "data": {}})
+        elif cmd == "PcDataReq":
+            await self._send_json({"cmd": "PcDataRes", "data": {}})
         else:
             print(f"未知命令: {cmd}")
 

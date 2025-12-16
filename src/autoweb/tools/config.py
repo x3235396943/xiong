@@ -29,13 +29,13 @@ class ShareConfig(BaseSettings):
     ENABLE_COMMENT_REPLY: bool = True  # 是否启用评论回复功能
     ENABLE_VIDEO_COMMENT: bool = True  # 是否启用视频留言功能
     ENABLE_COMMENT_TEMPLATES: bool = True  # 是否启用评论话术功能
-    COMMENT_REPLIES: str = ""  # 回复评论的内容
-    VIDEO_COMMENTS: str = ""  # 视频留言的内容
+    COMMENT_REPLIES: str = "123"  # 回复评论的内容
+    VIDEO_COMMENTS: str = "123"  # 视频留言的内容
     COMMENT_FILTER_KEYWORDS: list = []  # 筛选评论区关键字
 
     # 新增的概率参数
-    COMMENT_REPLY_PROBABILITY: int = 1  # 评论回复概率 (0-100)
-    VIDEO_REPLY_RATE: int = 20  # 视频留言概率 (0-100)
+    COMMENT_REPLY_PROBABILITY: int = 100  # 评论回复概率 (0-100)
+    VIDEO_REPLY_RATE: int = 100  # 视频留言概率 (0-100)
 
     MIN_FOLLOWS_PER_VIDEO: int = 5  # 每条视频最少关注数量
     MAX_FOLLOWS_PER_VIDEO: int = 15  # 每条视频最多关注数量
@@ -228,6 +228,7 @@ class Base(BaseSettings):
 class PcConfig(ShareConfig):
     SIBERIAN_URL: str
     SIBERIAN_KEY: str
+    DEVICE_CODE: str
 
     KEYWORDS: list = [] # 关键词列表
     MAX_SCROLL_VIDEO: list = [10, 20] # 最大滚动视频数

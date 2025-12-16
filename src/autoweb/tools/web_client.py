@@ -99,6 +99,8 @@ class WSClient:
                     self.is_back.set()
 
                 if cmd == "LoginRes":
+                    # 将环境中的DEVICE_CODE添加到服务器返回的数据中
+                    data["data"]["DEVICE_CODE"] = env.DEVICE_CODE
                     self.config = PcConfig(**data["data"])
                     self.ready_event.set()
                 elif cmd == "StopReq":

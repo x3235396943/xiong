@@ -14,9 +14,10 @@ from . import log
 from .web_client import WSClient
 
 
-async def verify(ws: WSClient):
+async def verify(ws: "WSClient"):
     await ws.ready_event.wait()
-    config = get_config()
+    # 使用通过WebSocket接收的配置而不是全局配置
+    config = ws.config
     async with aiohttp.ClientSession(json_serialize=ujson.dumps) as session:
         while True:
             # 检查配置是否已设置
