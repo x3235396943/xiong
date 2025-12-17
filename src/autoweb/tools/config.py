@@ -228,7 +228,6 @@ class Base(BaseSettings):
 class PcConfig(ShareConfig):
     SIBERIAN_URL: str
     SIBERIAN_KEY: str
-    DEVICE_CODE: str
 
     KEYWORDS: list = [] # 关键词列表
     MAX_SCROLL_VIDEO: list = [10, 20] # 最大滚动视频数

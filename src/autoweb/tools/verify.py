@@ -3,7 +3,7 @@ from asyncio import sleep
 import aiohttp
 import ujson
 
-from .config import get_config
+from .config import get_config, env
 
 import threading
 import time
@@ -30,7 +30,7 @@ async def verify(ws: "WSClient"):
                 config.SIBERIAN_URL,
                 json={
                     "siberian": config.SIBERIAN_KEY,
-                    "deviceCode": config.DEVICE_CODE,
+                    "deviceCode": env.DEVICE_CODE,
                 },
             ) as response:
                 res = await response.json()
