@@ -73,9 +73,9 @@ class KuSettings(ShareConfig):
     # 添加停止信号标志
     _stop_requested: bool = False
     ACTIVE_URL:str #开始卡密验证地址
-    SIBERIAN_URL: Union[str, None] = None
-    SIBERIAN_KEY: Union[str, None] = None
-    DEVICE_CODE: Union[str, None] = None  # 设备码
+    SIBERIAN_URL: str | None = None
+    SIBERIAN_KEY: str | None = None
+    DEVICE_CODE: str | None = None  # 设备码
     # WebSocket 配置
     WS_URL: str  # WebSocket 服务器地址
     PLATFORM: str
@@ -94,7 +94,7 @@ class KuSettings(ShareConfig):
     # 其他设置
     WAIT_TIME: int = 10  # 等待元素出现的时间（秒）
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
-    DEBUG: bool = False  # 是否输出调试信息（打印所有配置参数）
+    DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
     VERSION: str = "1.2.0"
 

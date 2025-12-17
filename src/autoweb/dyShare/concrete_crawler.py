@@ -62,6 +62,9 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def prepare_environment(self) -> None:
         """准备运行环境"""
+        # 注册卡密失效时的停止回调
+        self.license_manager.set_stop_callback(self._on_license_invalid)
+        
         # 启动定期验证线程
         self.license_manager.start_periodic_check()
 
@@ -476,6 +479,14 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         self.config.request_stop()
         log.info(f"✓ 已设置 _stop_flag，当前状态: {self.utils._stop_flag.is_set()}")
         log.info(f"✓ WebSocket stop_requested 状态: {self.ws_client.stop_requested if self.ws_client else 'N/A'}")
+    
+    def _on_license_invalid(self):
+        """当卡密失效时的回调函数"""
+        log.error("=" * 50)
+        log.error("卡密已失效，正在停止程序...")
+        log.error("=" * 50)
+        # 调用停止信号处理函数来停止程序
+        self._on_stop_signal_received()
 
     def _handle_login_res_command(self, data: dict):
         """处理 LoginRes 指令"""

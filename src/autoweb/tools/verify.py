@@ -54,6 +54,7 @@ class LicenseManager:
         self._valid = True
         self._error_msg = ""
         self._stop_event = threading.Event()
+        self._stop_callback = None  # 停止回调函数
         
         # 延迟导入 config 以避免循环依赖
         from .config import get_config
@@ -135,7 +136,15 @@ class LicenseManager:
                 self._valid = False
                 self._error_msg = msg
                 log.error(f"❌ 卡密验证失败 (后台检查): {msg}")
-                # 注意：这里我们只记录状态，主线程通过 check_license_validity 抛出异常
+                # 卡密失效时，立即触发停止回调
+                if self._stop_callback:
+                    try:
+                        log.error("卡密已过期，正在停止程序...")
+                        self._stop_callback()
+                    except Exception as e:
+                        log.error(f"执行停止回调时出错: {e}")
+                # 卡密失效后，退出循环，不再继续检查
+                break
             else:
                 self._valid = True
                 # log.debug("卡密验证通过 (后台检查)")
@@ -199,4 +208,8 @@ class LicenseManager:
     def stop_periodic_check(self):
         """停止后台检查线程"""
         self._stop_event.set()
+    
+    def set_stop_callback(self, callback):
+        """设置停止回调函数，当卡密失效时会被调用"""
+        self._stop_callback = callback
 
