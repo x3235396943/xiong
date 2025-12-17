@@ -38,6 +38,34 @@ class WebSocketServer:
             COMMENT_REPLIES="|".join(["6"]),
             COMMENT_FILTER_KEYWORDS=["美女"],
             BIT_BROWSER_IDS=["57bd9953b5364d3db5c4ac7cfbb9a1b3"],
+            # ShareConfig 中的参数
+            LIKE_PROBABILITY=100,
+            VISIT_ENABLE=10,
+            PROFILE_FOLLOW_PROBABILITY=10,
+            ENABLE_FOLLOW=True,
+            ENABLE_PROFILE_VISIT=True,
+            ENABLE_LIKE=True,
+            ENABLE_SEARCH_KEYWORDS=True,
+            ENABLE_COMMENT_REPLY=True,
+            ENABLE_VIDEO_COMMENT=True,
+            ENABLE_COMMENT_TEMPLATES=True,
+            COMMENT_REPLY_PROBABILITY=100,
+            VIDEO_REPLY_RATE=100,
+            MIN_FOLLOWS_PER_VIDEO=5,
+            MAX_FOLLOWS_PER_VIDEO=15,
+            COMMENT_LIKE_COUNT_MIN=5,
+            COMMENT_LIKE_COUNT_MAX=15,
+            LIKE_WAIT_MIN=4,
+            LIKE_WAIT_MAX=10,
+            VISIT_MIN=2,
+            VISIT_MAX=5,
+            VIDEO_REPLY_WAIT_MIN=5,
+            VIDEO_REPLY_WAIT_MAX=8,
+            COMMENT_WAIT_MIN=5,
+            COMMENT_WAIT_MAX=8,
+            MAX_SCROLL_VIDEO=[10, 20],
+            MAX_COMMENT=[2, 15]
+
         )
         config_data = config.model_dump()
         print("发送的配置数据:", config_data)
