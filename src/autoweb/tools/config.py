@@ -217,7 +217,7 @@ class Base(BaseSettings):
     DEVICE_CODE: str
     WS_URL: str
     LOGS_PATH: str
-    CONNECT_KEY: str =  ""
+    CONNECT_KEY: str
     VERSION: str | None
     DEBUG: bool = False
     HEADLESS: bool = True
