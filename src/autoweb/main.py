@@ -1,12 +1,12 @@
 import asyncio
 
 from .tools import verify, config, log
-from .tools.base import AbstractCrawler
+from .tools.core import AbstractCrawler
 from .dy import DouyinCrawler
 from .dyShare import DouyinShareCrawler
 # from .ks import KuaishouCrawler
 
-from .tools.web_client import WSClient
+from .tools.ws_client import WSClient
 
 
 class TaskManager:

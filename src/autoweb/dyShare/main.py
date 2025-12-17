@@ -7,7 +7,7 @@
 """
 
 import sys
-from .concrete_crawler import ConcreteDyShareCrawler
+from .crawler import ConcreteDyShareCrawler
 
 
 class DouyinShareCrawler:

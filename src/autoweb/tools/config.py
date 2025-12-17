@@ -96,7 +96,7 @@ class KuSettings(ShareConfig):
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str = "1.2.0"
+    VERSION: str = "1.3.0"
 
     # 快手bit浏览器设置
     BROWSER_SAVE_DIR: str = "browser_sessions"
@@ -136,7 +136,7 @@ class KuSettings(ShareConfig):
         Args:
             config_dict: 包含配置项的字典
         """
-        from . import log
+        from .core import log
 
         for key, value in config_dict.items():
             if hasattr(self, key):
@@ -156,7 +156,7 @@ class KuSettings(ShareConfig):
         Args:
             timeout: 等待超时时间（秒），默认5分钟
         """
-        from . import log
+        from .core import log
 
         log.info("等待服务器配置初始化...")
         start_time = time.time()
@@ -178,7 +178,7 @@ class KuSettings(ShareConfig):
         """
         打印配置摘要信息
         """
-        from . import log
+        from .core import log
 
         log.info("当前配置摘要:")
         log.info(f"  PLATFORM: {self.PLATFORM}")
@@ -226,8 +226,8 @@ class Base(BaseSettings):
 
 
 class PcConfig(ShareConfig):
-    SIBERIAN_URL: str
-    SIBERIAN_KEY: str
+    SIBERIAN_URL: str =  "http://139.159.230.186/api/siberianNitraria/verifyActivate"
+    SIBERIAN_KEY: str = "2j2r6Jdr2Se/5Sv9n9H67xQOADQZ4ThV9jINpCYZbqY="
 
     KEYWORDS: list = [] # 关键词列表
     MAX_SCROLL_VIDEO: list = [10, 20] # 最大滚动视频数

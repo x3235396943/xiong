@@ -15,13 +15,16 @@ from asyncio import sleep
 from random import randint, choice
 from datetime import datetime
 import sys
-import json
-import re
 
 from ..tools import log, config
-from ..tools.web_client import WSClient
-from ..tools.base import AbstractCrawler
-from ..tools.bit_api import openBrowser
+from ..tools.ws_client import WSClient
+from ..tools.core import AbstractCrawler, openBrowser
+from ..tools.license import LicenseManager, LicenseException
+from ..tools.douyin_common import (
+    DouyinConfigParser,
+    DouyinCommentActions,
+    DouyinBrowserActions,
+)
 
 
 class DouyinCrawler(AbstractCrawler):
@@ -30,95 +33,33 @@ class DouyinCrawler(AbstractCrawler):
     def __init__(self, ws):
         self.ws: WSClient = ws
         self.word = None  # 初始化 word 属性
+        self.license_manager = LicenseManager()  # 卡密管理器
+        self._license_invalid = False  # 卡密失效标志
 
     def _parse_keywords(self):
         """解析关键字配置"""
         raw = self.ws.config.COMMENT_FILTER_KEYWORDS or []
-        seps = [",", "，", " ", "\t", ";", "；"]
-        kws = []
-        if isinstance(raw, str):
-            s = raw.strip()
-            try:
-                data = json.loads(s)
-                if isinstance(data, list):
-                    raw = data
-                else:
-                    raw = [s]
-            except Exception:
-                raw = [s]
-        if isinstance(raw, list):
-            if len(raw) == 1 and isinstance(raw[0], str):
-                base = raw[0]
-                for sep in seps:
-                    base = base.replace(sep, ",")
-                kws = [x.strip() for x in base.split(",") if x.strip()]
-            else:
-                kws = [str(x).strip() for x in raw if str(x).strip()]
-        return kws
+        return DouyinConfigParser.parse_keywords(raw)
 
     def _normalize_text(self, t):
         """文本标准化（转小写、去除多余空格）"""
-        try:
-            s = str(t).lower()
-            s = re.sub(r"\s+", " ", s).strip()
-            return s
-        except Exception:
-            return str(t)
+        return DouyinConfigParser.normalize_text(t)
 
     def _parse_video_comments(self):
         """解析视频留言内容列表，使用 -&- 作为分隔符"""
         raw = getattr(self.ws.config, 'VIDEO_COMMENTS', '') or ''
-        if not raw:
-            return []
-        comments = []
-        if isinstance(raw, str):
-            s = raw.strip()
-            try:
-                data = json.loads(s)
-                if isinstance(data, list):
-                    comments = [str(x).strip() for x in data if str(x).strip()]
-                else:
-                    comments = [s] if s else []
-            except Exception:
-                # 不是JSON，按 -&- 分隔符分割
-                comments = [x.strip() for x in s.split("-&-") if x.strip()]
-        elif isinstance(raw, list):
-            comments = [str(x).strip() for x in raw if str(x).strip()]
-        return comments if comments else []
+        return DouyinConfigParser.parse_video_comments(raw)
 
     def _parse_comment_replies(self):
         """解析评论回复内容列表，使用 -&- 作为分隔符"""
         raw = getattr(self.ws.config, 'COMMENT_REPLIES', '') or ''
-        if not raw:
-            return []
-        replies = []
-        if isinstance(raw, str):
-            s = raw.strip()
-            try:
-                data = json.loads(s)
-                if isinstance(data, list):
-                    replies = [str(x).strip() for x in data if str(x).strip()]
-                else:
-                    replies = [s] if s else []
-            except Exception:
-                # 不是JSON，按 -&- 分隔符分割
-                replies = [x.strip() for x in s.split("-&-") if x.strip()]
-        elif isinstance(raw, list):
-            replies = [str(x).strip() for x in raw if str(x).strip()]
-        return replies if replies else []
+        return DouyinConfigParser.parse_comment_replies(raw)
 
     async def scroll(self, dom: WebElement):
-        ActionChains(self.driver).scroll_from_origin(
-            ScrollOrigin.from_element(dom), 0, 200
-        ).perform()
-        await sleep(2)
+        await DouyinBrowserActions.scroll_element_async(self.driver, dom, delta_y=200, sleep_time=2)
 
     def clear(self, dom: WebElement):
-        if sys.platform == "win32":
-            dom.send_keys(Keys.CONTROL, "a")
-        elif sys.platform == "darwin":  # Mac
-            dom.send_keys(Keys.COMMAND, "a")
-        dom.send_keys(Keys.BACKSPACE)
+        DouyinBrowserActions.clear_input(dom)
 
     async def search(self):
         driver = self.driver
@@ -391,82 +332,68 @@ class DouyinCrawler(AbstractCrawler):
 
     async def _leave_video_comment(self, active, comment_text):
         """在当前视频页面留下评论"""
-        driver = self.driver
-        try:
-            # 查找评论输入框
-            comment_input = active.find_element(
-                By.CSS_SELECTOR,
-                '.GXmFLge7.comment-input-inner-container'
-            )
-            # 点击评论输入框
-            driver.execute_script("arguments[0].click();", comment_input)
-            await sleep(0.5)
-            # 输入评论文本
-            ActionChains(driver).send_keys(comment_text).perform()
-            await sleep(0.5)
-            # 尝试点击发送按钮
-            try:
-                send_button = active.find_element(
-                    By.CSS_SELECTOR,
-                    '[data-e2e="comment-post"]'
-                )
-                driver.execute_script("arguments[0].click();", send_button)
-                log.debug(f"成功发布视频评论: {comment_text[:20]}...")
-                await sleep(1)
-                await self.ws.push(videoComment=1)
-                return True
-            except:
-                # 如果找不到发送按钮，尝试按回车键
-                ActionChains(driver).send_keys(Keys.RETURN).perform()
-                log.debug(f"通过回车键发送视频评论: {comment_text[:20]}...")
-                await sleep(1)
-                await self.ws.push(videoComment=1)
-                return True
-        except Exception as e:
-            log.debug(f"发布视频评论失败: {e}")
-            return False
+        return await DouyinCommentActions.leave_video_comment_async(
+            self.driver,
+            comment_text,
+            active_element=active,
+            ws_push_func=self.ws.push
+        )
 
     async def _reply_to_comment(self, active, comment, reply_text):
         """回复指定评论"""
-        driver = self.driver
-        try:
-            # 查找评论的回复按钮
-            reply_button = comment.find_element(
-                By.CSS_SELECTOR,
-                'div:nth-child(2) > div > div:nth-child(4) > div > div:nth-child(3) > div'
-            )
-            # 点击回复按钮
-            driver.execute_script("arguments[0].click();", reply_button)
-            await sleep(0.5)
-            # 输入回复文本
-            ActionChains(driver).send_keys(reply_text).perform()
-            await sleep(0.5)
-            # 尝试点击发送按钮
-            try:
-                send_button = active.find_element(
-                    By.CSS_SELECTOR,
-                    '[data-e2e="comment-post"]'
-                )
-                driver.execute_script("arguments[0].click();", send_button)
-                log.debug(f"成功回复评论: {reply_text[:20]}...")
-                await sleep(1)
-                await self.ws.push(comment=1)
-                return True
-            except:
-                # 如果找不到发送按钮，尝试按回车键
-                ActionChains(driver).send_keys(Keys.RETURN).perform()
-                log.debug(f"通过回车键发送回复: {reply_text[:20]}...")
-                await sleep(1)
-                await self.ws.push(comment=1)
-                return True
-        except Exception as e:
-            log.debug(f"回复评论失败: {e}")
-            return False
+        return await DouyinCommentActions.reply_to_comment_async(
+            self.driver,
+            comment,
+            reply_text,
+            active_element=active,
+            ws_push_func=self.ws.push
+        )
+
+    def _on_license_invalid(self):
+        """当卡密失效时的回调函数（异步环境）"""
+        log.error("=" * 50)
+        log.error("卡密已失效，正在停止程序...")
+        log.error("=" * 50)
+        # 设置标志，在异步执行中检查
+        self._license_invalid = True
 
     async def start(self):
         try:
             # 等待配置初始化完成
             await self.ws.ready_event.wait()
+            
+            # 从 ws.config 更新 LicenseManager 的参数（配置从服务器接收后）
+            # SIBERIAN_URL 和 SIBERIAN_KEY 从服务器接收的配置中获取
+            if hasattr(self.ws.config, 'SIBERIAN_URL') and self.ws.config.SIBERIAN_URL:
+                self.license_manager.url = self.ws.config.SIBERIAN_URL
+            if hasattr(self.ws.config, 'SIBERIAN_KEY') and self.ws.config.SIBERIAN_KEY:
+                self.license_manager.key = self.ws.config.SIBERIAN_KEY
+            
+            # DEVICE_CODE、UUID 和 ACTIVE_URL 从全局 config 读取（通常通过环境变量或初始配置）
+            from ..tools.config import get_config
+            global_config = get_config()
+            if hasattr(global_config, 'DEVICE_CODE') and global_config.DEVICE_CODE:
+                self.license_manager.code = global_config.DEVICE_CODE
+            if hasattr(global_config, 'UUID') and global_config.UUID:
+                self.license_manager.uuid = global_config.UUID
+            if hasattr(global_config, 'ACTIVE_URL') and global_config.ACTIVE_URL:
+                self.license_manager.active_url = global_config.ACTIVE_URL
+            
+            # 验证卡密（带UUID）
+            if not self.license_manager.verify_license():
+                raise LicenseException("❌ 卡密验证失败！")
+            
+            # 设置停止回调
+            self.license_manager.set_stop_callback(self._on_license_invalid)
+            
+            # 启动定期检查（延迟一点，确保配置已更新）
+            await sleep(0.5)
+            self.license_manager.start_periodic_check()
+            
+            # 检查卡密失效标志
+            if self._license_invalid:
+                raise LicenseException("卡密已失效，程序已停止")
+            
             if not len(self.ws.config.BIT_BROWSER_IDS):
                 raise Exception("请至少传一个比特浏览器id")
 
@@ -494,14 +421,30 @@ class DouyinCrawler(AbstractCrawler):
 
             await sleep(4)
             try:
+                # 在执行前检查卡密失效标志
+                if self._license_invalid:
+                    raise LicenseException("卡密已失效，程序已停止")
+                
                 await self.search()
+                
+                # 在执行后再次检查
+                if self._license_invalid:
+                    raise LicenseException("卡密已失效，程序已停止")
+                
                 await self.ws.push(isCompleted=True)
             finally:
                 timestamp = datetime.now().strftime("%Y年%m月%d日_%H时%M分%S秒")
                 driver.get_screenshot_as_file(f"screenshot_{timestamp}.png")
+        except LicenseException:
+            # 卡密失效异常，直接抛出
+            log.error("程序因卡密失效而停止")
+            raise
         except Exception as e:
             log.debug(
                 f"发生异常:{e}，当前关键字：{self.word}",
                 exc_info=True,
             )
             raise
+        finally:
+            # 停止卡密定期检查
+            self.license_manager.stop_periodic_check()
