@@ -244,8 +244,10 @@ class DouyinCrawler(AbstractCrawler):
                 # comment.click()
                 # await sleep(1)
                 commentOk = False
-                # 使用标准化的关键字匹配
-                if self.ws.config.ENABLE_SEARCH_KEYWORDS and comment.text:
+                # 使用标准化的关键字匹配（需要同时启用ENABLE_COMMENT_TEMPLATES和ENABLE_SEARCH_KEYWORDS）
+                if (self.ws.config.ENABLE_COMMENT_TEMPLATES 
+                    and self.ws.config.ENABLE_SEARCH_KEYWORDS 
+                    and comment.text):
                     keywords = self._parse_keywords()
                     norm_comment = self._normalize_text(comment.text)
                     for kw in keywords:
