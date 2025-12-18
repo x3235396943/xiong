@@ -1187,6 +1187,7 @@ class DyShareUtils:
         cfg = get_config()
         browser_info = self.get_browser_info(browser_number)
         self.debug_log("info", "启动持续处理循环", browser_number)
+        sent_completion_report = False
 
         if reporter:
             if cfg.URLS and len(cfg.URLS) > 0:
@@ -1238,6 +1239,13 @@ class DyShareUtils:
                 if url is None:
                     if cfg.URLS and len(cfg.URLS) > 0:
                         self.debug_log("info", "列表中的所有URL已处理完毕", browser_number)
+                        # 列表模式：按“每个浏览器线程结束”上报完成态
+                        if reporter:
+                            try:
+                                reporter.set_completed(True)
+                                sent_completion_report = True
+                            except Exception as e:
+                                log.warning(f"{browser_info} 上报 isCompleted 失败: {e}")
                         break
                     self.debug_log("info", "数据库中没有待处理的链接，等待30秒后重试...", browser_number)
                     self.safe_sleep(30, browser_number=browser_number)
@@ -1294,7 +1302,7 @@ class DyShareUtils:
                                 self.mark_link_as_completed(link_id, db_path)
                             if reporter:
                                 reporter.increment_video()
-                                reporter.update_keywords_index(url_index)
+                                reporter.update_url_index(url_index)
                                 reporter.increment_url_ok()
                             self.debug_log("info", f"链接处理成功: {url}", browser_number)
                             break
@@ -1303,7 +1311,7 @@ class DyShareUtils:
                             self.mark_link_as_failed(link_id, db_path)
                         if reporter:
                             reporter.increment_video()
-                            reporter.update_keywords_index(url_index)
+                            reporter.update_url_index(url_index)
                             reporter.increment_url_fail()
                         self.debug_log("error", f"{browser_info} 链接处理失败（链接失效）: {url}", browser_number)
                         break
@@ -1335,7 +1343,7 @@ class DyShareUtils:
                                 self.mark_link_as_failed(link_id, db_path)
                             if reporter:
                                 reporter.increment_video()
-                                reporter.update_keywords_index(url_index)
+                                reporter.update_url_index(url_index)
                                 reporter.increment_url_fail()
                             self.debug_log("error", f"{browser_info} 链接处理彻底失败: {url}", browser_number)
 
@@ -1359,7 +1367,8 @@ class DyShareUtils:
         except Exception as e:
             log.error(f"{browser_info} 程序异常退出: {e}")
         finally:
-            if reporter:
+            # 列表模式结束时若已显式上报完成态，则避免再次 force_report 造成重复 PcDataReq
+            if reporter and not sent_completion_report:
                 reporter.force_report()
             if driver:
                 try:

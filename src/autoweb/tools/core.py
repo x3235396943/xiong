@@ -123,13 +123,15 @@ class DataReporter:
             "urlOk": 0,
             "video": 0,
             "videoComment": 0,
-            "keywordsIndex": 0,
+            "urlIndex": 0,
         }
 
         self._lock = threading.Lock()
 
         self._total_links = 0
         self._completed_links = 0
+        # 显式完成态覆盖：用于某些业务（如 dyShare 分摊任务）按“每浏览器线程结束”上报完成
+        self._completed_override: Optional[bool] = None
 
         self._send_queue: "queue.Queue[dict | None]" = queue.Queue()
         self._send_thread = None
@@ -181,11 +183,24 @@ class DataReporter:
         with self._lock:
             self._completed_links = completed
 
+    def set_completed(self, completed: bool = True):
+        """
+        显式设置完成态（覆盖 isCompleted 计算逻辑），并立即上报一次。
+
+        - dyShare：每个浏览器线程结束时调用 set_completed(True) 上报完成
+        - 其他场景不调用则不影响原有行为
+        """
+        with self._lock:
+            self._completed_override = completed
+        self._check_and_report()
+
     def _check_and_report(self):
         try:
             with self._lock:
                 is_completed = False
-                if self._total_links > 0:
+                if self._completed_override is not None:
+                    is_completed = self._completed_override
+                elif self._total_links > 0:
                     processed_links = self._stats["urlOk"] + self._stats["urlFail"]
                     is_completed = processed_links >= self._total_links
 
@@ -205,7 +220,7 @@ class DataReporter:
                     "follow": stats["follow"],
                     "id": device_code,
                     "isCompleted": is_completed,
-                    "keywordsIndex": stats["keywordsIndex"],
+                    "urlIndex": stats["urlIndex"],
                     "like": stats["like"],
                     "urlFail": stats["urlFail"],
                     "urlOk": stats["urlOk"],
@@ -279,11 +294,11 @@ class DataReporter:
         if need_report:
             self._check_and_report()
 
-    def update_keywords_index(self, index: int):
+    def update_url_index(self, index: int):
         with self._lock:
-            old_value = self._stats["keywordsIndex"]
-            self._stats["keywordsIndex"] = index
-            need_report = self._stats["keywordsIndex"] != old_value
+            old_value = self._stats["urlIndex"]
+            self._stats["urlIndex"] = index
+            need_report = self._stats["urlIndex"] != old_value
         if need_report:
             self._check_and_report()
 
