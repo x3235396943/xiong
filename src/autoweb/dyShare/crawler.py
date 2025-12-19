@@ -40,7 +40,7 @@ class BaseDyShareCrawler(ABC):
 
     @abstractmethod
     def setup_database(self) -> None:
-        """设置数据库"""
+        """准备待处理链接（列表模式）"""
 
     @abstractmethod
     def output_version_info(self) -> None:
@@ -77,36 +77,6 @@ class BaseDyShareCrawler(ABC):
         finally:
             self.cleanup_resources()
 
-    def handle_command(self, command: str) -> None:
-        if command == "add":
-            self.handle_add_command()
-        elif command == "run":
-            self.execute_main_process()
-        elif command == "look":
-            self.handle_look_command()
-        elif command == "clear":
-            self.handle_clear_command()
-        elif command == "help":
-            self.show_help()
-        else:
-            self.execute_main_process()
-
-    @abstractmethod
-    def handle_add_command(self) -> None:
-        """处理添加链接命令"""
-
-    @abstractmethod
-    def handle_look_command(self) -> None:
-        """处理查看链接命令"""
-
-    @abstractmethod
-    def handle_clear_command(self) -> None:
-        """处理清除数据库命令"""
-
-    @abstractmethod
-    def show_help(self) -> None:
-        """显示帮助信息"""
-
 
 # ----------------------------
 # utils.py（原样合并，修正 config 初始化顺序）
@@ -115,7 +85,6 @@ import json
 import os
 import random
 import re
-import sqlite3
 import threading
 import time
 from datetime import datetime
@@ -141,7 +110,6 @@ from ..tools.license import LicenseException, LicenseManager
 
 # 全局配置与卡密管理器（确保先 get_config 再使用字段）
 config: KuSettings = get_config()  # type: ignore
-LINKS_DB_PATH = config.LINKS_DB_PATH
 li = LicenseManager()
 
 
@@ -986,71 +954,6 @@ class DyShareUtils:
             log.error(f"{browser_info} 滚动失败: {e}")
         return False
 
-    def init_database(self, db_path=LINKS_DB_PATH):
-        self.debug_log("info", "初始化数据库")
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS links (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url TEXT UNIQUE NOT NULL,
-                status TEXT DEFAULT 'pending',
-                created_at TEXT DEFAULT '',
-                updated_at TEXT DEFAULT ''
-            )
-        """
-        )
-
-        conn.commit()
-        conn.close()
-
-    def add_links_cli(self, db_path=LINKS_DB_PATH):
-        log.info("启动链接添加工具")
-        self.init_database(db_path)
-
-        print("链接添加工具")
-        print("输入包含抖音链接的文本（每行一个），输入 'quit' 结束:")
-
-        while True:
-            try:
-                text = input().strip()
-                if text.lower() == "quit":
-                    break
-                if text:
-                    self.add_link_to_db(text, db_path)
-                else:
-                    self.debug_log("info", "输入不能为空，请重新输入")
-            except KeyboardInterrupt:
-                log.info("用户中断链接添加工具\n已退出链接添加工具")
-                break
-            except EOFError:
-                log.info("链接添加工具输入结束\n已退出链接添加工具")
-                break
-
-    def add_link_to_db(self, url, db_path=LINKS_DB_PATH):
-        log.debug(f"尝试添加链接到数据库: {url}")
-        cleaned_url = self.extract_douyin_link(url)
-        if not cleaned_url:
-            log.warning(f"无效的抖音链接: {url}")
-            return
-
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        try:
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute(
-                "INSERT INTO links (url, status, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                (cleaned_url, "pending", current_time, current_time),
-            )
-            conn.commit()
-            log.info(f"链接已添加到数据库: {cleaned_url}")
-        except sqlite3.IntegrityError:
-            log.warning(f"链接已存在: {cleaned_url}")
-        finally:
-            conn.close()
-
     def check_stop_signal(self):
         if self._stop_flag.is_set():
             raise KeyboardInterrupt("收到全局停止信号")
@@ -1127,59 +1030,10 @@ class DyShareUtils:
 
             return None, None, None
 
-    def get_next_link(self, db_path=LINKS_DB_PATH, browser_id=None):
-        if config.URLS and len(config.URLS) > 0:
-            return self.get_next_link_from_list(config.URLS, browser_id)
-
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT id FROM links ORDER BY id")
-        all_link_ids = [row[0] for row in cursor.fetchall()]
-
-        cursor.execute("SELECT id, url FROM links WHERE status = 'pending' LIMIT 1")
-        result = cursor.fetchone()
-
-        if result:
-            link_id, url = result
-            url_index = all_link_ids.index(link_id) if link_id in all_link_ids else 0
-
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute(
-                "UPDATE links SET status = 'processing', updated_at = ? WHERE id = ?",
-                (current_time, link_id),
-            )
-            conn.commit()
-            conn.close()
-            if config.DEBUG:
-                log.info(f"获取到待处理链接: {url}, 索引: {url_index}")
-            return link_id, url, url_index
-
-        conn.close()
-        log.debug("数据库中没有待处理的链接")
-        return None, None, None
-
-    def mark_link_as_completed(self, link_id, db_path=LINKS_DB_PATH):
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute(
-            "UPDATE links SET status = 'completed', updated_at = ? WHERE id = ?",
-            (current_time, link_id),
-        )
-        conn.commit()
-        conn.close()
-
-    def mark_link_as_failed(self, link_id, db_path=LINKS_DB_PATH):
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute(
-            "UPDATE links SET status = 'failed', updated_at = ? WHERE id = ?",
-            (current_time, link_id),
-        )
-        conn.commit()
-        conn.close()
+    def get_next_link(self, browser_id=None):
+        """仅列表模式：从 config.URLS 中获取下一个待处理链接。"""
+        urls_list = config.URLS or []
+        return self.get_next_link_from_list(urls_list, browser_id)
 
     def continuous_processing_loop(
         self,
@@ -1194,7 +1048,6 @@ class DyShareUtils:
         max_likes_per_video,
         browser_number=None,
         reporter=None,
-        db_path=None,
     ):
         cfg = get_config()
         browser_info = self.get_browser_info(browser_number)
@@ -1202,19 +1055,7 @@ class DyShareUtils:
         sent_completion_report = False
 
         if reporter:
-            if cfg.URLS and len(cfg.URLS) > 0:
-                reporter.set_total_links(len(cfg.URLS))
-            else:
-                try:
-                    conn = sqlite3.connect(db_path)
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT COUNT(*) FROM links")
-                    total_count = cursor.fetchone()[0]
-                    conn.close()
-                    reporter.set_total_links(total_count)
-                except Exception as e:
-                    log.warning(f"无法获取总链接数: {e}")
-                    reporter.set_total_links(0)
+            reporter.set_total_links(len(cfg.URLS or []))
 
         self.safe_check_license()
         driver = None
@@ -1246,22 +1087,18 @@ class DyShareUtils:
                         log.error(f"{self.get_browser_info(browser_number)} 创建失败，程序即将退出")
                         raise Exception("浏览器创建失败，无法继续执行")
 
-                link_id, url, url_index = self.get_next_link(db_path, browser_id)
+                _, url, url_index = self.get_next_link(browser_id)
 
                 if url is None:
-                    if cfg.URLS and len(cfg.URLS) > 0:
-                        self.debug_log("info", "列表中的所有URL已处理完毕", browser_number)
-                        # 列表模式：按“每个浏览器线程结束”上报完成态
-                        if reporter:
-                            try:
-                                reporter.set_completed(True)
-                                sent_completion_report = True
-                            except Exception as e:
-                                log.warning(f"{browser_info} 上报 isCompleted 失败: {e}")
-                        break
-                    self.debug_log("info", "数据库中没有待处理的链接，等待30秒后重试...", browser_number)
-                    self.safe_sleep(30, browser_number=browser_number)
-                    continue
+                    self.debug_log("info", "列表中的所有URL已处理完毕", browser_number)
+                    # 列表模式：按“每个浏览器线程结束”上报完成态
+                    if reporter:
+                        try:
+                            reporter.set_completed(True)
+                            sent_completion_report = True
+                        except Exception as e:
+                            log.warning(f"{browser_info} 上报 isCompleted 失败: {e}")
+                    break
 
                 self.debug_log("info", f"获取到新链接: {url}", browser_number)
 
@@ -1310,8 +1147,6 @@ class DyShareUtils:
                         )
 
                         if success:
-                            if link_id is not None:
-                                self.mark_link_as_completed(link_id, db_path)
                             if reporter:
                                 reporter.increment_video()
                                 reporter.update_url_index(url_index)
@@ -1319,8 +1154,6 @@ class DyShareUtils:
                             self.debug_log("info", f"链接处理成功: {url}", browser_number)
                             break
 
-                        if link_id is not None:
-                            self.mark_link_as_failed(link_id, db_path)
                         if reporter:
                             reporter.increment_video()
                             reporter.update_url_index(url_index)
@@ -1351,8 +1184,6 @@ class DyShareUtils:
                             break
 
                         if retry_count >= 3:
-                            if link_id is not None:
-                                self.mark_link_as_failed(link_id, db_path)
                             if reporter:
                                 reporter.increment_video()
                                 reporter.update_url_index(url_index)
@@ -1471,75 +1302,6 @@ class DyShareUtils:
                     log.info("💤 Windows防休眠模式已解除")
         except Exception as e:
             log.warning(f"设置防休眠模式失败: {e}")
-
-    def clear_database(self, db_path=LINKS_DB_PATH, status=None):
-        log.info("开始清空数据库")
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        try:
-            if status:
-                cursor.execute("DELETE FROM links WHERE status = ?", (status,))
-                log.info(f"已删除状态为 {status} 的链接")
-            else:
-                cursor.execute("DELETE FROM links")
-                log.info("已删除所有链接")
-            conn.commit()
-            log.info("数据库清空完成")
-        except Exception as e:
-            log.error(f"清空数据库时出错: {e}")
-        finally:
-            conn.close()
-
-    def view_links_in_db(self, db_path=LINKS_DB_PATH):
-        log.info("查看数据库中的链接")
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT id, url, status, created_at FROM links ORDER BY created_at")
-            links = cursor.fetchall()
-
-            cursor.execute("SELECT status, COUNT(*) FROM links GROUP BY status")
-            status_counts = cursor.fetchall()
-            status_dict = {status: count for status, count in status_counts}
-
-            total_count = sum(status_dict.values())
-            pending_count = status_dict.get("pending", 0)
-            processing_count = status_dict.get("processing", 0)
-            failed_count = status_dict.get("failed", 0)
-            completed_count = status_dict.get("completed", 0)
-
-            if not links:
-                log.info("数据库中没有链接")
-                return
-
-            log.info(f"数据库中的链接 (共 {len(links)} 条)")
-            print(f"数据库中的链接 (共 {len(links)} 条):")
-            print(f"总链接数: {total_count}")
-            print(
-                f"待处理: {pending_count} | 处理中: {processing_count} | 失败: {failed_count} | 已完成: {completed_count}"
-            )
-
-            print("-" * 100)
-            print(f"{'ID':<5} {'状态':<12} {'创建时间':<20} {'链接'}")
-            print("-" * 100)
-
-            for link in links:
-                link_id, url, status, created_at = link
-                short_url = (url[:70] + "...") if len(url) > 73 else url
-                print(f"{link_id:<5} {status:<12} {created_at:<20} {short_url}")
-
-            if total_count > 0:
-                processed = completed_count + failed_count + processing_count
-                progress = processed / total_count
-                bar_length = 40
-                filled_length = int(bar_length * progress)
-                bar = "█" * filled_length + "-" * (bar_length - filled_length)
-                print(f"完成进度: |{bar}| {progress:.1%} ({processed}/{total_count})")
-
-        except Exception as e:
-            log.error(f"查看链接时出错: {e}")
-        finally:
-            conn.close()
 
     def process_urls_thread(
         self,
@@ -1706,13 +1468,10 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             self.utils.print_config_debug()
 
     def setup_database(self) -> None:
-        use_list_mode = self.config.URLS and len(self.config.URLS) > 0
-        if use_list_mode:
-            self._prepare_url_list_mode()
-        else:
-            log.info("使用数据库模式")
-            time.sleep(0.2)
-            self.utils.init_database()
+        # 仅列表模式：URLS 由服务器下发或本地配置提供
+        self._prepare_url_list_mode()
+        if not self.config.URLS or len(self.config.URLS) == 0:
+            raise Exception("URLS 为空：请通过服务器下发或本地配置提供待处理链接")
 
         if not self.config.BIT_BROWSER_IDS:
             raise Exception("请在代码中的 BIT_BROWSER_IDS 列表中配置浏览器ID")
@@ -1804,21 +1563,6 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         self._stop_websocket_client()
         self.utils.set_keep_awake(False)
         self.license_manager.stop_periodic_check()
-
-    def handle_add_command(self) -> None:
-        self.utils.add_links_cli()
-
-    def handle_look_command(self) -> None:
-        self.utils.view_links_in_db()
-
-    def handle_clear_command(self) -> None:
-        if len(sys.argv) > 2:
-            self.utils.clear_database(status=sys.argv[2])
-        else:
-            self.utils.clear_database()
-
-    def show_help(self) -> None:
-        print("使用方法: pixi run web [run|add|look|clear]")
 
     def _prepare_url_list_mode(self) -> None:
         cleaned_urls = []

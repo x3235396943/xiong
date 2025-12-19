@@ -20,11 +20,8 @@ class DouyinShareCrawler:
         crawler = ConcreteDyShareCrawler()
 
         try:
-            if len(sys.argv) > 1:
-                crawler.handle_command(sys.argv[1])
-            else:
-                # 默认执行主流程
-                crawler.execute_main_process()
+            # 仅保留默认运行（列表模式）。忽略所有命令行参数。
+            crawler.execute_main_process()
 
         except Exception as e:
             print(f"程序执行出错: {e}")

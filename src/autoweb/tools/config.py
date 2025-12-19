@@ -85,8 +85,6 @@ class KuSettings(ShareConfig):
     # 服务器消息ID，用于发送消息到服务器时的标识符
     SERVER_ID: str = "shebeiid"
 
-    # 数据库路径
-    LINKS_DB_PATH: str = "links.db"
     # 本地导入链接
     URLS: list = []
     # 链接索引
@@ -96,7 +94,7 @@ class KuSettings(ShareConfig):
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str = "1.2.3"
+    VERSION: str = "1.2.4"
 
     # 快手bit浏览器设置
     BROWSER_SAVE_DIR: str = "browser_sessions"
