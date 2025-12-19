@@ -267,27 +267,57 @@ class DouyinCrawler(AbstractCrawler):
                         and (force_follow or randint(1, 100) <= follow_prob)
                     ):
                         try:
-                            driver.find_element(
+                            follow_button = driver.find_element(
                                 By.CSS_SELECTOR, '[data-e2e="user-info-follow-btn"]'
-                            ).click()
-                            followIndex += 1
-                            await self.ws.push(follow=1)
+                            )
+
+                            # 检查关注按钮状态，避免重复关注
+                            try:
+                                button_text = follow_button.text.strip()
+                                if "已关注" in button_text:
+                                    log.debug("用户已被关注，跳过关注操作")
+                                else:
+                                    follow_button.click()
+                                    followIndex += 1
+                                    await self.ws.push(follow=1)
+                            except Exception:
+                                # 无法获取按钮文本，输出该用户不存在
+                                log.debug("该用户不存在")
+
                         except ElementClickInterceptedException:
+                            # 处理点击被拦截的情况
                             timestamp = datetime.now().strftime(
                                 "%Y年%m月%d日_%H时%M分%S秒"
                             )
                             driver.get_screenshot_as_file(f"screenshot_{timestamp}.png")
-                            driver.execute_script(
-                                "arguments[0].click();",
-                                driver.find_element(
+
+                            try:
+                                follow_button = driver.find_element(
                                     By.CSS_SELECTOR, '[data-e2e="user-info-follow-btn"]'
-                                ),
-                            )
-                            log.debug("💗关注用户成功")
-                            followIndex += 1
-                            await self.ws.push(follow=1)
+                                )
+
+                                # 再次检查关注按钮状态
+                                try:
+                                    button_text = follow_button.text.strip()
+                                    if "已关注" in button_text:
+                                        log.debug("用户已被关注，跳过关注操作")
+                                    else:
+                                        driver.execute_script("arguments[0].click();", follow_button)
+                                        log.debug("💗关注用户成功")
+                                        followIndex += 1
+                                        await self.ws.push(follow=1)
+                                except Exception:
+                                    # 无法获取按钮文本，输出该用户不存在
+                                    log.debug("该用户不存在")
+
+                            except Exception:
+                                # 按钮不存在或其他异常，输出该用户不存在
+                                log.debug("该用户不存在")
+
                         except NoSuchElementException:
-                            log.debug("用户不存在")
+                            # 按钮不存在，输出该用户不存在
+                            log.debug("该用户不存在")
+
                         await sleep(randint(self.ws.config.VISIT_MIN, self.ws.config.VISIT_MAX))
                     driver.close()
                     driver.switch_to.window(driver.window_handles[0])

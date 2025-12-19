@@ -412,15 +412,27 @@ class DyShareUtils:
                     follow_button = WebDriverWait(driver, 5).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, follow_btn_css))
                     )
-                    self.human_like_delay(0.5, 1.0, browser_number)
-                    follow_button.click()
-                    if reporter:
-                        reporter.increment_follow()
-                    self.debug_log("info", "关注成功", browser_number)
-                    action_success = True
-                    time.sleep(random.uniform(1, 2))
+
+                    # 检查关注按钮状态，避免重复关注
+                    try:
+                        button_text = follow_button.text.strip()
+                        if "已关注" in button_text:
+                            self.debug_log("info", "用户已被关注，跳过关注操作", browser_number)
+                        else:
+                            self.human_like_delay(0.5, 1.0, browser_number)
+                            follow_button.click()
+                            if reporter:
+                                reporter.increment_follow()
+                            self.debug_log("info", "关注成功", browser_number)
+                            action_success = True
+                            time.sleep(random.uniform(1, 2))
+                    except Exception:
+                        # 无法获取按钮文本，输出该用户不存在
+                        self.debug_log("warning", "该用户不存在", browser_number)
+
                 except Exception:
-                    pass
+                    # 按钮不存在或其他异常，输出该用户不存在
+                    self.debug_log("warning", "该用户不存在", browser_number)
             else:
                 self.debug_log(
                     "info",
