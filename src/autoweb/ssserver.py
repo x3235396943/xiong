@@ -13,14 +13,14 @@ class WebSocketServer:
 
     async def _send_json(self, data: dict) -> None:
         """发送JSON数据到WebSocket客户端"""
-        data["CONNECT_KEY"] = "test"
+        data["CONNECT_KEY"] = "key-6584"
         await self.ws.send_json(data)
 
     async def _handle_login_request(self) -> None:
         """处理登录请求"""
         config = PcConfig(
-            SIBERIAN_URL="http://139.159.230.186/api/siberianNitraria/verifyActivate",
-            SIBERIAN_KEY="2j2r6Jdr2Se/5Sv9n9H67xQOADQZ4ThV9jINpCYZbqY=",
+            SIBERIAN_URL="http://http://139.159.230.186/api/siberianNitraria/verifyActivate",
+            SIBERIAN_KEY="Li/HbEihAYOLKDSYZAqJ/8d2tN0SC81ROxOFJ4Yokuk=",
             # 搜索关键字
             KEYWORDS=[
                 "猫咪",
@@ -39,7 +39,7 @@ class WebSocketServer:
             COMMENT_FILTER_KEYWORDS=["美女"],
             BIT_BROWSER_IDS=["57bd9953b5364d3db5c4ac7cfbb9a1b3"],
             # ShareConfig 中的参数
-            LIKE_PROBABILITY=100,
+            LIKE_PROBABILITY=10,
             VISIT_ENABLE=10,
             PROFILE_FOLLOW_PROBABILITY=10,
             ENABLE_FOLLOW=True,
@@ -49,8 +49,8 @@ class WebSocketServer:
             ENABLE_COMMENT_REPLY=True,
             ENABLE_VIDEO_COMMENT=True,
             ENABLE_COMMENT_TEMPLATES=True,
-            COMMENT_REPLY_PROBABILITY=100,
-            VIDEO_REPLY_RATE=100,
+            COMMENT_REPLY_PROBABILITY=10,
+            VIDEO_REPLY_RATE=10,
             MIN_FOLLOWS_PER_VIDEO=5,
             MAX_FOLLOWS_PER_VIDEO=15,
             COMMENT_LIKE_COUNT_MIN=5,

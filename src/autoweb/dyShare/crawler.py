@@ -99,7 +99,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from ..tools import log
-from ..tools.config import KuSettings, get_config
+from ..tools.config import KuSettings, get_config, env
 from ..tools.core import closeBrowser, openBrowser
 from ..tools.douyin_common import (
     DouyinBrowserActions,
@@ -1477,9 +1477,10 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             raise Exception("请在代码中的 BIT_BROWSER_IDS 列表中配置浏览器ID")
 
     def output_version_info(self) -> None:
+        version = env.VERSION or self.config.VERSION
         version_info = {
             "code": 0,
-            "data": {"type": "version", "version": f"pc.{self.config.VERSION}"},
+            "data": {"type": "version", "version": f"pc.{version}"},
         }
         output = json.dumps(version_info, ensure_ascii=False)
         print(output)
@@ -1835,7 +1836,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
                 "cmd": "LoginReq",
                 "id": device_id,
                 "mode": "pc",
-                "version": self.config.VERSION,
+                "version": env.VERSION or self.config.VERSION,
             }
         )
         time.sleep(0.2)

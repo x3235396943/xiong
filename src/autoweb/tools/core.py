@@ -20,7 +20,7 @@ import queue
 import threading
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
 import requests
 
@@ -109,7 +109,7 @@ class DataReporter:
         self,
         device_code: str,
         browser_id: str,
-        send_ws_message_func: Optional[Callable[[Dict[str, Any]], None]] = None,
+        send_ws_message_func: Callable[[Dict[str, Any]], None] | None = None,
     ):
         self.device_code = device_code
         self.browser_id = browser_id
@@ -130,8 +130,8 @@ class DataReporter:
 
         self._total_links = 0
         self._completed_links = 0
-        # 显式完成态覆盖：用于某些业务（如 dyShare 分摊任务）按“每浏览器线程结束”上报完成
-        self._completed_override: Optional[bool] = None
+        # 显式完成态覆盖：用于某些业务（如 dyShare 分摊任务）按"每浏览器线程结束"上报完成
+        self._completed_override: bool | None = None
 
         self._send_queue: "queue.Queue[dict | None]" = queue.Queue()
         self._send_thread = None

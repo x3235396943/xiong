@@ -13,7 +13,7 @@ import asyncio
 import json
 from asyncio import sleep
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
 from .core import log
 from .config import env, PcConfig
@@ -219,11 +219,11 @@ class WebsocketsWSClient:
         # 指令处理回调字典：{cmd: handler_function}
         self.command_handlers: Dict[str, Callable[[Dict[str, Any]], None]] = {}
         # 停止信号回调
-        self.stop_signal_handler: Optional[Callable[[], None]] = None
+        self.stop_signal_handler: Callable[[], None] | None = None
         # 保存外部发送消息的函数引用
-        self.external_send_func: Optional[Callable[[Dict], None]] = None
+        self.external_send_func: Callable[[Dict], None] | None = None
         # 保存配置更新回调函数
-        self.config_update_handler: Optional[Callable[[Dict], None]] = None
+        self.config_update_handler: Callable[[Dict], None] | None = None
         # 事件循环引用
         self.event_loop = None
         # 从URL中提取设备ID

@@ -174,7 +174,7 @@ class LicenseManager:
             return
 
         if not self._valid:
-            raise LicenseException(f"License Invalid: {self._error_msg}")
+            raise LicenseException(f"许可证无效: {self._error_msg}")
 
     def start_periodic_check(self):
         if self._stop_event.is_set():
