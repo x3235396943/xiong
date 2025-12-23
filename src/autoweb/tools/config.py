@@ -218,7 +218,7 @@ class Base(BaseSettings):
     CONNECT_KEY: str
     VERSION: str | None
     DEBUG: bool = False
-    HEADLESS: bool
+    HEADLESS: bool = False
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
 
