@@ -478,3 +478,16 @@ class DouyinBrowserActions:
         except Exception as e:
             log.error(f"滚动失败: {e}")
 
+    @staticmethod
+    def ensure_element_centered(driver, element):
+        import time
+        try:
+            driver.execute_script(
+                "arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'nearest'});",
+                element,
+            )
+            time.sleep(0.3)
+            return True
+        except Exception:
+            return False
+

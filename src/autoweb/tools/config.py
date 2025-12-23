@@ -94,7 +94,7 @@ class KuSettings(ShareConfig):
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str = "1.2.5"
+    VERSION: str = "1.3.2"
 
     # 快手bit浏览器设置
     BROWSER_SAVE_DIR: str = "browser_sessions"
@@ -218,7 +218,7 @@ class Base(BaseSettings):
     CONNECT_KEY: str
     VERSION: str | None
     DEBUG: bool = False
-    HEADLESS: bool = True
+    HEADLESS: bool
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
 
@@ -228,8 +228,8 @@ class PcConfig(ShareConfig):
     SIBERIAN_KEY: str = "2j2r6Jdr2Se/5Sv9n9H67xQOADQZ4ThV9jINpCYZbqY="
 
     KEYWORDS: list = [] # 关键词列表
-    MAX_SCROLL_VIDEO: list = [10, 20] # 最大滚动视频数
-    MAX_COMMENT: list = [2, 15] # 最大评论数
+    MAX_SCROLL_VIDEO: list = [10, 20] # 浏览视频数
+    MAX_COMMENT: list = [2, 15] # 评论区滚动次数
 
     model_config = SettingsConfigDict(extra="ignore")
 

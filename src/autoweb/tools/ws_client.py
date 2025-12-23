@@ -32,7 +32,7 @@ class AiohttpWSClient:
     session: ClientSession
     ws: ClientWebSocketResponse
 
-    def __init__(self, url: str):
+    def __init__(self, url: str, browser_id: str | None = None):
         self.url = url
         self._running = False
         self.send_queue: asyncio.Queue[dict] = asyncio.Queue()
@@ -40,6 +40,7 @@ class AiohttpWSClient:
         self.is_back = asyncio.Event()
         self.config: PcConfig | None = None
         self.cmd = ""
+        self.browser_id: str | None = browser_id
         self.device_data = {
             "cmd": "PcDataReq",
             "data": {
@@ -53,6 +54,17 @@ class AiohttpWSClient:
                 "videoComment": 0,
             },
         }
+        if browser_id:
+            self.device_data["data"]["browserId"] = browser_id
+
+    def set_browser_id(self, browser_id: str | None):
+        self.browser_id = browser_id
+        data = self.device_data.get("data")
+        if isinstance(data, dict):
+            if browser_id:
+                data["browserId"] = browser_id
+            else:
+                data.pop("browserId", None)
 
     async def connect(self):
         log.debug(f"{self.url}...")
@@ -77,6 +89,8 @@ class AiohttpWSClient:
         while self._running:
             msg = await self.send_queue.get()
             msg["id"] = env.DEVICE_CODE
+            if self.browser_id and isinstance(msg.get("data"), dict):
+                msg["data"]["browserId"] = self.browser_id
             if msg["cmd"] != "HeartbeatReq":
                 log.debug(f"_sender: {msg}")
             await self.ws.send_json(msg)
@@ -138,7 +152,7 @@ class AiohttpWSClient:
     async def push(self, **kwargs):
         params = self.device_data["data"]
         for k, v in kwargs.items():
-            if type(params[k]) is int:
+            if k in params and type(params[k]) is int:
                 params[k] += v
             else:
                 params[k] = v
@@ -210,12 +224,13 @@ import websockets
 class WebsocketsWSClient:
     ws: Any
 
-    def __init__(self, url: str):
+    def __init__(self, url: str, browser_id: str | None = None):
         self.url = url
         self.send_queue: asyncio.Queue[str] = asyncio.Queue()
         self._running = False
         self.ready_event = asyncio.Event()
         self.stop_requested = False  # 添加停止请求标志
+        self.browser_id: str | None = browser_id
         # 指令处理回调字典：{cmd: handler_function}
         self.command_handlers: Dict[str, Callable[[Dict[str, Any]], None]] = {}
         # 停止信号回调
@@ -257,8 +272,13 @@ class WebsocketsWSClient:
         if hasattr(self, "ws") and self.ws:
             await self.ws.close()
 
+    def set_browser_id(self, browser_id: str | None):
+        self.browser_id = browser_id
+
     async def send(self, data: dict):
         if not self.stop_requested:
+            if self.browser_id and isinstance(data.get("data"), dict):
+                data["data"]["browserId"] = self.browser_id
             await self.send_queue.put(json.dumps(data, ensure_ascii=False))
 
     async def _sender(self):

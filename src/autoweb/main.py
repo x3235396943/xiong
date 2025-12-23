@@ -54,20 +54,29 @@ class TaskManager:
 
 
 def main():
-    # 保留原来的逻辑以防需要
-    if config.PLATFORM == "dy" and config.RUN_MODE == "share":
-        o = DouyinShareCrawler()
-        o.start()
+    # 根据平台和运行模式选择执行方式
+    if config.PLATFORM == "dy":
+        if config.RUN_MODE == "share":
+            # 运行分享模式
+            o = DouyinShareCrawler()
+            o.start()
+            return
+        elif config.RUN_MODE == "search":
+            # 运行搜索模式（异步模式）
+            manager = TaskManager(ws_url=config.WS_URL)
+            try:
+                asyncio.run(manager.start())
+            except KeyboardInterrupt:
+                print("✅ Ctrl+C 终止")
+            except Exception as e:
+                log.debug(e, exc_info=True)
+            return
+        else:
+            print(f"❌ 错误：不支持的模式 '{config.RUN_MODE}'。")
+            return
+    else:
+        print(f"❌ 错误：不支持的平台 '{config.PLATFORM}'。")
         return
-
-    manager = TaskManager(ws_url=config.WS_URL)
-    try:
-        asyncio.run(manager.start())
-    except KeyboardInterrupt:
-        print("✅ Ctrl+C 终止")
-    except Exception as e:
-        log.debug(e, exc_info=True)
-
 
 if __name__ == "__main__":
     main()

@@ -234,6 +234,10 @@ class DouyinCrawler(AbstractCrawler):
                         avatar_link = comment.find_element(
                             By.CSS_SELECTOR, ".comment-item-avatar a"
                         )
+                        try:
+                            DouyinBrowserActions.ensure_element_centered(driver, avatar_link)
+                        except Exception:
+                            pass
                         await sleep(0.5)
                         avatar_link.click()
                     except ElementClickInterceptedException:
@@ -245,14 +249,24 @@ class DouyinCrawler(AbstractCrawler):
                         )
                     except NoSuchElementException:
                         # dom还没加载完成,点击上层使窗口滚动到dom显示,使其加载子元素
-                        comment.find_element(
+                        avatar_box = comment.find_element(
                             By.CSS_SELECTOR, ".comment-item-avatar"
-                        ).click()
+                        )
+                        try:
+                            DouyinBrowserActions.ensure_element_centered(driver, avatar_box)
+                        except Exception:
+                            pass
+                        avatar_box.click()
                         await sleep(2)
 
-                        comment.find_element(
+                        avatar_link = comment.find_element(
                             By.CSS_SELECTOR, ".comment-item-avatar a"
-                        ).click()
+                        )
+                        try:
+                            DouyinBrowserActions.ensure_element_centered(driver, avatar_link)
+                        except Exception:
+                            pass
+                        avatar_link.click()
 
                     await sleep(randint(3, 5))
                     driver.switch_to.window(driver.window_handles[1])
@@ -427,7 +441,10 @@ class DouyinCrawler(AbstractCrawler):
             if not len(self.ws.config.BIT_BROWSER_IDS):
                 raise Exception("请至少传一个比特浏览器id")
 
-            res = openBrowser(self.ws.config.BIT_BROWSER_IDS[0])
+            browser_id = self.ws.config.BIT_BROWSER_IDS[0]
+            if hasattr(self.ws, "set_browser_id"):
+                self.ws.set_browser_id(browser_id)
+            res = openBrowser(browser_id)
             log.debug(res)
 
             chrome_options = webdriver.ChromeOptions()
