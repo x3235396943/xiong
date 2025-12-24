@@ -32,7 +32,7 @@ from .config import get_config
 # ----------------------------
 class AbstractCrawler(ABC):
     @abstractmethod
-    async def start(self):
+    def start(self, _):
         """
         start crawler
         """
@@ -337,7 +337,7 @@ def openBrowser(browser_id: str) -> dict:
 def closeBrowser(browser_id: str) -> None:
     json_data = {"id": f"{browser_id}"}
     requests.post(
-        f"{_BIT_API_URL}/browser/close", data=json.dumps(json_data), headers=_BIT_HEADERS
+        f"{_BIT_API_URL}/browser/close",
+        data=json.dumps(json_data),
+        headers=_BIT_HEADERS,
     ).json()
-
-

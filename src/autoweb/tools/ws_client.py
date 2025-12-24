@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 from asyncio import sleep
-from datetime import datetime
+from collections import deque
 from typing import Any, Callable, Dict
 
 from .core import log
@@ -31,6 +31,8 @@ class NotBack(Exception):
 class AiohttpWSClient:
     session: ClientSession
     ws: ClientWebSocketResponse
+    loop: asyncio.AbstractEventLoop
+    URLS: deque[str]
 
     def __init__(self, url: str, browser_id: str | None = None):
         self.url = url
@@ -133,6 +135,7 @@ class AiohttpWSClient:
                     self.is_back.set()
                 if cmd == "LoginRes":
                     self.config = PcConfig(**data["data"])
+                    self.keywords = deque(self.config.KEYWORDS)
                     self.ready_event.set()
                 elif cmd == "StopReq":
                     await self.send({"cmd": "StopRes"})
@@ -146,19 +149,23 @@ class AiohttpWSClient:
             await asyncio.sleep(10)
             await self.send({"cmd": "HeartbeatReq"})
 
-    async def updateState(self, state: str):
-        await self.send({"cmd": "RunStateReq", "state": state})
+    def updateState(self, state: str):
+        self.loop.call_soon_threadsafe(
+            self.send_queue.put_nowait, {"cmd": "RunStateReq", "state": state}
+        )
 
-    async def push(self, **kwargs):
+    def push(self, **kwargs):
         params = self.device_data["data"]
         for k, v in kwargs.items():
-            if k in params and type(params[k]) is int:
+            if type(params[k]) is int:
                 params[k] += v
             else:
                 params[k] = v
-        await self.send(self.device_data)
+        self.loop.call_soon_threadsafe(self.send_queue.put_nowait, self.device_data)
 
     async def run(self):
+        self.loop = asyncio.get_running_loop()
+
         retry = 1
         retry_times = 3
         while True:
@@ -353,7 +360,9 @@ class WebsocketsWSClient:
                         is_stop_signal = False
                         if cmd == "StopReq":
                             is_stop_signal = True
-                            self._send_response({"cmd": "StopRes", "id": self.device_id})
+                            self._send_response(
+                                {"cmd": "StopRes", "id": self.device_id}
+                            )
                             log.info("等待 StopRes 消息发送完成...")
                             await self._wait_for_message_sent()
                             log.info("✓ StopRes 消息已发送完成")
@@ -523,5 +532,3 @@ def start_websocket_client_in_thread(ws_client, on_stop_signal_received):
     ws_thread.start()
     time.sleep(2)
     return ws_thread
-
-

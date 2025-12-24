@@ -72,7 +72,7 @@ class KuSettings(ShareConfig):
     _config_initialized: bool = False
     # 添加停止信号标志
     _stop_requested: bool = False
-    ACTIVE_URL:str #开始卡密验证地址
+    ACTIVE_URL: str  # 开始卡密验证地址
     SIBERIAN_URL: str | None = None
     SIBERIAN_KEY: str | None = None
     DEVICE_CODE: str | None = None  # 设备码
@@ -224,12 +224,12 @@ class Base(BaseSettings):
 
 
 class PcConfig(ShareConfig):
-    SIBERIAN_URL: str =  "http://139.159.230.186/api/siberianNitraria/verifyActivate"
+    SIBERIAN_URL: str = "http://139.159.230.186/api/siberianNitraria/verifyActivate"
     SIBERIAN_KEY: str = "2j2r6Jdr2Se/5Sv9n9H67xQOADQZ4ThV9jINpCYZbqY="
 
-    KEYWORDS: list = [] # 关键词列表
-    MAX_SCROLL_VIDEO: list = [10, 20] # 浏览视频数
-    MAX_COMMENT: list = [2, 15] # 评论区滚动次数
+    KEYWORDS: list = []  # 关键词列表
+    MAX_SCROLL_VIDEO: list = [10, 20]  # 浏览视频数
+    MAX_COMMENT: list = [2, 15]  # 评论区滚动次数
 
     model_config = SettingsConfigDict(extra="ignore")
 

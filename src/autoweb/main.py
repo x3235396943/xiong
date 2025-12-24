@@ -1,5 +1,7 @@
 import asyncio
 
+from autoweb.dyShare import crawler
+
 from .tools import verify, config, log
 from .tools.core import AbstractCrawler
 from .dy import DouyinCrawler
@@ -14,22 +16,25 @@ class TaskManager:
 
     def __init__(self, ws_url: str):
         self.ws = WSClient(url=ws_url)
+        self.crawler = []
 
     @staticmethod
-    async def create_crawler(platform: str, ws: WSClient) -> AbstractCrawler:
+    def create_crawler(platform: str, ws: WSClient) -> AbstractCrawler:
         crawler_class = TaskManager.CRAWLERS.get(platform)
         if not crawler_class:
             raise ValueError(
                 "Invalid Media Platform. Currently only supported dy or dys or ks ..."
             )
-        crawler = crawler_class(ws)
-        return crawler
+        return crawler_class(ws)
 
     async def _start_crawler(self):
         await self.ws.ready_event.wait()
 
-        crawler = await self.create_crawler(config.PLATFORM, self.ws)
-        await crawler.start()
+        async with asyncio.TaskGroup() as tg:
+            for v in self.ws.config.BIT_BROWSER_IDS:
+                crawler = self.create_crawler(config.PLATFORM, self.ws)
+                self.crawler.append(crawler)
+                tg.create_task(asyncio.to_thread(crawler.start, v))
 
     async def start(self):
         tasks = [
@@ -43,13 +48,19 @@ class TaskManager:
         for task in pending:
             task.cancel()
 
-        for task in done:
-            exc = task.exception()
-            if exc:
-                await self.ws.send({"cmd": "ErrReq", "logs": exc})
-                await self.ws.close()
-                raise exc
-        else:
+        if pending:
+            await asyncio.wait(pending, return_when=asyncio.ALL_COMPLETED)
+
+        try:
+            for task in done:
+                exc = task.exception()
+                if exc:
+                    raise exc
+        except Exception as e:
+            await self.ws.send({"cmd": "ErrReq", "logs": e})
+        finally:
+            for crawler in self.crawler:
+                crawler.stop()
             await self.ws.close()
 
 
@@ -78,6 +89,6 @@ def main():
         print(f"❌ 错误：不支持的平台 '{config.PLATFORM}'。")
         return
 
+
 if __name__ == "__main__":
     main()
-
