@@ -8,48 +8,60 @@
 import json
 import time
 import requests
+import os
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+# 单文件常量与解析
+SEARCH_KEYWORDS_DEFAULT = ["美食", "穿搭", "旅行"]
+BROWSER_ID_DEFAULT = "57bd9953b5364d3db5c4ac7cfbb9a1b3"
+
+def parse_keywords(raw):
+    s = raw
+    if not s:
+        return SEARCH_KEYWORDS_DEFAULT[:]
+    try:
+        if isinstance(s, str):
+            t = s.strip()
+            if not t:
+                return SEARCH_KEYWORDS_DEFAULT[:]
+            # 尝试按 JSON 列表解析
+            try:
+                data = json.loads(t)
+                if isinstance(data, list):
+                    return [str(x).strip() for x in data if str(x).strip()]
+            except Exception:
+                pass
+            # 按常见分隔符解析
+            for sep in [",", "，", ";", "；", " "]:
+                t = t.replace(sep, ",")
+            return [x.strip() for x in t.split(",") if x.strip()]
+        elif isinstance(s, list):
+            return [str(x).strip() for x in s if str(x).strip()]
+    except Exception:
+        return SEARCH_KEYWORDS_DEFAULT[:]
+    return SEARCH_KEYWORDS_DEFAULT[:]
 
 def clear_input(element):
-    """
-    清空输入框（跨平台）
-
-    Args:
-        element: 输入框元素
-    """
     import sys
     from selenium.webdriver.common.keys import Keys
-
     if sys.platform == "win32":
         element.send_keys(Keys.CONTROL, "a")
-    elif sys.platform == "darwin":  # Mac
+    elif sys.platform == "darwin":
         element.send_keys(Keys.COMMAND, "a")
-    else:  # Linux
+    else:
         element.send_keys(Keys.CONTROL, "a")
     element.send_keys(Keys.BACKSPACE)
 
 
 def scroll_element_sync(driver, element, delta_y=400, sleep_time=2):
-    """
-    滚动元素（同步版本）
-
-    Args:
-        driver: WebDriver实例
-        element: 要滚动的元素
-        delta_y: 垂直滚动距离
-        sleep_time: 滚动后等待时间（秒）
-    """
     import time
-
     try:
+        from selenium.webdriver.common.action_chains import ActionChains
+        from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
         scroll_origin = ScrollOrigin.from_element(element)
         ActionChains(driver).scroll_from_origin(scroll_origin, 0, delta_y).perform()
         time.sleep(sleep_time)
@@ -58,13 +70,6 @@ def scroll_element_sync(driver, element, delta_y=400, sleep_time=2):
 
 
 def ensure_element_centered(driver, element):
-    """
-    确保元素在屏幕中央
-
-    Args:
-        driver: WebDriver实例
-        element: 元素
-    """
     import time
     try:
         driver.execute_script(
@@ -83,17 +88,7 @@ _BIT_HEADERS = {"Content-Type": "application/json"}
 
 
 def open_bit_browser(browser_id: str) -> dict:
-    """
-    打开比特浏览器
-
-    Args:
-        browser_id: 浏览器ID
-
-    Returns:
-        包含驱动路径和调试地址的字典
-    """
     json_data = {"id": str(browser_id)}
-
     try:
         response = requests.post(
             f"{_BIT_API_URL}/browser/open",
@@ -288,73 +283,102 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
     except Exception as e:
         print(f"遍历处理评论区时出错: {e}")
 
+def process_search_keywords(driver):
+    raw_env = os.getenv("KEYWORDS")
+    kws = parse_keywords(raw_env)
+    wait_seconds = 10
+    WebDriverWait(driver, max(10, wait_seconds)).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
+    driver.get("https://www.xiaohongshu.com")
+    WebDriverWait(driver, max(10, wait_seconds)).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
+    time.sleep(1)
+    for kw in kws:
+        input_el = None
+        btn_el = None
+        for css in ["input.search-input", "input[placeholder*='搜索']", "input[autocomplete='off']"]:
+            try:
+                input_el = driver.find_element(By.CSS_SELECTOR, css)
+                if input_el:
+                    break
+            except Exception:
+                continue
+        if not input_el:
+            print("[xhs] 未找到搜索输入框")
+            continue
+        try:
+            ensure_element_centered(driver, input_el)
+        except Exception:
+            pass
+        try:
+            clear_input(input_el)
+        except Exception:
+            pass
+        input_el.click()
+        time.sleep(0.2)
+        from selenium.webdriver.common.action_chains import ActionChains
+        ActionChains(driver).send_keys(kw).perform()
+        time.sleep(0.2)
+        for css in [".search-icon", "button.search-icon", "[class*='search'] svg"]:
+            try:
+                btn_el = driver.find_element(By.CSS_SELECTOR, css)
+                if btn_el:
+                    break
+            except Exception:
+                continue
+        if btn_el is not None:
+            try:
+                ensure_element_centered(driver, btn_el)
+            except Exception:
+                pass
+            try:
+                driver.execute_script("arguments[0].click();", btn_el)
+            except Exception:
+                btn_el.click()
+        else:
+            from selenium.webdriver.common.keys import Keys
+            ActionChains(driver).send_keys(Keys.RETURN).perform()
+        WebDriverWait(driver, max(10, wait_seconds)).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        time.sleep(1)
+        try:
+            body = driver.find_element(By.TAG_NAME, "body")
+            scroll_element_sync(driver, body, 400, 1.0)
+        except Exception:
+            pass
+        print(f"[xhs] 搜索完成: {kw}")
 
 def main():
     """
     主函数 - 打开指定ID的比特浏览器并访问小红书链接
     """
-    # 固定的浏览器ID
-    browser_id = "57bd9953b5364d3db5c4ac7cfbb9a1b3"
-
-    # 小红书链接
-    url = "https://www.xiaohongshu.com/discovery/item/693b98cb000000001e030556?source=webshare&xhsshare=pc_web&xsec_token=ABZ8bY4ZO-6CgS2h3puFrQvc_BqEe8s66nuRxObkjUTAs=&xsec_source=pc_share"
-
+    browser_id = os.getenv("BIT_BROWSER_ID") or BROWSER_ID_DEFAULT
     print(f"正在打开比特浏览器 (ID: {browser_id})...")
-
-    # 打开比特浏览器
     res = open_bit_browser(browser_id)
 
     if not res or "data" not in res:
         print("无法打开比特浏览器")
-        if res:
-            print(f"错误信息: {res}")
         return
 
     driver_path = res["data"].get("driver")
     debugger_address = res["data"].get("http")
 
-    if not driver_path:
-        print("驱动路径为空")
-        return
-
-    if not debugger_address:
-        print("调试地址为空")
-        return
-
     print(f"浏览器已成功打开")
     print(f"驱动路径: {driver_path}")
     print(f"调试地址: {debugger_address}")
 
-    # 配置Chrome选项
-    chrome_options = Options()
-    chrome_options.add_experimental_option("debuggerAddress", debugger_address)
-
     try:
-        # 创建WebDriver实例
+        from selenium.webdriver.chrome.options import Options
+        chrome_options = Options()
+        chrome_options.add_experimental_option("debuggerAddress", debugger_address)
         chrome_service = Service(driver_path)
         driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-
         print("WebDriver连接成功")
 
-        # 访问指定链接
-        print(f"正在访问链接: {url}")
-        driver.get(url)
-
-        # 等待页面加载完成
-        wait = WebDriverWait(driver, 30)
-        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-
-        print("页面加载完成")
-        print(f"页面标题: {driver.title}")
-
-        # 等待一段时间让评论区加载
-        print("等待评论区加载...")
-        time.sleep(5)
-
-        # 逐条遍历处理评论区
-        process_comments_sequentially(driver)
-
-        # 保持脚本运行，直到用户按键
+        process_search_keywords(driver)
         input("\n按Enter键退出...")
 
     except Exception as e:
