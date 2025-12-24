@@ -29,7 +29,7 @@ websockets = ">=15.0.1,<16"
 
 [tool.pixi.tasks]
 web = "python -m autoweb.main"
-server = "python -m autoweb.ssserver"
+server = "python -m autoweb.server"
 
 [tool.pixi.tasks.build-web]
 cmd = "pyinstaller --onefile --noconsole --icon assets\\ICO.ico --name web .\\src\\in.py"
