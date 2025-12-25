@@ -28,7 +28,7 @@ class NotBack(Exception):
     pass
 
 
-class AiohttpWSClient:
+class WSClient:
     session: ClientSession
     ws: ClientWebSocketResponse
 
@@ -209,10 +209,6 @@ class AiohttpWSClient:
                     log.error("重试次数已用尽，WS客户端关闭")
                     raise
             retry += 1
-
-
-# dy 现有代码默认使用的 WSClient（保持向后兼容）
-WSClient = AiohttpWSClient
 
 
 # ----------------------------

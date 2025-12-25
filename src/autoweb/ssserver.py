@@ -19,7 +19,7 @@ class WebSocketServer:
     async def _handle_login_request(self) -> None:
         """处理登录请求"""
         config = PcConfig(
-            SIBERIAN_URL="http://http://139.159.230.186/api/siberianNitraria/verifyActivate",
+            SIBERIAN_URL="http://127.0.0.1:8765/api/siberianNitraria/verifyActivate",
             SIBERIAN_KEY="Li/HbEihAYOLKDSYZAqJ/8d2tN0SC81ROxOFJ4Yokuk=",
             # 搜索关键字
             KEYWORDS=[
@@ -37,7 +37,7 @@ class WebSocketServer:
             VIDEO_COMMENTS="|".join(["6"]),
             COMMENT_REPLIES="|".join(["6"]),
             COMMENT_FILTER_KEYWORDS=["美女"],
-            BIT_BROWSER_IDS=["57bd9953b5364d3db5c4ac7cfbb9a1b3"],
+            BIT_BROWSER_IDS=["993f02587c724a24a624cd7decaf2b10","6c9c32f09f904051813f7fbe302c4bf9"],
             # ShareConfig 中的参数
             LIKE_PROBABILITY=10,
             VISIT_ENABLE=10,
@@ -65,7 +65,6 @@ class WebSocketServer:
             COMMENT_WAIT_MAX=8,
             MAX_SCROLL_VIDEO=[10, 20],
             MAX_COMMENT=[2, 15]
-
         )
         config_data = config.model_dump()
         print("发送的配置数据:", config_data)

@@ -96,33 +96,6 @@ class KuSettings(ShareConfig):
 
     VERSION: str = "1.3.2"
 
-    # 快手bit浏览器设置
-    BROWSER_SAVE_DIR: str = "browser_sessions"
-    BROWSER_MAX_WORKERS: int = 5
-
-    # 快手操作设置
-    VIDEO_INPUT_DELAY_MIN: float = 0.1
-    VIDEO_INPUT_DELAY_MAX: float = 0.3
-    VIDEO_IMPLICIT_WAIT: int = 10
-    VIDEO_PAGE_LOAD_WAIT: int = 2
-    VIDEO_MAIN_LOOP_INTERVAL_MIN: float = 3600
-    VIDEO_MAIN_LOOP_INTERVAL_MAX: float = 3601
-    VIDEO_ACTION_INTERVAL_MIN: float = 15
-    VIDEO_ACTION_INTERVAL_MAX: float = 30
-    VIDEO_SCROLL_INTERVAL_MIN: float = 1
-    VIDEO_SCROLL_INTERVAL_MAX: float = 10
-    VIDEOS_PER_LOOP_MIN: int = 15
-    VIDEOS_PER_LOOP_MAX: int = 30
-    FOLLOW_COUNT_MIN: int = 170
-    FOLLOW_COUNT_MAX: int = 195
-    COMMENT_MIN_OPERATION_COUNT: int = 3
-    COMMENT_MAX_OPERATION_COUNT: int = 5
-    COMMENT_MIN_ELEMENTS_COUNT: int = 3
-    COMMENT_MAX_ELEMENTS_COUNT: int = 5
-    FOLLOW_INTERVAL_MIN: float = 3
-    FOLLOW_INTERVAL_MAX: float = 10
-    FOLLOW_PROBABILITY: float = 4
-    COMMENT_KEYWORDS: list = []
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
 
@@ -224,12 +197,40 @@ class Base(BaseSettings):
 
 
 class PcConfig(ShareConfig):
-    SIBERIAN_URL: str =  "http://139.159.230.186/api/siberianNitraria/verifyActivate"
-    SIBERIAN_KEY: str = "2j2r6Jdr2Se/5Sv9n9H67xQOADQZ4ThV9jINpCYZbqY="
+    SIBERIAN_URL: str
+    SIBERIAN_KEY: str
 
     KEYWORDS: list = [] # 关键词列表
     MAX_SCROLL_VIDEO: list = [10, 20] # 浏览视频数
     MAX_COMMENT: list = [2, 15] # 评论区滚动次数
+
+    # 快手bit浏览器设置
+    BROWSER_SAVE_DIR: str = "browser_sessions"
+    BROWSER_MAX_WORKERS: int = 5
+
+    # 快手操作设置
+    VIDEO_INPUT_DELAY_MIN: float = 0.1
+    VIDEO_INPUT_DELAY_MAX: float = 0.3
+    VIDEO_IMPLICIT_WAIT: int = 10
+    VIDEO_PAGE_LOAD_WAIT: int = 2
+    VIDEO_MAIN_LOOP_INTERVAL_MIN: float = 3600
+    VIDEO_MAIN_LOOP_INTERVAL_MAX: float = 3601
+    VIDEO_ACTION_INTERVAL_MIN: float = 15
+    VIDEO_ACTION_INTERVAL_MAX: float = 30
+    VIDEO_SCROLL_INTERVAL_MIN: float = 1
+    VIDEO_SCROLL_INTERVAL_MAX: float = 10
+    VIDEOS_PER_LOOP_MIN: int = 15
+    VIDEOS_PER_LOOP_MAX: int = 30
+    FOLLOW_COUNT_MIN: int = 170
+    FOLLOW_COUNT_MAX: int = 195
+    COMMENT_MIN_OPERATION_COUNT: int = 3
+    COMMENT_MAX_OPERATION_COUNT: int = 5
+    COMMENT_MIN_ELEMENTS_COUNT: int = 3
+    COMMENT_MAX_ELEMENTS_COUNT: int = 5
+    FOLLOW_INTERVAL_MIN: float = 3
+    FOLLOW_INTERVAL_MAX: float = 10
+    FOLLOW_PROBABILITY: float = 4
+    COMMENT_KEYWORDS: list = []
 
     model_config = SettingsConfigDict(extra="ignore")
 
