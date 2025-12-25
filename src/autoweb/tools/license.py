@@ -9,41 +9,10 @@ from __future__ import annotations
 import os
 import threading
 import time
-from asyncio import sleep
-
-import aiohttp
 import requests
-import ujson
 
 from .core import log
 from .config import env, get_config
-from .ws_client import WSClient
-
-
-async def verify(ws: "WSClient"):
-    """
-    dy 异步模式：通过 WebSocket 下发配置后，定期向验证服务器校验
-    """
-    await ws.ready_event.wait()
-    config = ws.config
-    async with aiohttp.ClientSession(json_serialize=ujson.dumps) as session:
-        while True:
-            if not config.SIBERIAN_URL or not config.SIBERIAN_KEY:
-                log.warning("SIBERIAN_URL 或 SIBERIAN_KEY 未设置，跳过验证")
-                await sleep(180)
-                continue
-
-            async with session.post(
-                config.SIBERIAN_URL,
-                json={
-                    "siberian": config.SIBERIAN_KEY,
-                    "deviceCode": env.DEVICE_CODE,
-                },
-            ) as response:
-                res = await response.json()
-                if res["code"] != 200:
-                    raise Exception(res)
-            await sleep(180)
 
 
 class LicenseException(Exception):

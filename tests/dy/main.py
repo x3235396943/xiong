@@ -15,11 +15,11 @@ from random import randint, choice
 from datetime import datetime
 import threading
 
-from ..tools import log, config
-from ..tools.ws_client import WSClient
-from ..tools.core import AbstractCrawler, openBrowser
-from ..tools.license import LicenseManager, LicenseException
-from ..tools.douyin_common import (
+from autoweb.tools import log, config
+from autoweb.tools.ws_client import WSClient
+from autoweb.tools.core import AbstractCrawler, openBrowser
+from autoweb.tools.license import LicenseManager, LicenseException
+from autoweb.tools.douyin_common import (
     DouyinConfigParser,
     DouyinCommentActions,
     DouyinBrowserActions,
@@ -48,10 +48,12 @@ class DouyinCrawler(AbstractCrawler):
     def _parse_keywords(self):
         """解析关键字配置"""
         raw = self.ws.config.COMMENT_FILTER_KEYWORDS or []
+        self.sleep(3)
         return DouyinConfigParser.parse_keywords(raw)
 
     def _normalize_text(self, t):
         """文本标准化（转小写、去除多余空格）"""
+        self.sleep(3)
         return DouyinConfigParser.normalize_text(t)
 
     def _parse_video_comments(self):
@@ -62,11 +64,12 @@ class DouyinCrawler(AbstractCrawler):
     def _parse_comment_replies(self):
         """解析评论回复内容列表，使用 -&- 作为分隔符"""
         raw = getattr(self.ws.config, "COMMENT_REPLIES", "") or ""
+        self.sleep(3)
         return DouyinConfigParser.parse_comment_replies(raw)
 
     def scroll(self, dom: WebElement):
         DouyinBrowserActions.scroll_element_async(
-            self.driver, dom, delta_y=200, sleep_time=2
+            self.driver, dom, delta_y=200, sleep_time=2, sleep=self.sleep
         )
 
     def clear(self, dom: WebElement):
@@ -263,7 +266,7 @@ class DouyinCrawler(AbstractCrawler):
                         )
                         try:
                             DouyinBrowserActions.ensure_element_centered(
-                                driver, avatar_link
+                                driver, avatar_link, sleep=self.sleep
                             )
                         except Exception:
                             pass
@@ -283,7 +286,7 @@ class DouyinCrawler(AbstractCrawler):
                         )
                         try:
                             DouyinBrowserActions.ensure_element_centered(
-                                driver, avatar_box
+                                driver, avatar_box, sleep=self.sleep
                             )
                         except Exception:
                             pass
@@ -295,7 +298,7 @@ class DouyinCrawler(AbstractCrawler):
                         )
                         try:
                             DouyinBrowserActions.ensure_element_centered(
-                                driver, avatar_link
+                                driver, avatar_link, sleep=self.sleep
                             )
                         except Exception:
                             pass
@@ -419,7 +422,7 @@ class DouyinCrawler(AbstractCrawler):
     def _leave_video_comment(self, active, comment_text):
         """在当前视频页面留下评论"""
         return DouyinCommentActions.leave_video_comment_async(
-            self.driver, comment_text, active_element=active, ws_push_func=self.ws.push
+            self.driver, comment_text, active_element=active, ws_push_func=self.ws.push,sleep = self.sleep
         )
 
     def _reply_to_comment(self, active, comment, reply_text):
@@ -430,6 +433,7 @@ class DouyinCrawler(AbstractCrawler):
             reply_text,
             active_element=active,
             ws_push_func=self.ws.push,
+            sleep = self.sleep
         )
 
     def _on_license_invalid(self):
@@ -519,6 +523,7 @@ class DouyinCrawler(AbstractCrawler):
             finally:
                 timestamp = datetime.now().strftime("%Y年%m月%d日_%H时%M分%S秒")
                 driver.get_screenshot_as_file(f"screenshot_{timestamp}.png")
+
         except LicenseException:
             # 卡密失效异常，直接抛出
             log.error("程序因卡密失效而停止")

@@ -26,6 +26,7 @@ ujson = ">=5.11.0,<6"
 psutil = "*"
 ipykernel = ">=7.1.0,<8"
 websockets = ">=15.0.1,<16"
+pixi-pycharm = ">=0.0.10,<0.0.11"
 
 [tool.pixi.tasks]
 web = "python -m autoweb.main"

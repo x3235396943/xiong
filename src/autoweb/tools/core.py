@@ -137,6 +137,7 @@ class DataReporter:
         self._send_thread = None
         self._send_thread_running = False
         self._start_send_thread()
+        self._keywords: str | None = None
 
     def _start_send_thread(self):
         if self._send_thread_running:
@@ -207,6 +208,7 @@ class DataReporter:
                 stats = self._stats
                 device_code = self.device_code
                 browser_id = self.browser_id
+                keywords = self._keywords
         except Exception:
             return
 
@@ -220,12 +222,10 @@ class DataReporter:
                     "follow": stats["follow"],
                     "id": device_code,
                     "isCompleted": is_completed,
-                    "urlIndex": stats["urlIndex"],
                     "like": stats["like"],
-                    "urlFail": stats["urlFail"],
-                    "urlOk": stats["urlOk"],
                     "video": stats["video"],
                     "videoComment": stats["videoComment"],
+                    **({"keywords": keywords} if keywords else {}),
                 },
                 "id": device_code,
             }
@@ -311,6 +311,11 @@ class DataReporter:
 
     def __del__(self):
         self._stop_send_thread()
+
+    def set_keywords(self, word: str | None):
+        with self._lock:
+            self._keywords = word
+        self._check_and_report()
 
 
 # ----------------------------
