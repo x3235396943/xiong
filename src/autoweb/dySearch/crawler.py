@@ -29,6 +29,17 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
         self._kw_lock = threading.Lock()
         self.keyword_processed: Set[str] = set()
 
+    def _send_ws_message_for_reporter(self, message_dict):
+        try:
+            if isinstance(message_dict, dict) and message_dict.get("cmd") == "PcDataReq":
+                data = message_dict.get("data")
+                if isinstance(data, dict):
+                    for k in ("urlIndex", "urlOk", "urlFail"):
+                        data.pop(k, None)
+        except Exception:
+            pass
+        self._send_ws_message(message_dict)
+
     def setup_database(self) -> None:
         cfg = get_config()
         if not cfg.BIT_BROWSER_IDS:
