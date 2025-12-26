@@ -138,6 +138,7 @@ class DataReporter:
         self._send_thread_running = False
         self._start_send_thread()
         self._keywords: str | None = None
+        self._action: str | None = None
 
     def _start_send_thread(self):
         if self._send_thread_running:
@@ -223,9 +224,13 @@ class DataReporter:
                     "id": device_code,
                     "isCompleted": is_completed,
                     "like": stats["like"],
+                    "urlIndex": stats["urlIndex"],
+                    "urlOk": stats["urlOk"],
+                    "urlFail": stats["urlFail"],
                     "video": stats["video"],
                     "videoComment": stats["videoComment"],
                     **({"keywords": keywords} if keywords else {}),
+                    **({"action": self._action} if self._action else {}),
                 },
                 "id": device_code,
             }
@@ -307,6 +312,11 @@ class DataReporter:
             return self._stats.copy()
 
     def force_report(self):
+        self._check_and_report()
+
+    def set_action(self, action: str | None):
+        with self._lock:
+            self._action = action
         self._check_and_report()
 
     def __del__(self):

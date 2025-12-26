@@ -94,7 +94,7 @@ class KuSettings(ShareConfig):
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str = "1.3.3"
+    VERSION: str = "1.3.5"
 
     # 快手bit浏览器设置
     BROWSER_SAVE_DIR: str = "browser_sessions"
@@ -205,8 +205,8 @@ class Base(BaseSettings):
 
 
 class PcConfig(ShareConfig):
-    SIBERIAN_URL: str = "http://139.159.230.186/api/siberianNitraria/verifyActivate"
-    SIBERIAN_KEY: str = "2j2r6Jdr2Se/5Sv9n9H67xQOADQZ4ThV9jINpCYZbqY="
+    SIBERIAN_URL: str
+    SIBERIAN_KEY: str
 
     KEYWORDS: list = []  # 关键词列表
     MAX_SCROLL_VIDEO: list = [10, 20]  # 浏览视频数

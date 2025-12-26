@@ -292,6 +292,7 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                                     try:
                                         DouyinCommentActions.leave_video_comment_async(driver, comment_text, active_element=active, ws_push_func=None, sleep=self.utils.safe_sleep)
                                         if reporter:
+                                            reporter.set_action("videoComment")
                                             reporter.increment_video_comment(1)
                                     except Exception:
                                         pass
@@ -377,6 +378,7 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                         like_button.click()
                         like_index += 1
                         if reporter:
+                            reporter.set_action("like")
                             reporter.increment_like(1)
                         self.utils.safe_sleep(random.randint(cfg.LIKE_WAIT_MIN, cfg.LIKE_WAIT_MAX), browser_number=browser_number)
                     except Exception:
@@ -404,6 +406,7 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                                         follow_button.click()
                                         follow_index += 1
                                         if reporter:
+                                            reporter.set_action("follow")
                                             reporter.increment_follow(1)
                                 except Exception:
                                     pass
@@ -429,6 +432,7 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                             try:
                                 DouyinCommentActions.reply_to_comment_async(driver, comment, reply_content, active_element=active, ws_push_func=None, sleep=self.utils.safe_sleep)
                                 if reporter:
+                                    reporter.set_action("reply")
                                     reporter.increment_comment(1)
                             except Exception:
                                 pass

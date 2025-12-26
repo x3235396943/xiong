@@ -395,6 +395,8 @@ class DyShareUtils:
                             self.human_like_delay(0.5, 1.0, browser_number)
                             follow_button.click()
                             if reporter:
+                                reporter.set_action("follow")
+                            if reporter:
                                 reporter.increment_follow()
                             self.debug_log("info", "关注成功", browser_number)
                             action_success = True
@@ -521,6 +523,8 @@ class DyShareUtils:
                 self.human_like_delay(0.3, 0.8, browser_number)
                 web_driver.execute_script("arguments[0].click();", like_button)
                 if reporter:
+                    reporter.set_action("like")
+                if reporter:
                     reporter.increment_like()
                 like_count += 1
                 time.sleep(random.uniform(0.5, 1.5))
@@ -607,6 +611,8 @@ class DyShareUtils:
                     web_driver, target_comment_now, reply_content, browser_number, browser_id
                 )
                 if reply_success:
+                    if reporter:
+                        reporter.set_action("reply")
                     if reporter:
                         reporter.increment_comment()
                     self.debug_log(
@@ -756,6 +762,8 @@ class DyShareUtils:
                         )
                         if success:
                             video_comment_count += 1
+                            if reporter:
+                                reporter.set_action("videoComment")
                             if reporter:
                                 reporter.increment_video_comment()
                             self.debug_log(
