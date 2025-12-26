@@ -1146,8 +1146,9 @@ class DyShareUtils:
                             comment_wait_max_val,
                             visit_min_val,
                             visit_max_val,
-                            url_index,
-                            reporter,
+                            navigate=True,
+                            url_index=url_index,
+                            reporter=reporter,
                         )
 
                         if success:
@@ -1408,6 +1409,7 @@ class DyShareUtils:
                     comment_wait_max,
                     visit_min,
                     visit_max,
+                    navigate=True,
                     url_index=i,
                 )
                 if not success:
