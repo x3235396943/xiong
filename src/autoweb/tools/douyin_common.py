@@ -168,7 +168,7 @@ class DouyinCommentActions:
 
     @staticmethod
     def leave_video_comment_async(
-        driver, comment_text, active_element=None, ws_push_func=None
+        driver, comment_text, active_element=None, ws_push_func=None, sleep=sleep
     ):
         """
         在当前视频页面留下评论（异步版本）
@@ -306,7 +306,7 @@ class DouyinCommentActions:
 
     @staticmethod
     def reply_to_comment_async(
-        driver, target_comment, reply_text, active_element=None, ws_push_func=None
+        driver, target_comment, reply_text, active_element=None, ws_push_func=None, sleep=sleep
     ):
         """
         回复指定评论（异步版本）
@@ -463,7 +463,7 @@ class DouyinBrowserActions:
         element.send_keys(Keys.BACKSPACE)
 
     @staticmethod
-    def scroll_element_async(driver, element, delta_y=200, sleep_time=2):
+    def scroll_element_async(driver, element, delta_y=200, sleep_time=2, sleep=sleep):
         """
         滚动元素（异步版本）
 
@@ -472,6 +472,7 @@ class DouyinBrowserActions:
             element: 要滚动的元素
             delta_y: 垂直滚动距离
             sleep_time: 滚动后等待时间（秒）
+            sleep: 可选的sleep函数，用于支持异步环境
         """
         ActionChains(driver).scroll_from_origin(
             ScrollOrigin.from_element(element), 0, delta_y
@@ -499,7 +500,7 @@ class DouyinBrowserActions:
             log.error(f"滚动失败: {e}")
 
     @staticmethod
-    def ensure_element_centered(driver, element):
+    def ensure_element_centered(driver, element, sleep=sleep):
         import time
 
         try:
@@ -507,7 +508,7 @@ class DouyinBrowserActions:
                 "arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'nearest'});",
                 element,
             )
-            time.sleep(0.3)
+            sleep(0.3)
             return True
         except Exception:
             return False
