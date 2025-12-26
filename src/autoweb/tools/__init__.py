@@ -1,6 +1,6 @@
 from .core import log
 from .config import get_config, KuSettings, PcConfig, env
-from .license import verify, LicenseException, LicenseManager
+from .license import LicenseException, LicenseManager
 from .douyin_common import (
     DouyinConfigParser,
     DouyinCommentActions,
@@ -15,7 +15,6 @@ __all__ = [
     "get_config",
     "PcConfig",
     "KuSettings",
-    "verify",
     "LicenseException",
     "LicenseManager",
     "DouyinConfigParser",

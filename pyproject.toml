@@ -30,7 +30,7 @@ pixi-pycharm = ">=0.0.10,<0.0.11"
 
 [tool.pixi.tasks]
 web = "python -m autoweb.main"
-server = "python -m autoweb.ssserver"
+server = "python -m autoweb.server"
 
 [tool.pixi.tasks.build-web]
 cmd = "pyinstaller --onefile --noconsole --icon assets\\ICO.ico --name web .\\src\\in.py"

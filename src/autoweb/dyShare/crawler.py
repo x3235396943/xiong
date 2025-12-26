@@ -263,7 +263,12 @@ class DyShareUtils:
     def open_comment_section(self, driver, wait_time=10, browser_number=None):
         self.debug_log("info", "尝试打开评论区", browser_number)
         self.check_stop_signal()
-
+        try:
+            _ = driver.find_element(By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+            self.debug_log("info", "评论区已打开", browser_number)
+            return True
+        except Exception:
+            pass
         wait = WebDriverWait(driver, wait_time)
         try:
             comment_button = wait.until(
@@ -271,24 +276,24 @@ class DyShareUtils:
                     (By.XPATH, '//*[contains(@class, "fN2jqmuV")]/div[2]')
                 )
             )
+            self.human_like_delay(0.5, 1.0, browser_number)
+            comment_button.click()
+            self.debug_log("info", "打开评论区成功", browser_number)
+            return True
         except Exception:
-            self.debug_log("warning", "评论区按钮未找到，尝试刷新页面...", browser_number)
-            driver.refresh()
-            self.human_like_delay(5, 7, browser_number)
             try:
-                comment_button = wait.until(
+                alt_btn = wait.until(
                     EC.element_to_be_clickable(
-                        (By.XPATH, '//*[contains(@class, "fN2jqmuV")]/div[2]')
+                        (By.CSS_SELECTOR, '[data-e2e="feed-comment-icon"]')
                     )
                 )
+                self.human_like_delay(0.5, 1.0, browser_number)
+                alt_btn.click()
+                self.debug_log("info", "打开评论区成功(搜索页入口)", browser_number)
+                return True
             except Exception:
-                self.debug_log("warning", "刷新后仍未找到评论按钮，跳过打开评论区操作", browser_number)
+                self.debug_log("warning", "评论区按钮未找到", browser_number)
                 return False
-
-        self.human_like_delay(0.5, 1.0, browser_number)
-        comment_button.click()
-        self.debug_log("info", "打开评论区成功", browser_number)
-        return True
 
     def switch_to_new_tab(self, driver, url, wait_time=10, browser_number=None):
         self.debug_log("info", f"尝试在新标签页中打开链接: {url}", browser_number)
@@ -648,6 +653,7 @@ class DyShareUtils:
         comment_wait_max,
         visit_min,
         visit_max,
+        navigate=True,
         url_index=None,
         reporter=None,
     ):
@@ -699,20 +705,18 @@ class DyShareUtils:
 
         try:
             self.check_stop_signal()
-            self.debug_log("info", f"访问网页: {url}", browser_number)
-
-            try:
-                driver.set_page_load_timeout(wait_time)
-            except Exception:
-                pass
-
-            driver.get(url)
-            self.check_stop_signal()
-            wait = WebDriverWait(driver, wait_time)
-            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-
-            self.human_like_delay(3, 6, browser_number)
-            self.human_like_delay(1, 2, browser_number)
+            if navigate:
+                self.debug_log("info", f"访问网页: {url}", browser_number)
+                try:
+                    driver.set_page_load_timeout(wait_time)
+                except Exception:
+                    pass
+                driver.get(url)
+                self.check_stop_signal()
+                wait = WebDriverWait(driver, wait_time)
+                wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+                self.human_like_delay(3, 6, browser_number)
+                self.human_like_delay(1, 2, browser_number)
 
             if config.ENABLE_VIDEO_COMMENT:
                 wait_time_before_comment = random.uniform(
