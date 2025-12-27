@@ -511,3 +511,6 @@ class BrowserCluster:
 def get_cluster():
     config = get_config()
     return BrowserCluster(max_workers=config.BROWSER_MAX_WORKERS)
+
+# 全局集群实例，可以直接导入使用
+cluster = get_cluster()

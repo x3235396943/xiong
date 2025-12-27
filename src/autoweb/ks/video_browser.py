@@ -35,7 +35,7 @@ from .video_pause_manager import (
     is_need_play
 )
 from ..tools import log as logger
-from ..tools import config, log2
+from ..tools import config
 from .browser_cluster import cluster
 
 
@@ -1728,7 +1728,7 @@ def _video_single_operation(driver, comment_elements:list, params: dict) -> tupl
                     # 等待一下，让点赞操作生效
                     time.sleep(0.5)
                     logger.info(f"[{params['browser_name']}] ✓ 点赞操作完成")
-                    log2.info(
+                    logger.info(
                         {
                             "code": 0,
                             "data": {
@@ -1788,7 +1788,7 @@ def _video_single_operation(driver, comment_elements:list, params: dict) -> tupl
                         time.sleep(3)
                         follow_success = True
                         logger.info(f"[{params['browser_name']}] ✓ 关注操作完成")
-                        log2.info(
+                        logger.info(
                             {
                                 "code": 0,
                                 "data": {
@@ -2006,7 +2006,7 @@ def browser_video_loop(
         logger.error(f"[{params['browser_name']}] ✗ 浏览器驱动未初始化，跳过")
         return
 
-    log2.info(
+    logger.info(
                 {
                     "code": 0,
                     "data": {
@@ -2063,7 +2063,7 @@ def browser_video_loop(
                 if not now_search_keywords:
                     keywords_exhausted = True
                     logger.info(f"[{params['browser_name']}] 搜索关键词已耗尽，停止新的搜索流程")
-                    log2.info(
+                    logger.info(
                             {
                                 "code": 0,
                                 "data": {
@@ -2083,7 +2083,7 @@ def browser_video_loop(
                     continue
                 else:
                     logger.info(f"[{params['browser_name']}] ✓ 点击视频完成")
-                    log2.info(
+                    logger.info(
                             {
                                 "code": 0,
                                 "data": {
@@ -2182,7 +2182,7 @@ def browser_video_loop(
                         if old_current_seconds is None:
                             logger.debug(f"[{params['browser_name']}] 无法获取上一帧进度，跳过本次播放完毕检测")
                             video_operation_completed = False
-                            log2.info(
+                            logger.info(
                                 {
                                     "code": 0,
                                     "data": {
@@ -2212,7 +2212,7 @@ def browser_video_loop(
                             if now_video_poster_url and now_video_poster_url != old_video_poster_url:
                                 old_video_poster_url = now_video_poster_url
                                 video_operation_completed =False
-                                log2.info(
+                                logger.info(
                                     {
                                         "code": 0,
                                         "data": {

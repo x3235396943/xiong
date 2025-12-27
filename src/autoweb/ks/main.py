@@ -181,7 +181,6 @@ comment_max_operation_count = config.COMMENT_MAX_OPERATION_COUNT
 comment_min_elements_count = config.COMMENT_MIN_ELEMENTS_COUNT
 # 评论区最大元素数量判断
 comment_max_elements_count = config.COMMENT_MAX_ELEMENTS_COUNT
-
 # 全局退出标志
 shutdown_event = threading.Event()
 
@@ -370,26 +369,3 @@ if __name__ == "__main__":
         shutdown_event.set()
         kill_chrome_processes()
         logger.info("程序已退出")
-    # # 快手操作设置
-    # VIDEO_INPUT_DELAY_MIN: float = 0.1
-    # VIDEO_INPUT_DELAY_MAX: float = 0.3
-    # VIDEO_IMPLICIT_WAIT: int = 10
-    # VIDEO_PAGE_LOAD_WAIT: int = 2
-    # VIDEO_MAIN_LOOP_INTERVAL_MIN: float = 3600
-    # VIDEO_MAIN_LOOP_INTERVAL_MAX: float = 3601
-    # VIDEO_ACTION_INTERVAL_MIN: float = 15
-    # VIDEO_ACTION_INTERVAL_MAX: float = 30
-    # VIDEO_SCROLL_INTERVAL_MIN: float = 1
-    # VIDEO_SCROLL_INTERVAL_MAX: float = 10
-    # VIDEOS_PER_LOOP_MIN: int = 15
-    # VIDEOS_PER_LOOP_MAX: int = 30
-    # FOLLOW_COUNT_MIN: int = 170
-    # FOLLOW_COUNT_MAX: int = 195
-    # COMMENT_MIN_OPERATION_COUNT: int = 3
-    # COMMENT_MAX_OPERATION_COUNT: int = 5
-    # COMMENT_MIN_ELEMENTS_COUNT: int = 3
-    # COMMENT_MAX_ELEMENTS_COUNT: int = 5
-    # FOLLOW_INTERVAL_MIN: float = 3
-    # FOLLOW_INTERVAL_MAX: float = 10
-    # FOLLOW_PROBABILITY: float = 4
-    # COMMENT_KEYWORDS: list = []
