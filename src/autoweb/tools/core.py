@@ -338,10 +338,12 @@ _BIT_HEADERS = {"Content-Type": "application/json"}
 def openBrowser(browser_id: str) -> dict:
     cfg = get_config()
     json_data: Dict[str, Any] = {"id": f"{browser_id}"}
+    
+    # 根据配置决定是否使用无头模式
     if getattr(cfg, "HEADLESS", False):
         json_data["args"] = ["--headless"]
-        json_data["queue"] = True
-        json_data["ignoreDefaultUrls"] = True
+    json_data["queue"] = True
+    json_data["ignoreDefaultUrls"] = True
 
     res = requests.post(
         f"{_BIT_API_URL}/browser/open", data=json.dumps(json_data), headers=_BIT_HEADERS

@@ -1,6 +1,8 @@
+import asyncio
 from .tools import config, log
 from .dyShare import DouyinShareCrawler
 from .dySearch import DouyinSearchCrawler
+from .ks.main import KuaishouCrawler
 
 
 def main():
@@ -14,10 +16,15 @@ def main():
             o = DouyinSearchCrawler()
             o.start()
             return
-        print(f"❌ 错误：不支持的模式 '{config.RUN_MODE}'。")
+        print(f"❌ 错误：不支持的模式 '{config.RUN_MODE}'.")
+        return
+    elif config.PLATFORM == "ks":
+        # 快手平台
+        o = KuaishouCrawler()
+        asyncio.run(o.start())
         return
     else:
-        print(f"❌ 错误：不支持的平台 '{config.PLATFORM}'。")
+        print(f"❌ 错误：不支持的平台 '{config.PLATFORM}'.")
         return
 
 

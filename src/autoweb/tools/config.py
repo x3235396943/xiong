@@ -91,7 +91,7 @@ class KuSettings(ShareConfig):
     URL_INDEX: list = []
     # 其他设置
     WAIT_TIME: int = 10  # 等待元素出现的时间（秒）
-    HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
+    HEADLESS: bool  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
     VERSION: str = "1.3.4"
@@ -222,7 +222,7 @@ class Base(BaseSettings):
     CONNECT_KEY: str
     VERSION: str | None
     DEBUG: bool = False
-    HEADLESS: bool = False
+    HEADLESS: bool
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
 

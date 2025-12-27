@@ -1804,7 +1804,7 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
     def _handle_config_update(self, config_data: dict):
         try:
-            log.info(f"收到配置更新: {config_data}")
+            # log.info(f"收到配置更新: {config_data}")
             cfg = get_config()
             cfg.update_from_dict(config_data)
             if "SIBERIAN_URL" in config_data:
