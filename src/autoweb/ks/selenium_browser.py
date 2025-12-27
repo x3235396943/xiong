@@ -286,7 +286,7 @@ class SeleniumBrowser:
                 self.id = browser_id
             
             json_data: Dict[str, Any] = {"id": f'{browser_id}'}
-            json_data["args"] = ["--headless"]
+            # json_data["args"] = ["--headless"]
             json_data["queue"] = True
             json_data["ignoreDefaultUrls"] = True
             try:
