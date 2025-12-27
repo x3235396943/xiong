@@ -37,7 +37,7 @@ class WebSocketServer:
             VIDEO_COMMENTS="|".join(["6"]),
             COMMENT_REPLIES="|".join(["6"]),
             COMMENT_FILTER_KEYWORDS=["美女"],
-            BIT_BROWSER_IDS=["993f02587c724a24a624cd7decaf2b10","6c9c32f09f904051813f7fbe302c4bf9"],
+            BIT_BROWSER_IDS=["4bbbe30c084a495796aaaff8a7082fda","57bd9953b5364d3db5c4ac7cfbb9a1b3"],
             # ShareConfig 中的参数
             LIKE_PROBABILITY=10,
             VISIT_ENABLE=10,

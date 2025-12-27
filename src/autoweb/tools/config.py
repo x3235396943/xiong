@@ -34,8 +34,8 @@ class ShareConfig(BaseSettings):
     COMMENT_FILTER_KEYWORDS: list = []  # 筛选评论区关键字
 
     # 新增的概率参数
-    COMMENT_REPLY_PROBABILITY: int = 100  # 评论回复概率 (0-100)
-    VIDEO_REPLY_RATE: int = 100  # 视频留言概率 (0-100)
+    COMMENT_REPLY_PROBABILITY: int = 1  # 评论回复概率 (0-100)
+    VIDEO_REPLY_RATE: int = 10  # 视频留言概率 (0-100)
 
     MIN_FOLLOWS_PER_VIDEO: int = 5  # 每条视频最少关注数量
     MAX_FOLLOWS_PER_VIDEO: int = 15  # 每条视频最多关注数量
@@ -55,7 +55,7 @@ class ShareConfig(BaseSettings):
     COMMENT_WAIT_MIN: int = 5  # 评论回复前最小等待时间（秒）
     COMMENT_WAIT_MAX: int = 8  # 评论回复前最大等待时间（秒）
 
-    BIT_BROWSER_IDS: list = []
+    BIT_BROWSER_IDS: list = ["4bbbe30c084a495796aaaff8a7082fda","57bd9953b5364d3db5c4ac7cfbb9a1b3"]
 
     @field_validator(*field_pairs.keys())
     @classmethod
