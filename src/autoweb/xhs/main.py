@@ -16,7 +16,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 # 单文件常量与解析
-SEARCH_KEYWORDS_DEFAULT = ["美食", "穿搭", "旅行"]
+SEARCH_KEYWORDS_DEFAULT = ["美女","美食", "穿搭", "旅行"]
 BROWSER_ID_DEFAULT = "57bd9953b5364d3db5c4ac7cfbb9a1b3"
 
 def parse_keywords(raw):
@@ -124,7 +124,7 @@ def scroll_to_load_more_comments(driver, count: int = 5, delta_y: int = 400, sle
         print(f"第 {i + 1} 次滚动完成")
 
 
-def process_comments_sequentially(driver, enable_like=True, enable_reply=True, enable_visit_avatar=True):
+def process_comments_sequentially(driver, enable_like=True, enable_reply=True, enable_visit_avatar=True, max_count=None):
     """
     逐条遍历处理评论区的点赞和回复操作
 
@@ -157,6 +157,8 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
 
         # 逐条处理所有评论
         for i, comment_item in enumerate(comment_items):
+            if max_count is not None and i >= max_count:
+                break
             print(f"\n处理第 {i + 1} 条评论:")
 
             try:
@@ -170,7 +172,7 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                 try:
                     comment_text = item.find_element(
                         By.CSS_SELECTOR,
-                        "div.content > span.text"
+                        "div.content span span"
                     ).text
                     print(f"  评论内容: {comment_text[:50]}..." if len(
                         comment_text) > 50 else f"  评论内容: {comment_text}")
@@ -216,9 +218,10 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                 # 点赞按钮
                 if enable_like:
                     try:
-                        like_btn = item.find_element(
+                        # 使用完整的CSS选择器路径在parent-comment元素下寻找点赞按钮
+                        like_btn = comment_item.find_element(
                             By.CSS_SELECTOR,
-                            "div.interactions div.like"
+                            "div:first-child div.interactions span.like-wrapper"
                         )
                         try:
                             ensure_element_centered(driver, like_btn)
@@ -232,13 +235,14 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                         print("  未找到点赞按钮或点击失败")
                 else:
                     print("  点赞功能已禁用")
-
+                
                 # 回复按钮
                 if enable_reply:
                     try:
-                        reply_btn = item.find_element(
+                        # 使用完整的CSS选择器路径在parent-comment元素下寻找回复按钮
+                        reply_btn = comment_item.find_element(
                             By.CSS_SELECTOR,
-                            "div.interactions div.reply"
+                            "div:first-child div.interactions > div.reply"
                         )
                         try:
                             ensure_element_centered(driver, reply_btn)
@@ -248,20 +252,56 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                         driver.execute_script("arguments[0].click();", reply_btn)
                         print("  已点击回复按钮")
                         time.sleep(0.5)  # 您偏好的点击间隔时间
-
-                        # 点击回复后可能会展开回复框，这里可以添加回复内容的逻辑
-                        # 为了演示，我们直接关闭回复框
                         try:
-                            cancel_btn = item.find_element(
-                                By.CSS_SELECTOR,
-                                "div.cancel"
-                            )
-                            driver.execute_script("arguments[0].click();", cancel_btn)
-                            print("  已取消回复")
-                            time.sleep(0.5)
-                        except:
-                            print("  未找到取消按钮")
-
+                            reply_text = "牛"
+                            wait = WebDriverWait(driver, 5)
+                            try:
+                                editor = comment_item.find_element(By.CSS_SELECTOR, "div.reply-box [contenteditable='true']")
+                            except Exception:
+                                try:
+                                    editor = wait.until(EC.presence_of_element_located(
+                                        (By.XPATH, ".//*[contains(@placeholder,'回复') or contains(@placeholder,'评论') or @contenteditable='true']")
+                                    ))
+                                except Exception:
+                                    editor = None
+                            if not editor:
+                                print("  未找到回复输入框")
+                            else:
+                                ensure_element_centered(driver, editor)
+                                try:
+                                    editor.click()
+                                except Exception:
+                                    pass
+                                try:
+                                    clear_input(editor)
+                                except Exception:
+                                    pass
+                                try:
+                                    from selenium.webdriver.common.action_chains import ActionChains
+                                    ActionChains(driver).move_to_element(editor).click(editor).send_keys(reply_text).perform()
+                                    print("  已输入回复内容")
+                                except Exception:
+                                    try:
+                                        editor.send_keys(reply_text)
+                                        print("  已输入回复内容")
+                                    except Exception:
+                                        print("  输入回复内容失败")
+                                try:
+                                    send_btn = comment_item.find_element(By.XPATH, ".//span[contains(., '发送')]")
+                                    ensure_element_centered(driver, send_btn)
+                                    driver.execute_script("arguments[0].click();", send_btn)
+                                    print("  已点击发送按钮")
+                                except Exception:
+                                    try:
+                                        from selenium.webdriver.common.keys import Keys
+                                        editor.send_keys(Keys.RETURN)
+                                        print("  已按回车发送")
+                                    except Exception:
+                                        print("  按回车发送失败")
+                                time.sleep(0.5)
+                        except Exception as e:
+                            print(f"  回复输入或发送失败: {e}")
+                        
                     except:
                         print("  未找到回复按钮或点击失败")
                 else:
@@ -350,6 +390,44 @@ def process_search_keywords(driver):
         except Exception:
             pass
         print(f"[xhs] 搜索完成: {kw}")
+        try:
+            browse_search_results_and_operate(driver, items_to_visit=2, actions_per_video=3)
+        except Exception as e:
+            print(f"[xhs] 浏览并操作失败: {e}")
+
+def get_search_result_covers(driver):
+    els = driver.find_elements(By.CSS_SELECTOR, "section.note-item a.cover.mask.ld")
+    if not els:
+        els = driver.find_elements(By.CSS_SELECTOR, "section.note-item a.cover")
+    if not els:
+        els = driver.find_elements(By.CSS_SELECTOR, "a.cover")
+    return els
+
+def visit_video_and_operate(driver, actions_per_video=3):
+    process_comments_sequentially(driver, enable_like=True, enable_reply=False, enable_visit_avatar=True, max_count=actions_per_video)
+
+def browse_search_results_and_operate(driver, items_to_visit=2, actions_per_video=3):
+    covers = get_search_result_covers(driver)
+    n = min(items_to_visit, len(covers))
+    for i in range(n):
+        target = covers[i]
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", target)
+        time.sleep(0.3)
+        driver.execute_script("arguments[0].click();", target)
+        time.sleep(0.5)
+        handles = driver.window_handles
+        if len(handles) > 1:
+            driver.switch_to.window(handles[-1])
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        visit_video_and_operate(driver, actions_per_video)
+        if len(driver.window_handles) > 1:
+            driver.close()
+            driver.switch_to.window(driver.window_handles[0])
+        else:
+            driver.back()
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        time.sleep(1)
+        covers = get_search_result_covers(driver)
 
 def main():
     """
