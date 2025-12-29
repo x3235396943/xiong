@@ -121,7 +121,7 @@ class DataReporter:
             "like": 0,
             "urlFail": 0,
             "urlOk": 0,
-            "video": 0,
+            "keywordsOK": 0,
             "videoComment": 0,
             "urlIndex": 0,
         }
@@ -139,6 +139,7 @@ class DataReporter:
         self._start_send_thread()
         self._keywords: str | None = None
         self._action: str | None = None
+        self._action_pending: bool = False
 
     def _start_send_thread(self):
         if self._send_thread_running:
@@ -196,7 +197,7 @@ class DataReporter:
             self._completed_override = completed
         self._check_and_report()
 
-    def _check_and_report(self):
+    def _check_and_report(self, consume_action: bool = False):
         try:
             with self._lock:
                 is_completed = False
@@ -210,6 +211,7 @@ class DataReporter:
                 device_code = self.device_code
                 browser_id = self.browser_id
                 keywords = self._keywords
+                action_val = self._action if self._action_pending and self._action else None
         except Exception:
             return
 
@@ -227,10 +229,10 @@ class DataReporter:
                     "urlIndex": stats["urlIndex"],
                     "urlOk": stats["urlOk"],
                     "urlFail": stats["urlFail"],
-                    "video": stats["video"],
+                    "keywordsOK": stats["keywordsOK"],
                     "videoComment": stats["videoComment"],
                     **({"keywords": keywords} if keywords else {}),
-                    **({"action": self._action} if self._action else {}),
+                    **({"action": action_val} if action_val else {}),
                 },
                 "id": device_code,
             }
@@ -238,6 +240,10 @@ class DataReporter:
             if self._send_thread_running:
                 try:
                     self._send_queue.put_nowait(message)
+                    if consume_action:
+                        with self._lock:
+                            if self._action_pending:
+                                self._action_pending = False
                 except Exception:
                     pass
         except Exception:
@@ -249,7 +255,7 @@ class DataReporter:
             self._stats["comment"] += count
             need_report = self._stats["comment"] > old_value
         if need_report:
-            self._check_and_report()
+            self._check_and_report(consume_action=True)
 
     def increment_follow(self, count: int = 1):
         with self._lock:
@@ -257,7 +263,7 @@ class DataReporter:
             self._stats["follow"] += count
             need_report = self._stats["follow"] > old_value
         if need_report:
-            self._check_and_report()
+            self._check_and_report(consume_action=True)
 
     def increment_like(self, count: int = 1):
         with self._lock:
@@ -265,7 +271,7 @@ class DataReporter:
             self._stats["like"] += count
             need_report = self._stats["like"] > old_value
         if need_report:
-            self._check_and_report()
+            self._check_and_report(consume_action=True)
 
     def increment_url_fail(self, count: int = 1):
         with self._lock:
@@ -297,6 +303,14 @@ class DataReporter:
             self._stats["videoComment"] += count
             need_report = self._stats["videoComment"] > old_value
         if need_report:
+            self._check_and_report(consume_action=True)
+
+    def increment_keywords_ok(self, count: int = 1):
+        with self._lock:
+            old_value = self._stats["keywordsOK"]
+            self._stats["keywordsOK"] += count
+            need_report = self._stats["keywordsOK"] > old_value
+        if need_report:
             self._check_and_report()
 
     def update_url_index(self, index: int):
@@ -317,7 +331,7 @@ class DataReporter:
     def set_action(self, action: str | None):
         with self._lock:
             self._action = action
-        self._check_and_report()
+            self._action_pending = bool(action)
 
     def __del__(self):
         self._stop_send_thread()

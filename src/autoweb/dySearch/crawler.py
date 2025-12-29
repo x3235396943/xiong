@@ -320,7 +320,7 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                     with self._kw_lock:
                         self.keyword_processed.add(word)
                     if reporter:
-                        reporter.increment_video(1)
+                        reporter.increment_keywords_ok(1)
                     try:
                         driver.find_element(By.CLASS_NAME, "uRH5Oxnw").click()
                     except Exception:
@@ -443,7 +443,7 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                             try:
                                 DouyinCommentActions.reply_to_comment_async(driver, comment, reply_content, active_element=active, ws_push_func=None, sleep=self.utils.safe_sleep)
                                 if reporter:
-                                    reporter.set_action("reply")
+                                    reporter.set_action("comment")
                                     reporter.increment_comment(1)
                             except Exception:
                                 pass

@@ -36,6 +36,7 @@ from .video_pause_manager import (
 )
 from ..tools import log as logger
 from ..tools import config
+from ..tools.core import DataReporter
 from .browser_cluster import cluster
 
 
@@ -1079,7 +1080,8 @@ def _check_is_on_video_url(driver) -> bool:
 def browser_video_url_list_loop(
     params: dict,  # 接收封装的参数字典
     browser,
-    url_queue: queue.Queue
+    url_queue: queue.Queue,
+    data_reporter=None
 ):
     """
 
@@ -1282,7 +1284,7 @@ def browser_video_url_list_loop(
                             params_with_count = params.copy()
                             params_with_count['total_follow_count'] = total_follow_count
                             
-                            operation_success, action_type = _video_single_operation(driver, comment_elements, params_with_count)
+                            operation_success, action_type = _video_single_operation(driver, comment_elements, params_with_count, data_reporter)
                             
                             if operation_success:
                                 current_video_action_count += 1
@@ -1291,9 +1293,15 @@ def browser_video_url_list_loop(
                                 if action_type == ActionType.LIKE:
                                     total_like_count += 1
                                     logger.info(f"[{params['browser_name']}] ✓ 点赞操作完成 | 累计点赞: {total_like_count}")
+                                    # 使用数据报告器报告点赞操作
+                                    if data_reporter:
+                                        data_reporter.increment_like(1)
                                 elif action_type == ActionType.FOLLOW:
                                     total_follow_count += 1
                                     logger.info(f"[{params['browser_name']}] ✓ 关注操作完成 | 累计关注: {total_follow_count}")
+                                    # 使用数据报告器报告关注操作
+                                    if data_reporter:
+                                        data_reporter.increment_follow(1)
                                 
                                 logger.info(f"[{params['browser_name']}] 视频单次操作完成，当前操作次数: {current_video_action_count}/{comment_operation_count}")
                                 
@@ -1616,7 +1624,7 @@ def _extract_user_id_from_comment(comment_text: str) -> str:
         return ""
 
 
-def _video_single_operation(driver, comment_elements:list, params: dict) -> tuple[bool, ActionType | None]:
+def _video_single_operation(driver, comment_elements:list, params: dict, data_reporter=None) -> tuple[bool, ActionType | None]:
     """
     视频单次操作(时间版本)
     Args:
@@ -1737,6 +1745,9 @@ def _video_single_operation(driver, comment_elements:list, params: dict) -> tupl
                             },
                         }
                     )
+                    # 使用数据报告器报告点赞操作
+                    if data_reporter:
+                        data_reporter.increment_like(1)
                     return True, ActionType.LIKE
                 return False, None
             except Exception as e:
@@ -1797,6 +1808,9 @@ def _video_single_operation(driver, comment_elements:list, params: dict) -> tupl
                                 },
                             }
                         )
+                        # 使用数据报告器报告关注操作
+                        if data_reporter:
+                            data_reporter.increment_follow(1)
                     else:
                         # 关注按钮不可见或已关注
                         already_followed = True
@@ -1978,7 +1992,8 @@ def _get_video_duration(driver) -> Tuple[Optional[float], Optional[float]]:
 
 def browser_video_loop(
     params: dict,  # 接收封装的参数字典
-    browser
+    browser,
+    data_reporter=None
 ):
     """
     单个浏览器的刷视频循环任务
@@ -2006,6 +2021,7 @@ def browser_video_loop(
         logger.error(f"[{params['browser_name']}] ✗ 浏览器驱动未初始化，跳过")
         return
 
+    # 数据报告器作为参数传递
     logger.info(
                 {
                     "code": 0,
@@ -2273,15 +2289,21 @@ def browser_video_loop(
                             # 将当前累计关注数传递到params中
                             params_with_count = params.copy()
                             params_with_count['total_follow_count'] = total_follow_count
-                            operation_success, action_type = _video_single_operation(driver, comment_elements or [], params_with_count)
+                            operation_success, action_type = _video_single_operation(driver, comment_elements or [], params_with_count, data_reporter)
                             if operation_success:
                                 current_video_action_count += 1
                                 
                                 # 根据操作类型更新统计
                                 if action_type == ActionType.LIKE:
                                     total_like_count += 1
+                                    # 使用数据报告器报告点赞操作
+                                    if data_reporter:
+                                        data_reporter.increment_like(1)
                                 elif action_type == ActionType.FOLLOW:
                                     total_follow_count += 1
+                                    # 使用数据报告器报告关注操作
+                                    if data_reporter:
+                                        data_reporter.increment_follow(1)
                                 
                                 logger.info(f"[{params['browser_name']}] 视频单次操作完成，当前操作次数: {current_video_action_count}")
                                 scroll_time = int(random.uniform(params['action_interval_min'], params['action_interval_max']))

@@ -612,7 +612,7 @@ class DyShareUtils:
                 )
                 if reply_success:
                     if reporter:
-                        reporter.set_action("reply")
+                        reporter.set_action("comment")
                     if reporter:
                         reporter.increment_comment()
                     self.debug_log(
@@ -1161,14 +1161,14 @@ class DyShareUtils:
 
                         if success:
                             if reporter:
-                                reporter.increment_video()
+                                reporter.increment_keywords_ok()
                                 reporter.update_url_index(url_index)
                                 reporter.increment_url_ok()
                             self.debug_log("info", f"链接处理成功: {url}", browser_number)
                             break
 
                         if reporter:
-                            reporter.increment_video()
+                            reporter.increment_keywords_ok()
                             reporter.update_url_index(url_index)
                             reporter.increment_url_fail()
                         self.debug_log("error", f"{browser_info} 链接处理失败（链接失效）: {url}", browser_number)
@@ -1198,7 +1198,7 @@ class DyShareUtils:
 
                         if retry_count >= 3:
                             if reporter:
-                                reporter.increment_video()
+                                reporter.increment_keywords_ok()
                                 reporter.update_url_index(url_index)
                                 reporter.increment_url_fail()
                             self.debug_log("error", f"{browser_info} 链接处理彻底失败: {url}", browser_number)

@@ -9,6 +9,9 @@ from .selenium_browser import SeleniumBrowser
 from .selenium_kuaisou import *
 from selenium.webdriver.common.by import By
 from ..tools import log as logger
+from ..tools.config import get_config
+from ..tools.license import LicenseManager
+from ..tools.core import DataReporter
 from .browser_cluster import BrowserCluster, cluster
 from .video_browser import browser_video_loop, browser_video_url_list_loop
 from .video_monitor import start_monitoring, stop_monitoring
@@ -258,7 +261,7 @@ def main():
         params = {
             "browser_name": display_name,
             "id": browser_id,
-            "search_keywords": SEARCH_KEYWORDS,
+            "search_keywords": getattr(config, 'KEYWORDS', []) or [],  # 从配置获取关键词列表
             "main_loop_interval_min": main_loop_interval_min,
             "main_loop_interval_max": main_loop_interval_max,
             "action_interval_min": action_interval_min,
@@ -327,9 +330,74 @@ def signal_handler(signum, frame):
     sys.exit(0)
 
 class KuaishouCrawler:
-    
+    def __init__(self):
+        self.config = get_config()
+        self.license_manager = LicenseManager()
+        self.ws_manager = None
+        self.data_reporters = {}
+        self.utils = None
+
+    def initialize_config(self) -> None:
+        # WebSocket初始化在ws_manager中处理
+        try:
+            # 检查是否有配置信息，如果没有则不等待
+            cfg = get_config()
+            # 如果WS_URL为空或没有必要的配置信息，跳过等待
+            if not hasattr(cfg, 'WS_URL') or not cfg.WS_URL:
+                logger.info("未配置WebSocket服务器，跳过配置初始化等待")
+                return
+            # 尝试等待配置初始化，增加超时时间以确保能接收服务器配置
+            logger.info(f"正在尝试连接到WebSocket服务器: {cfg.WS_URL}")
+            cfg.wait_for_initialization(timeout=60)  # 增加到60秒超时，确保能接收服务器配置
+        except TimeoutError as e:
+            logger.warning(f"配置初始化超时: {e}，使用默认配置继续运行")
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            logger.error(f"配置初始化异常: {e}")
+            # 即使出错也继续运行，使用默认配置
+
+    def validate_license(self) -> bool:
+        return self.license_manager.verify_license()
+
+    def prepare_environment(self) -> None:
+        self.license_manager.set_stop_callback(self._on_license_invalid)
+        self.license_manager.start_periodic_check()
+
+    def _on_license_invalid(self):
+        logger.error("=" * 50)
+        logger.error("卡密已失效，正在停止程序...")
+        logger.error("=" * 50)
+        self._on_stop_signal_received()
+
+    def _on_stop_signal_received(self):
+        logger.info("=" * 50)
+        logger.info("收到停止信号，设置停止标志...")
+        logger.info("=" * 50)
+        global shutdown_event
+        shutdown_event.set()
+        self.config.request_stop()
+
     async def start(self):
         try:
+            # 首先初始化WebSocket管理器（如果配置了WebSocket）
+            # 这样可以确保WebSocket连接在等待配置前就建立好
+            if hasattr(self.config, 'WS_URL') and self.config.WS_URL:
+                from .ws_manager import init_ws_manager
+                if init_ws_manager(self.config, self.license_manager):
+                    logger.info("WebSocket管理器初始化成功")
+                else:
+                    logger.warning("WebSocket管理器初始化失败")
+            
+            # 初始化配置（现在WebSocket已连接，可以接收服务器配置）
+            self.initialize_config()
+
+            if not self.validate_license():
+                print("❌ 卡密验证失败！")
+                return
+
+            self.prepare_environment()
+            
             main()
         except KeyboardInterrupt:
             logger.warning("程序被用户中断（KeyboardInterrupt）")
@@ -343,6 +411,11 @@ class KuaishouCrawler:
             logger.info("正在清理资源...")
             shutdown_event.set()
             kill_chrome_processes()
+            # 停止WebSocket管理器
+            from .ws_manager import stop_ws_manager
+            stop_ws_manager()
+            # 停止卡密检查
+            self.license_manager.stop_periodic_check()
             logger.info("程序已退出")
 
 if __name__ == "__main__":
