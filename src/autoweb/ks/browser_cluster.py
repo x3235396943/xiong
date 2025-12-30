@@ -195,6 +195,14 @@ class BrowserCluster:
                 
                 if success:
                     logger.info(f"✓ 浏览器 '{browser_name}' (ID: {browser_id}) 启动成功")
+                    # 发送浏览器运行状态到服务器
+                    try:
+                        from .ws_manager import get_ws_manager
+                        ws_manager = get_ws_manager()
+                        if ws_manager:
+                            ws_manager.send_run_state_req(browser_id)
+                    except Exception as e:
+                        logger.error(f"发送浏览器运行状态失败: {e}")
                 else:
                     logger.info(f"✗ 浏览器 '{browser_name}' (ID: {browser_id}) 启动失败: {entry['message']}")
             else:
@@ -267,6 +275,14 @@ class BrowserCluster:
                 display_name = entry['name'] or browser_id
                 if success:
                     logger.info(f"✓ 浏览器 '{display_name}' (ID: {browser_id}) 启动成功")
+                    # 发送浏览器运行状态到服务器
+                    try:
+                        from .ws_manager import get_ws_manager
+                        ws_manager = get_ws_manager()
+                        if ws_manager:
+                            ws_manager.send_run_state_req(browser_id)
+                    except Exception as e:
+                        logger.error(f"发送浏览器运行状态失败: {e}")
                 else:
                     logger.info(f"✗ 浏览器 '{display_name}' (ID: {browser_id}) 启动失败: {entry['message']}")
             else:

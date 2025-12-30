@@ -1,4 +1,5 @@
 import time
+import json
 import selenium
 import random
 import threading
@@ -55,6 +56,14 @@ def init_browsers():
         if selenium_browser.driver:
             browser_name = "single_browser_fallback"
             added = cluster.add_browser(browser_name, selenium_browser, display_name=browser_name)
+            # 发送浏览器运行状态到服务器
+            try:
+                from .ws_manager import get_ws_manager
+                ws_manager = get_ws_manager()
+                if ws_manager and selenium_browser.id:
+                    ws_manager.send_run_state_req(selenium_browser.id)
+            except Exception as e:
+                logger.error(f"发送浏览器运行状态失败: {e}")
 
     combined_results = {**name_results, **id_results}
 
@@ -147,7 +156,7 @@ def _parse_keywords(raw_keywords):
 
     return []
 
-DEFAULT_SEARCH_KEYWORDS = ["御姐", "美女", "性感", "制服", "清纯", "可爱", "性感", "女神", "模特", "丰满"]
+DEFAULT_SEARCH_KEYWORDS = []#"御姐", "美女", "性感", "制服", "清纯", "可爱", "性感", "女神", "模特", "丰满"
 SEARCH_KEYWORDS = _parse_keywords(config.KEYWORDS) or DEFAULT_SEARCH_KEYWORDS
 
 # ==================== 主流程循环配置 ====================
@@ -187,7 +196,7 @@ comment_max_elements_count = config.COMMENT_MAX_ELEMENTS_COUNT
 # 全局退出标志
 shutdown_event = threading.Event()
 
-def thread_func(browser_name, browser, params, url_queue=None):
+def thread_func(browser_name, browser, params, url_queue=None, data_reporter=None):
     """线程执行函数：运行单个浏览器任务"""
     try:
         # 将退出事件传递给任务函数
@@ -199,12 +208,14 @@ def thread_func(browser_name, browser, params, url_queue=None):
             browser_video_url_list_loop(
                 params=params,
                 browser=browser,
-                url_queue=url_queue
+                url_queue=url_queue,
+                data_reporter=data_reporter
             )
         else:
             browser_video_loop(
                 params=params,
-                browser=browser
+                browser=browser,
+                data_reporter=data_reporter
             )
     except KeyboardInterrupt:
         logger.info(f"[{browser_name}] 线程收到中断信号，正在退出...")
@@ -280,11 +291,55 @@ def main():
             "comment_max_elements_count": comment_max_elements_count,
         }
         
+        # 创建数据报告器
+        try:
+            from .ws_manager import get_ws_manager
+            ws_manager = get_ws_manager()
+            if ws_manager and hasattr(ws_manager, 'ws_client'):
+                # 创建数据报告器
+                def send_ws_message_func(message_dict):
+                    try:
+                        if isinstance(message_dict, dict) and message_dict.get("cmd") == "PcDataReq":
+                            data = message_dict.get("data")
+                            if isinstance(data, dict):
+                                for k in ("urlIndex", "urlOk", "urlFail"):
+                                    data.pop(k, None)
+                    except Exception:
+                        pass
+                    
+                    # 通过WebSocket管理器发送消息
+                    from .ws_manager import get_ws_manager
+                    ws_manager = get_ws_manager()
+                    if ws_manager and ws_manager.ws_client:
+                        import asyncio
+                        try:
+                            try:
+                                logger.info(f"发送到服务器的消息: {json.dumps(message_dict, ensure_ascii=False, indent=2)}")
+                            except Exception:
+                                pass
+                            asyncio.run_coroutine_threadsafe(
+                                ws_manager.ws_client.send(message_dict),
+                                ws_manager.ws_client.event_loop
+                            )
+                        except Exception as e:
+                            logger.error(f"发送WebSocket消息失败: {e}")
+                
+                data_reporter = DataReporter(
+                    device_code=config.DEVICE_CODE,
+                    browser_id=browser_id,
+                    send_ws_message_func=send_ws_message_func,
+                )
+            else:
+                data_reporter = None
+        except Exception as e:
+            logger.error(f"创建数据报告器失败: {e}")
+            data_reporter = None
+        
         # 创建线程，目标函数为thread_func，传入参数
         # 设置为 daemon 线程，这样主程序退出时线程也会退出
         thread = threading.Thread(
             target=thread_func,
-            args=(display_name, browser, params, url_queue),
+            args=(display_name, browser, params, url_queue, data_reporter),
             name=f"BrowserThread-{browser_key}",
             daemon=True  # 设置为守护线程，主程序退出时自动退出
         )
@@ -377,6 +432,29 @@ class KuaishouCrawler:
         global shutdown_event
         shutdown_event.set()
         self.config.request_stop()
+
+    def _send_ws_message_for_reporter(self, message_dict):
+        try:
+            if isinstance(message_dict, dict) and message_dict.get("cmd") == "PcDataReq":
+                data = message_dict.get("data")
+                if isinstance(data, dict):
+                    for k in ("urlIndex", "urlOk", "urlFail"):
+                        data.pop(k, None)
+        except Exception:
+            pass
+        
+        # 通过WebSocket管理器发送消息
+        from .ws_manager import get_ws_manager
+        ws_manager = get_ws_manager()
+        if ws_manager and ws_manager.ws_client:
+            import asyncio
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    ws_manager.ws_client.send(message_dict),
+                    ws_manager.ws_client.event_loop
+                )
+            except Exception as e:
+                logger.error(f"发送WebSocket消息失败: {e}")
 
     async def start(self):
         try:

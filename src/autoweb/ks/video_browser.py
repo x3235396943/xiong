@@ -1293,22 +1293,16 @@ def browser_video_url_list_loop(
                                 if action_type == ActionType.LIKE:
                                     total_like_count += 1
                                     logger.info(f"[{params['browser_name']}] ✓ 点赞操作完成 | 累计点赞: {total_like_count}")
-                                    # 使用数据报告器报告点赞操作
-                                    if data_reporter:
-                                        data_reporter.increment_like(1)
                                 elif action_type == ActionType.FOLLOW:
                                     total_follow_count += 1
                                     logger.info(f"[{params['browser_name']}] ✓ 关注操作完成 | 累计关注: {total_follow_count}")
-                                    # 使用数据报告器报告关注操作
-                                    if data_reporter:
-                                        data_reporter.increment_follow(1)
-                                
+
                                 logger.info(f"[{params['browser_name']}] 视频单次操作完成，当前操作次数: {current_video_action_count}/{comment_operation_count}")
-                                
+
                                 # 滚动评论区到底部
                                 scroll_time = int(random.uniform(params['action_interval_min'], params['action_interval_max']))
                                 scroll_comment_to_bottom(driver, params, comment_element, scroll_time, params['scroll_interval_min'], params['scroll_interval_max'])
-                                
+
                                 # 更新统计文件
                                 _update_stats_file(stats_file_path, session_date_label, total_like_count, total_follow_count, params['browser_name'])
                             else:
@@ -1316,7 +1310,7 @@ def browser_video_url_list_loop(
                                 if 'short-video' not in driver.current_url:
                                     logger.warning(f"[{params['browser_name']}] 不在视频页面，退出操作循环")
                                     break
-                            
+
                             # 检查是否达到操作次数
                             if current_video_action_count >= comment_operation_count:
                                 try:
@@ -1337,17 +1331,17 @@ def browser_video_url_list_loop(
                         else:
                             logger.warning(f"[{params['browser_name']}] 不在视频页面，退出操作循环")
                             break
-                            
+
                     except Exception as e:
                         logger.error(f"[{params['browser_name']}] 评论操作失败: {e}")
                         import traceback
                         logger.error(f"[{params['browser_name']}] 错误堆栈:\n{traceback.format_exc()}")
                         time.sleep(2)
                         continue
-                
+
                 # 更新统计文件（在操作完成后）
                 _update_stats_file(stats_file_path, session_date_label, total_like_count, total_follow_count, params['browser_name'])
-                
+
                 # 步骤4: 恢复播放视频
                 logger.debug(f"[{params['browser_name']}] 步骤4: 恢复播放视频...")
                 # 使用播放线程来播放视频
@@ -1365,7 +1359,7 @@ def browser_video_url_list_loop(
                 wait_start = time.time()
                 check_count = 0
                 now_video_poster_url = initial_poster
-                
+
                 # 启动视频状态监控
                 start_monitoring(params['browser_name'])
                 logger.debug(f"[{params['browser_name']}] 视频状态监控已启动")
@@ -1396,7 +1390,7 @@ def browser_video_url_list_loop(
                             logger.info(f"[{params['browser_name']}] 暂停后已通过视频交换恢复")
                         else:
                             logger.warning(f"[{params['browser_name']}] 恢复失败，继续监控")
-                    
+
                     time.sleep(0.3)
                     check_count += 1
                     # 循环中周期性校验URL（每10次约3秒一次）
@@ -1453,13 +1447,13 @@ def browser_video_url_list_loop(
 
                 else:
                     logger.warning(f"[{params['browser_name']}] ⚠ 达到最大等待时间 {max_wait_time} 秒，继续下一个URL")
-                
+
                 logger.info(f"[{params['browser_name']}] ✓ 第 {url_index} 个视频URL处理完成\n")
                 try:
                     url_queue.task_done()
                 except Exception:
                     pass
-                
+
             except Exception as e:
                 logger.error(f"[{params['browser_name']}] ✗ 处理第 {url_index} 个视频URL时发生错误: {e}")
                 logger.exception(f"[{params['browser_name']}] 处理第 {url_index} 个视频URL时的异常堆栈")
@@ -1469,16 +1463,16 @@ def browser_video_url_list_loop(
                 except Exception:
                     pass
                 continue
-        
+
         logger.debug(f"\n[{params['browser_name']}] {'='*60}")
         logger.info(f"[{params['browser_name']}] 所有视频URL处理完成")
         logger.debug(f"[{params['browser_name']}] 累计点赞: {total_like_count}")
         logger.debug(f"[{params['browser_name']}] 累计关注: {total_follow_count}")
         logger.debug(f"[{params['browser_name']}] {'='*60}\n")
-        
+
         # URL列表模式完成后不关闭浏览器，让浏览器继续运行
         logger.info(f"[{params['browser_name']}] 所有视频URL处理完成，浏览器继续运行")
-        
+
     except KeyboardInterrupt:
         logger.debug(f"\n[{params['browser_name']}] 用户中断，停止处理")
         # 用户中断时不关闭浏览器，让浏览器继续运行
@@ -1497,6 +1491,10 @@ def browser_video_url_list_loop(
         if len(cluster.browsers) == 1:
             # 注销全局刷新监控器
             monitor_unregister_browser(browser_id)
+
+        # 强制发送数据报告
+        if data_reporter:
+            data_reporter.force_report()
 
 def _random_search_keyword(params: dict, now_search_keywords: Optional[str]) -> Optional[str]:
     """
@@ -1604,7 +1602,7 @@ def _extract_user_id_from_comment(comment_text: str) -> str:
         first_line = comment_text.split('\n')[0].strip()
         if not first_line:
             return ""
-        
+
         # 第一行格式通常是: "用户ID 时间信息" 或 "用户ID"
         # 尝试去掉时间信息（如 "1月前"、"2小时前" 等）
         # 时间信息通常在空格后面
@@ -1616,7 +1614,7 @@ def _extract_user_id_from_comment(comment_text: str) -> str:
                 # 去掉时间部分，返回用户ID
                 user_id = ' '.join(parts[:-1])
                 return user_id.strip()
-        
+
         # 如果没有时间信息，直接返回第一行
         return first_line.strip()
     except Exception as e:
@@ -1637,20 +1635,20 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
         tuple[bool, ActionType | None]: (操作是否成功, 操作类型)
     """
     try:
-        
+
         # 获取累计关注数（从params中获取，如果没有则默认为0）
         total_follow_count = params.get('total_follow_count', 0)
         max_follow_count = params.get('follow_count', 100)
-        
+
         selected_comment = None
         is_priority_comment = False
-        
+
         # 获取当前视频已关注的用户ID集合（如果不存在则创建）
         followed_user_ids = params.get('followed_user_ids', set())
         if not isinstance(followed_user_ids, set):
             followed_user_ids = set()
             params['followed_user_ids'] = followed_user_ids
-        
+
         # 特定评论优先关注（支持多个关键词列表）
         comment_filter_keywords = params.get('comment_filter_keywords', [])
         if comment_filter_keywords:
@@ -1659,12 +1657,12 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
                     comment_text = comment_element.text
                     # 提取用户ID
                     user_id = _extract_user_id_from_comment(comment_text)
-                    
+
                     # 如果该用户已经被关注过，跳过
                     if user_id and user_id in followed_user_ids:
                         logger.debug(f"[{params['browser_name']}] 用户 {user_id} 已被关注，跳过")
                         continue
-                    
+
                     # 检查评论是否包含任何一个关键词
                     for keyword in comment_filter_keywords:
                         if keyword and keyword in comment_text:
@@ -1678,7 +1676,7 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
                 except Exception as e:
                     logger.error(f"[{params['browser_name']}] 获取优先评论失败: {e}")
                     continue
-            
+
             # 如果找到特定评论但已达到关注上限，不执行操作
             if is_priority_comment and total_follow_count >= max_follow_count:
                 logger.warning(f"[{params['browser_name']}] 找到特定评论但已达到关注上限({total_follow_count}/{max_follow_count})，跳过本次操作")
@@ -1688,23 +1686,23 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
         if not selected_comment:
             # 获取可见评论（使用 is_element_visible 判断元素是否真正在视口中可见）
             visible_comments = is_element_visible(driver, comment_elements)
-            
+
             # 如果没有可见评论，返回False
             if not visible_comments:
                 logger.warning(f"[{params['browser_name']}] 没有可见评论，跳过本次操作")
                 return False, None
-            
+
             # 从可见评论中随机选择一个
             random_index = random.randint(0, len(visible_comments) - 1)
             selected_comment = visible_comments[random_index]
-        
+
         # 滚动到选中的评论，确保它在可视区域内
         try:
             driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'center'});", selected_comment)
             time.sleep(random.uniform(0.2, 0.4))
         except Exception as e:
             logger.debug(f"[{params['browser_name']}] 滚动到评论失败: {e}")
-        
+
         # 决定操作类型（点赞或关注）
         # 如果有特定评论，强制执行关注操作（除非达到上限，但已在上面处理）
         if is_priority_comment:
@@ -1722,7 +1720,7 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
                 action_type = ActionType.LIKE
             else:
                 action_type = ActionType.FOLLOW
-        
+
         # 执行相应操作
         if action_type == ActionType.LIKE:
             # 执行点赞操作
@@ -1747,6 +1745,7 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
                     )
                     # 使用数据报告器报告点赞操作
                     if data_reporter:
+                        data_reporter.set_action("like")
                         data_reporter.increment_like(1)
                     return True, ActionType.LIKE
                 return False, None
@@ -1778,17 +1777,17 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
                 # 点击作者名称，打开个人资料页面
                 safe_click(driver, author_name_element)
                 time.sleep(1)
-                
+
                 # 切换到新打开的标签页
                 window_handles = driver.window_handles
                 for handle in window_handles:
                     if handle != original_handle:
                         driver.switch_to.window(handle)
                         break
-                
+
                 # 等待页面加载
                 time.sleep(2)
-                
+
                 # 查找并点击关注按钮
                 follow_success = False
                 already_followed = False  # 标记是否已关注
@@ -1810,6 +1809,7 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
                         )
                         # 使用数据报告器报告关注操作
                         if data_reporter:
+                            data_reporter.set_action("follow")
                             data_reporter.increment_follow(1)
                     else:
                         # 关注按钮不可见或已关注
@@ -1817,7 +1817,7 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
                         logger.info(f"[{params['browser_name']}] 关注按钮不可见或已关注")
                 except Exception as e:
                     logger.warning(f"[{params['browser_name']}] 查找关注按钮失败: {e}")
-                
+
                 # 无论关注是否成功，只要能够获取到用户ID，都应该将其添加到已关注列表中
                 # 这样可以避免重复尝试关注同一个用户
                 if user_id:
@@ -1825,7 +1825,7 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
                     if not isinstance(followed_user_ids, set):
                         followed_user_ids = set()
                         params['followed_user_ids'] = followed_user_ids
-                    
+
                     if user_id not in followed_user_ids:
                         followed_user_ids.add(user_id)
                         if follow_success:
@@ -1836,11 +1836,11 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
                             logger.info(f"[{params['browser_name']}] 关注失败，但已记录用户ID: {user_id}，避免重复尝试，当前视频已关注 {len(followed_user_ids)} 个用户")
                     else:
                         logger.debug(f"[{params['browser_name']}] 用户 {user_id} 已在关注列表中")
-                
+
                 # 关闭个人资料标签页
                 if 'profile' in driver.current_url or driver.current_window_handle != original_handle:
                     driver.close()
-                
+
                 # 切换回原来的视频页面
                 window_handles = driver.window_handles
                 if original_handle in window_handles:
@@ -1848,7 +1848,7 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
                 elif window_handles:
                     # 如果原始窗口不存在，切换到第一个可用窗口
                     driver.switch_to.window(window_handles[0])
-                
+
                 if follow_success:
                     return True, ActionType.FOLLOW
                 else:
@@ -1868,7 +1868,7 @@ def _video_single_operation(driver, comment_elements:list, params: dict, data_re
                 except:
                     pass
                 return False, None
-        
+
         return False, None
     except Exception as e:
         logger.error(f"[{params['browser_name']}] 视频单次操作失败: {e}")
@@ -1972,7 +1972,7 @@ def _get_video_duration(driver) -> Tuple[Optional[float], Optional[float]]:
             if len(total_parts) == 2:
                 minutes, seconds = total_parts
                 total_seconds = int(minutes) * 60 + int(seconds)
-            
+
             # 获取当前时长
             current_elem = driver.find_element(By.CSS_SELECTOR, "span.current")
             current_text = current_elem.text.strip()
@@ -1981,7 +1981,7 @@ def _get_video_duration(driver) -> Tuple[Optional[float], Optional[float]]:
             if len(current_parts) == 2:
                 minutes, seconds = current_parts
                 current_seconds = int(minutes) * 60 + int(seconds)
-            
+
             return (total_seconds, current_seconds)
         else:
             return (None, None)
@@ -2015,6 +2015,7 @@ def browser_video_loop(
             comment_min_count: 每个视频最小操作次数，默认3次
             comment_max_count: 每个视频最大操作次数，默认5次
         browser: SeleniumBrowser 实例
+        data_reporter: 数据报告器实例
     """
     driver = browser.driver
     if not driver:
@@ -2034,11 +2035,13 @@ def browser_video_loop(
 
     # 删除多余页面保留一个
     _delete_extra_pages(driver, params)
-    
+
     now_search_keywords = None
     # 统计本次任务期间的累计数据
     total_like_count = 0
     total_follow_count = 0
+    # 记录完成的关键词数量
+    completed_keywords_count = 0
     # 文档记录：以日期为键（年月日）
     session_date_label = time.strftime("%Y年%m月%d日 %H:%M:%S")
     # 获取浏览器ID（如果有）
@@ -2074,10 +2077,13 @@ def browser_video_loop(
             try:
                 # ==================== 主流程 ====================
                 logger.info(f"[{params['browser_name']}] 执行搜索和点击视频...")
-                
+
                 now_search_keywords = _random_search_keyword(params, now_search_keywords)
                 if not now_search_keywords:
                     keywords_exhausted = True
+                    # 关键词已耗尽，设置完成状态为 true
+                    if data_reporter:
+                        data_reporter.set_completed(True)
                     logger.info(f"[{params['browser_name']}] 搜索关键词已耗尽，停止新的搜索流程")
                     logger.info(
                             {
@@ -2110,12 +2116,12 @@ def browser_video_loop(
                             }
                         )
 
-                
+
                 # ==================== 刷视频流程 ====================
                 logger.debug(f"[{params['browser_name']}] 开始刷视频流程...")
                 # 注册到全局刷新监控器（单线程最多5个浏览器，每个间隔0.05秒）
                 # monitor_register_browser(params['browser_name'], driver)
-                
+
                 # 创建视频状态监控器
                 check_interval = getattr(config, 'VIDEO_MONITOR_CHECK_INTERVAL', 1.0)
                 paused_threshold = getattr(config, 'VIDEO_MONITOR_PAUSED_THRESHOLD', 3.0)
@@ -2176,7 +2182,7 @@ def browser_video_loop(
                         # 初始化当前视频的已关注用户ID集合
                         params['followed_user_ids'] = set()
                         logger.debug(f"[{params['browser_name']}] 新视频开始，初始化已关注用户ID集合")
-                        
+
                     # 新视频暂停
                     if old_video_poster_url != now_video_poster_url and video_operation_completed:
                         # 将浏览器加入暂停管理列表
@@ -2292,26 +2298,20 @@ def browser_video_loop(
                             operation_success, action_type = _video_single_operation(driver, comment_elements or [], params_with_count, data_reporter)
                             if operation_success:
                                 current_video_action_count += 1
-                                
+
                                 # 根据操作类型更新统计
                                 if action_type == ActionType.LIKE:
                                     total_like_count += 1
-                                    # 使用数据报告器报告点赞操作
-                                    if data_reporter:
-                                        data_reporter.increment_like(1)
                                 elif action_type == ActionType.FOLLOW:
                                     total_follow_count += 1
-                                    # 使用数据报告器报告关注操作
-                                    if data_reporter:
-                                        data_reporter.increment_follow(1)
-                                
+
                                 logger.info(f"[{params['browser_name']}] 视频单次操作完成，当前操作次数: {current_video_action_count}")
                                 scroll_time = int(random.uniform(params['action_interval_min'], params['action_interval_max']))
                                 scroll_comment_to_bottom(driver, params, comment_element, scroll_time, params['scroll_interval_min'], params['scroll_interval_max'])
                             # 纠正情况
                             else:
                                 if 'short-video' not in driver.current_url:
-                                    
+
                                     break
                                 
                             if current_video_action_count >= comment_operation_count:
@@ -2353,6 +2353,15 @@ def browser_video_loop(
                 logger.info(f"[{params['browser_name']}] 更新统计文件...")
                 _update_stats_file(stats_file_path, session_date_label, total_like_count, total_follow_count, params['browser_name'])
                 logger.info(f"[{params['browser_name']}] 统计文件更新完成")
+                
+                # 增加完成的关键词计数
+                completed_keywords_count += 1
+                if data_reporter:
+                    data_reporter.increment_keywords_ok(1)
+                
+                # 强制发送数据报告
+                if data_reporter:
+                    data_reporter.force_report()
                 
     except KeyboardInterrupt:
         logger.debug(f"[{params['browser_name']}] 任务被中断")
