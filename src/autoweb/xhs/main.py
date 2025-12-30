@@ -6,6 +6,7 @@
 """
 
 import json
+import random
 import time
 import requests
 import os
@@ -79,6 +80,52 @@ def ensure_element_centered(driver, element):
         time.sleep(0.3)
         return True
     except Exception:
+        return False
+
+
+def follow_user_if_needed(driver, timeout=8, sleep_after=True):
+    """
+    在小红书用户主页点击「关注」
+    - 仅在未关注状态下点击
+    - 自动判断按钮文案
+    - 使用 JS click，稳定
+    """
+
+    try:
+        follow_btn = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((
+                By.CSS_SELECTOR,
+                "button.reds-button-new.follow-button"
+            ))
+        )
+
+        try:
+            ensure_element_centered(driver, follow_btn)
+        except Exception:
+            pass
+
+        btn_text = follow_btn.text.strip()
+        print(f"[follow] 当前按钮文本: {btn_text}")
+
+        # 已关注 / 互相关注 / 已请求
+        if btn_text != "关注":
+            print("[follow] 已是关注状态，跳过")
+            return False
+
+        # 模拟真人停顿
+        time.sleep(0.6 + random.random())
+
+        # JS 点击
+        driver.execute_script("arguments[0].click();", follow_btn)
+        print("[follow] 已点击关注")
+
+        if sleep_after:
+            time.sleep(1.2 + random.random())
+
+        return True
+
+    except Exception as e:
+        print(f"[follow] 点击关注失败: {e}")
         return False
 
 
@@ -201,7 +248,7 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                             driver.switch_to.window(all_handles[-1])
                             print("  已切换到用户主页")
                             time.sleep(3)  # 等待页面加载
-
+                            follow_user_if_needed(driver)
                             # 关闭用户主页标签页，切回原页面
                             driver.close()
                             driver.switch_to.window(all_handles[0])
