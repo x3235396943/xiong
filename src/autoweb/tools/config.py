@@ -94,7 +94,7 @@ class KuSettings(ShareConfig):
     HEADLESS: bool = False # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str = "1.3.5"
+    VERSION: str = "1.4.0"
 
     # 快手bit浏览器设置
     BROWSER_SAVE_DIR: str = "browser_sessions"
@@ -105,26 +105,26 @@ class KuSettings(ShareConfig):
     MAX_COMMENT: list = [2, 15]
 
     # 快手操作设置
-    VIDEO_INPUT_DELAY_MIN: float = 0.1
-    VIDEO_INPUT_DELAY_MAX: float = 0.3
-    VIDEO_IMPLICIT_WAIT: int = 10
-    VIDEO_PAGE_LOAD_WAIT: int = 2
-    VIDEO_MAIN_LOOP_INTERVAL_MIN: float = 3600
-    VIDEO_MAIN_LOOP_INTERVAL_MAX: float = 3601
-    VIDEO_ACTION_INTERVAL_MIN: float = 15
-    VIDEO_ACTION_INTERVAL_MAX: float = 30
-    VIDEO_SCROLL_INTERVAL_MIN: float = 1
-    VIDEO_SCROLL_INTERVAL_MAX: float = 10
-    VIDEOS_PER_LOOP_MIN: int = 15
-    VIDEOS_PER_LOOP_MAX: int = 30
-    FOLLOW_COUNT_MIN: int = 170
-    FOLLOW_COUNT_MAX: int = 195
-    COMMENT_MIN_OPERATION_COUNT: int = 3
-    COMMENT_MAX_OPERATION_COUNT: int = 5
-    COMMENT_MIN_ELEMENTS_COUNT: int = 3
-    COMMENT_MAX_ELEMENTS_COUNT: int = 5
-    FOLLOW_INTERVAL_MIN: float = 3
-    FOLLOW_INTERVAL_MAX: float = 10
+    VIDEO_INPUT_DELAY_MIN: float = 0.1#视频输入操作最小延迟（0.1秒）
+    VIDEO_INPUT_DELAY_MAX: float = 0.3#视频输入操作最大延迟（0.3秒）
+    VIDEO_IMPLICIT_WAIT: int = 10#隐式等待时间（10秒）- 等待元素出现的时间
+    VIDEO_PAGE_LOAD_WAIT: int = 2#页面加载等待时间（2秒）
+    VIDEO_MAIN_LOOP_INTERVAL_MIN: float = 3600#主循环间隔最小时间（3600秒）
+    VIDEO_MAIN_LOOP_INTERVAL_MAX: float = 3601#主循环间隔最大时间（3601秒）
+    VIDEO_ACTION_INTERVAL_MIN: float = 10#动作间隔最小时间（10秒）
+    VIDEO_ACTION_INTERVAL_MAX: float = 20#动作间隔最大时间（20秒）
+    VIDEO_SCROLL_INTERVAL_MIN: float = 3#滚动间隔最小时间（1秒）
+    VIDEO_SCROLL_INTERVAL_MAX: float = 10#滚动间隔最大时间（10秒）
+    VIDEOS_PER_LOOP_MIN: int = 15#每轮视频数最小值（15）
+    VIDEOS_PER_LOOP_MAX: int = 30#每轮视频数最大值（30）
+    FOLLOW_COUNT_MIN: int = 170#关注数最小值（170）
+    FOLLOW_COUNT_MAX: int = 195#关注数最大值（195）
+    COMMENT_MIN_OPERATION_COUNT: int = 3#评论最小操作次数（3）
+    COMMENT_MAX_OPERATION_COUNT: int = 5#评论最大操作次数（5）
+    COMMENT_MIN_ELEMENTS_COUNT: int = 3#评论区底部最小个数（3）
+    COMMENT_MAX_ELEMENTS_COUNT: int = 5#评论区底部最大个数（5）
+    FOLLOW_INTERVAL_MIN: float = 3#关注间隔最小时间（3秒）
+    FOLLOW_INTERVAL_MAX: float = 10#关注间隔最大时间（10秒）
     # FOLLOW_PROBABILITY: float = 4
     COMMENT_KEYWORDS: list = []
 
