@@ -96,10 +96,10 @@ class KuSettings(ShareConfig):
 
     VERSION: str = "1.4.0"
 
-    # 通用设置
+    # 抖音搜索模式配置（服务器下发）
     KEYWORDS: list = []
-    MAX_SCROLL_VIDEO: list = [10, 20]
-    MAX_COMMENT: list = [2, 15]
+    MAX_SCROLL_VIDEO: list = [10,20]
+    MAX_COMMENT: list = [2,15]
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
 
@@ -201,8 +201,8 @@ class Base(BaseSettings):
 
 
 class PcConfig(ShareConfig):
-    SIBERIAN_URL: str = "http://139.159.230.186/api/siberianNitraria/verifyActivate"
-    SIBERIAN_KEY: str = "2j2r6Jdr2Se/5Sv9n9H67xQOADQZ4ThV9jINpCYZbqY="
+    SIBERIAN_URL: str
+    SIBERIAN_KEY: str
 
     KEYWORDS: list = []  # 关键词列表
     MAX_SCROLL_VIDEO: list = [10, 20]  # 浏览视频数

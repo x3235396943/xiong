@@ -29,6 +29,12 @@ DEFAULT_VISIT_MIN = 2  # 关注后最小等待时间
 DEFAULT_VISIT_MAX = 5  # 关注后最大等待时间
 DEFAULT_PROFILE_WAIT_MIN = 5  # 进入主页后最小等待时间
 DEFAULT_PROFILE_WAIT_MAX = 15  # 进入主页后最大等待时间
+VIDEO_REPLY_RATE = 1  # 视频留言概率
+VIDEO_REPLY_WAIT_MIN = 5  # 视频留言前最小等待时间
+VIDEO_REPLY_WAIT_MAX = 10  # 视频留言前最大等待时间
+
+# 视频评论内容列表
+VIDEO_COMMENTS = "这个视频不错！-&-内容很棒！-&-支持一下！-&-666-&-好看！-&-不错哦-&-赞一个"  # 视频评论列表，使用-&-分隔
 DEFAULT_BIT_BROWSER_IDS = ["57bd9953b5364d3db5c4ac7cfbb9a1b3"]  # 默认浏览器ID列表
 
 def get_browser_log_prefix(browser_id):
@@ -109,6 +115,9 @@ def main():
     visit_max = DEFAULT_VISIT_MAX
     profile_wait_min = DEFAULT_PROFILE_WAIT_MIN
     profile_wait_max = DEFAULT_PROFILE_WAIT_MAX
+    video_comment_prob = VIDEO_REPLY_RATE
+    video_comment_wait_min = VIDEO_REPLY_WAIT_MIN
+    video_comment_wait_max = VIDEO_REPLY_WAIT_MAX
     like_count = 0
     follow_count = 0
 
@@ -123,6 +132,8 @@ def main():
     print(f"{log_prefix} 点赞后等待时间范围: {like_wait_min}-{like_wait_max}s")
     print(f"{log_prefix} 关注后等待时间范围: {visit_min}-{visit_max}s")
     print(f"{log_prefix} 进入主页等待时间范围: {profile_wait_min}-{profile_wait_max}s")
+    print(f"{log_prefix} 视频留言概率: {video_comment_prob}")
+    print(f"{log_prefix} 视频留言前等待时间范围: {video_comment_wait_min}-{video_comment_wait_max}s")
 
     res = _open_bit(browser_id)
     data = (res or {}).get("data") or {}
@@ -150,25 +161,50 @@ def main():
         except Exception:
             return []
 
+    def human_like_delay(min_delay=0.3, max_delay=0.8):
+        """模拟人工点击的随机延迟"""
+        delay = random.uniform(min_delay, max_delay)
+        time.sleep(delay)
+
     def click(x):
         if not x:
             return False
         try:
             driver.execute_script("arguments[0].click();", x)
+            human_like_delay(0.3, 0.8)  # 点击后添加随机等待
             return True
         except Exception:
             try:
                 x.click()
+                human_like_delay(0.3, 0.8)  # 点击后添加随机等待
                 return True
             except Exception:
                 return False
 
     try:
         print(f"{log_prefix} 访问快手搜索页面")
+        # 清理浏览器句柄，确保只有快手首页的界面
+        if len(driver.window_handles) > 1:
+            print(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
+            for handle in driver.window_handles[1:]:
+                driver.switch_to.window(handle)
+                driver.close()
+            driver.switch_to.window(driver.window_handles[0])
+            print(f"{log_prefix} 已关闭额外窗口，保留主窗口")
+        
         driver.get("https://www.kuaishou.com/search/video"); w(); time.sleep(0.8)
         for kw in _kws(DEFAULT_KEYWORDS):
             print(f"{log_prefix} 搜索关键词: {kw}")
             if "/search/" not in (driver.current_url or ""):
+                # 在每次进入搜索页面前清理浏览器句柄
+                if len(driver.window_handles) > 1:
+                    print(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
+                    for handle in driver.window_handles[1:]:
+                        driver.switch_to.window(handle)
+                        driver.close()
+                    driver.switch_to.window(driver.window_handles[0])
+                    print(f"{log_prefix} 已关闭额外窗口，保留主窗口")
+                
                 driver.get("https://www.kuaishou.com/search/video"); w(); time.sleep(0.5)
             inp = el("input.search-input") or el(".search-input")
             if not inp:
@@ -193,6 +229,44 @@ def main():
             if new_h:
                 driver.switch_to.window(new_h)
             w(); time.sleep(0.5)
+            
+            def leave_video_comment():
+                """在当前视频页面留下评论"""
+                try:
+                    # 等待视频加载并等待一段时间后进行评论
+                    wait_time = random.uniform(video_comment_wait_min, video_comment_wait_max)
+                    print(f"{log_prefix} 等待 {wait_time:.2f} 秒后进行视频留言")
+                    time.sleep(wait_time)
+                    
+                    # 查找评论输入框
+                    comment_input = el(".pl-textarea")
+                    if comment_input:
+                        # 点击输入框
+                        click(comment_input)
+                        time.sleep(0.5)
+                        
+                        # 输入评论内容
+                        comment_text = random.choice(["这个视频不错！", "内容很棒！", "支持一下！", "666", "好看！"])
+                        comment_input.send_keys(comment_text)
+                        time.sleep(0.5)
+                        
+                        # 尝试找到并点击发送按钮
+                        send_button = el(".pl-send-btn") or el(".send-btn") or el(".comment-send-btn")
+                        if send_button:
+                            click(send_button)
+                            print(f"{log_prefix} 已留言: {comment_text}")
+                            return True
+                        else:
+                            # 如果没有找到发送按钮，尝试按回车键
+                            comment_input.send_keys(Keys.RETURN)
+                            print(f"{log_prefix} 已留言: {comment_text}")
+                            return True
+                    else:
+                        print(f"{log_prefix} 未找到评论输入框")
+                        return False
+                except Exception as e:
+                    print(f"{log_prefix} 留言失败: {e}")
+                    return False
 
             vids = random.randint(video_min, video_max)
             print(f"{log_prefix} 开始浏览 {vids} 个视频")
@@ -206,6 +280,11 @@ def main():
                     )
                 except Exception:
                     time.sleep(1.0)
+                
+                # 根据概率决定是否进行视频留言
+                if random.random() <= video_comment_prob:
+                    print(f"{log_prefix} 根据概率决定进行视频留言")
+                    leave_video_comment()
                 scroll_times = random.randint(scroll_min, scroll_max)
                 processed = 0
                 scroll_done = 0
@@ -221,6 +300,8 @@ def main():
                             scroll_done += 1
                             since_scroll = 0
                             print(f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})")
+                            # 滚动后添加随机等待，模拟人工操作
+                            time.sleep(random.uniform(2, 4))
                         except Exception as e:
                             print(f"{log_prefix} 滚动评论区失败: {e}")
                             scroll_done += 1
@@ -229,6 +310,9 @@ def main():
                     it = items[processed]
                     processed += 1
                     since_scroll += 1
+                    
+                    # 处理每个评论项之间添加随机等待，模拟人工浏览
+                    time.sleep(random.uniform(0.5, 1.5))
 
                     if random.random() <= like_prob:
                         like_el = el(".comment-item-likeicon", it)
@@ -254,7 +338,7 @@ def main():
                         if a:
                             hs_a = set(driver.window_handles)
                             if click(a):
-                                time.sleep(0.5)
+                                time.sleep(random.uniform(1.0, 2.0))  # 点击头像后等待
                                 prof = next(iter(set(driver.window_handles) - hs_a), None)
                                 if prof:
                                     driver.switch_to.window(prof)
@@ -273,6 +357,8 @@ def main():
                                         except Exception:
                                             pass
                                     driver.switch_to.window(new_h or main_h)
+                                    # 关闭用户主页后等待
+                                    time.sleep(random.uniform(1.0, 2.0))
 
                     if since_scroll >= 3:
                         try:
@@ -280,6 +366,8 @@ def main():
                             scroll_done += 1
                             since_scroll = 0
                             print(f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})")
+                            # 滚动后添加随机等待，模拟人工操作
+                            time.sleep(random.uniform(2, 4))
                         except Exception as e:
                             print(f"{log_prefix} 滚动评论区失败: {e}")
                             scroll_done += 1
@@ -308,6 +396,16 @@ def main():
                     except Exception:
                         pass
                 time.sleep(0.7)
+            
+            # 确保只保留主窗口，清理可能残留的窗口
+            if len(driver.window_handles) > 1:
+                print(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
+                for handle in driver.window_handles[1:]:
+                    driver.switch_to.window(handle)
+                    driver.close()
+                driver.switch_to.window(driver.window_handles[0])
+                print(f"{log_prefix} 已关闭额外窗口，保留主窗口")
+            
             time.sleep(random.uniform(1.0, 2.0))
     finally:
         try:
