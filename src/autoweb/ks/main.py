@@ -20,16 +20,16 @@ DEFAULT_MAX_SCROLL_VIDEO = [2, 3]  # 默认视频数量范围
 DEFAULT_MAX_COMMENT = [2, 5]  # 默认评论滚动范围
 
 # 互动操作相关参数
-LIKE_PROBABILITY = 0.2  # 默认点赞概率
-VISIT_ENABLE = 0.1  # 默认访问主页概率
-PROFILE_FOLLOW_PROBABILITY = 0.2  # 默认主页关注概率
+LIKE_PROBABILITY = 20  # 默认点赞概率（百分比）
+VISIT_ENABLE = 10  # 默认访问主页概率（百分比）
+PROFILE_FOLLOW_PROBABILITY = 20  # 默认主页关注概率（百分比）
 DEFAULT_LIKE_WAIT_MIN = 4  # 点赞后最小等待时间
 DEFAULT_LIKE_WAIT_MAX = 10  # 点赞后最大等待时间
 DEFAULT_VISIT_MIN = 2  # 关注后最小等待时间
 DEFAULT_VISIT_MAX = 5  # 关注后最大等待时间
 DEFAULT_PROFILE_WAIT_MIN = 5  # 进入主页后最小等待时间
 DEFAULT_PROFILE_WAIT_MAX = 15  # 进入主页后最大等待时间
-VIDEO_REPLY_RATE = 1  # 视频留言概率
+VIDEO_REPLY_RATE = 100  # 视频留言概率（百分比）
 VIDEO_REPLY_WAIT_MIN = 5  # 视频留言前最小等待时间
 VIDEO_REPLY_WAIT_MAX = 10  # 视频留言前最大等待时间
 
@@ -126,13 +126,13 @@ def main():
     print(f"{log_prefix} 等待时间: {wait_time}s")
     print(f"{log_prefix} 视频数量范围: {video_min}-{video_max}")
     print(f"{log_prefix} 评论滚动范围: {scroll_min}-{scroll_max}")
-    print(f"{log_prefix} 点赞概率: {like_prob}")
-    print(f"{log_prefix} 访问主页概率: {visit_profile_prob}")
-    print(f"{log_prefix} 主页关注概率: {profile_follow_prob}")
+    print(f"{log_prefix} 点赞概率: {like_prob}%")
+    print(f"{log_prefix} 访问主页概率: {visit_profile_prob}%")
+    print(f"{log_prefix} 主页关注概率: {profile_follow_prob}%")
     print(f"{log_prefix} 点赞后等待时间范围: {like_wait_min}-{like_wait_max}s")
     print(f"{log_prefix} 关注后等待时间范围: {visit_min}-{visit_max}s")
     print(f"{log_prefix} 进入主页等待时间范围: {profile_wait_min}-{profile_wait_max}s")
-    print(f"{log_prefix} 视频留言概率: {video_comment_prob}")
+    print(f"{log_prefix} 视频留言概率: {video_comment_prob}%")
     print(f"{log_prefix} 视频留言前等待时间范围: {video_comment_wait_min}-{video_comment_wait_max}s")
 
     res = _open_bit(browser_id)
@@ -282,7 +282,7 @@ def main():
                     time.sleep(1.0)
                 
                 # 根据概率决定是否进行视频留言
-                if random.random() <= video_comment_prob:
+                if random.random() * 100 <= video_comment_prob:
                     print(f"{log_prefix} 根据概率决定进行视频留言")
                     leave_video_comment()
                 scroll_times = random.randint(scroll_min, scroll_max)
@@ -314,7 +314,7 @@ def main():
                     # 处理每个评论项之间添加随机等待，模拟人工浏览
                     time.sleep(random.uniform(0.5, 1.5))
 
-                    if random.random() <= like_prob:
+                    if random.random() * 100 <= like_prob:
                         like_el = el(".comment-item-likeicon", it)
                         if like_el:
                             cls0 = ""
@@ -333,7 +333,7 @@ def main():
                                     print(f"{log_prefix} 已点赞评论 (累计点赞次数: {like_count})")
                                     time.sleep(random.uniform(like_wait_min, like_wait_max))
 
-                    if random.random() <= visit_profile_prob:
+                    if random.random() * 100 <= visit_profile_prob:
                         a = el(".author-name", it)
                         if a:
                             hs_a = set(driver.window_handles)
@@ -344,7 +344,7 @@ def main():
                                     driver.switch_to.window(prof)
                                 try:
                                     time.sleep(random.uniform(profile_wait_min, profile_wait_max))
-                                    if random.random() <= profile_follow_prob:
+                                    if random.random() * 100 <= profile_follow_prob:
                                         follow_button = el(".btn-words")
                                         if follow_button and click(follow_button):
                                             follow_count += 1
