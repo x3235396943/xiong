@@ -450,21 +450,37 @@ def main():
 
                 print(f"{log_prefix} 第 {i+1} 个视频处理完成，点赞数: {current_like_count}/{max_like_per_video}，关注数: {current_follow_count}/{max_follow_per_video}")
 
-            if new_h:
-                try:
-                    driver.close()
-                except Exception:
-                    pass
-                driver.switch_to.window(main_h)
-            else:
-                root = el(".short-video-info-container") or el("div.comment-container.vertical-comment")
-                if not click(el(".close-page", root) if root else None):
-                    click(el(".close-page"))
-                    try:
-                        ActionChains(driver).send_keys(Keys.ESCAPE).perform()
-                    except Exception:
-                        pass
-                time.sleep(0.7)
+                # 如果不是最后一个视频，尝试切换到下一个视频
+                if i < vids - 1:
+                    print(f"{log_prefix} 尝试切换到下一个视频")
+                    switch_next_btn = el(".switch-item.video-switch-next")
+                    if switch_next_btn:
+                        if click(switch_next_btn):
+                            print(f"{log_prefix} 成功点击下一个视频按钮")
+                            # 等待新视频加载
+                            time.sleep(2.0)
+                        else:
+                            print(f"{log_prefix} 点击下一个视频按钮失败")
+                    else:
+                        print(f"{log_prefix} 未找到下一个视频按钮")
+                        # 如果找不到切换按钮，则继续执行（可能已经在最后一个视频）
+                else:
+                    # 最后一个视频处理完成后，退出视频播放页面
+                    if new_h:
+                        try:
+                            driver.close()
+                        except Exception:
+                            pass
+                        driver.switch_to.window(main_h)
+                    else:
+                        root = el(".short-video-info-container") or el("div.comment-container.vertical-comment")
+                        if not click(el(".close-page", root) if root else None):
+                            click(el(".close-page"))
+                            try:
+                                ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+                            except Exception:
+                                pass
+                        time.sleep(0.7)
             
             # 确保只保留主窗口，清理可能残留的窗口
             if len(driver.window_handles) > 1:
