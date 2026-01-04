@@ -38,7 +38,19 @@ VIDEO_COMMENTS = "这个视频不错！-&-内容很棒！-&-支持一下！-&-66
 DEFAULT_BIT_BROWSER_IDS = ["57bd9953b5364d3db5c4ac7cfbb9a1b3"]  # 默认浏览器ID列表
 
 # 评论关键词过滤
-COMMENT_FILTER_KEYWORDS = ["美女", "帅哥", "喜欢"]  # 评论过滤关键词
+COMMENT_FILTER_KEYWORDS = "美女-&-帅哥-&-喜欢"
+
+# 是否启用点赞功能
+ENABLE_LIKE = True
+# 是否启用关注功能
+ENABLE_FOLLOW = True
+# 是否启用进入个人主页功能
+ENABLE_PROFILE_VISIT = True
+# 是否启用视频评论功能
+ENABLE_VIDEO_COMMENT = True
+# 是否启用关键词搜索功能
+ENABLE_SEARCH_KEYWORDS = True
+
 
 def get_browser_log_prefix(browser_id):
     """生成浏览器日志前缀，格式为'浏览器 #编号'"""
@@ -123,6 +135,7 @@ def main():
     video_comment_wait_max = VIDEO_REPLY_WAIT_MAX
     like_count = 0
     follow_count = 0
+    
 
     print(f"{log_prefix} 开始执行快手自动化任务")
     print(f"{log_prefix} 浏览器ID: {browser_id}")
@@ -198,8 +211,9 @@ def main():
     # 检查评论是否包含关键词
     def check_comment_contains_keywords(comment_text, keywords):
         """检查评论是否包含指定关键词"""
+        keyword_list = [x.strip() for x in keywords.split("-&-") if x.strip()]
         norm_comment = normalize_text(comment_text)
-        for kw in keywords:
+        for kw in keyword_list:
             if normalize_text(kw) in norm_comment:
                 return True
         return False
@@ -290,7 +304,7 @@ def main():
                 except Exception as e:
                     print(f"{log_prefix} 留言失败: {e}")
                     return False
-
+                
             vids = random.randint(video_min, video_max)
             print(f"{log_prefix} 开始浏览 {vids} 个视频")
             
@@ -304,8 +318,7 @@ def main():
                 except Exception:
                     time.sleep(1.0)
                 
-                # 根据概率决定是否进行视频留言
-                if random.random() * 100 <= video_comment_prob:
+                if ENABLE_VIDEO_COMMENT and (random.random() * 100 <= video_comment_prob):
                     print(f"{log_prefix} 根据概率决定进行视频留言")
                     leave_video_comment()
                 scroll_times = random.randint(scroll_min, scroll_max)
@@ -350,9 +363,10 @@ def main():
                             comment_ok = True
                     except Exception:
                         pass
+                    effective_comment_ok = comment_ok if ENABLE_SEARCH_KEYWORDS else False
 
                     # 点赞逻辑 - 如果包含关键词则强制点赞，否则按概率点赞
-                    if comment_ok or (random.random() * 100 <= like_prob):
+                    if ENABLE_LIKE and (effective_comment_ok or (random.random() * 100 <= like_prob)):
                         like_el = el(".comment-item-likeicon", it)
                         if like_el:
                             cls0 = ""
@@ -372,7 +386,7 @@ def main():
                                     time.sleep(random.uniform(like_wait_min, like_wait_max))
 
                     # 访问主页逻辑 - 如果评论包含关键词则强制访问，否则按概率访问
-                    should_visit = comment_ok or (random.random() * 100 <= visit_profile_prob)
+                    should_visit = ENABLE_PROFILE_VISIT and (effective_comment_ok or (random.random() * 100 <= visit_profile_prob))
                     if should_visit:
                         a = el(".author-name", it)
                         if a:
@@ -386,13 +400,14 @@ def main():
                                     time.sleep(random.uniform(profile_wait_min, profile_wait_max))
                                     
                                     # 如果评论包含关键词，则强制关注，否则按概率关注
-                                    follow_prob = 100 if comment_ok else profile_follow_prob
-                                    if random.random() * 100 <= follow_prob:
-                                        follow_button = el(".btn-words")
-                                        if follow_button and click(follow_button):
-                                            follow_count += 1
-                                            print(f"{log_prefix} 已关注用户 (累计关注次数: {follow_count})")
-                                            time.sleep(random.uniform(visit_min, visit_max))
+                                    if ENABLE_FOLLOW:
+                                        follow_prob = 100 if effective_comment_ok else profile_follow_prob
+                                        if random.random() * 100 <= follow_prob:
+                                            follow_button = el(".btn-words")
+                                            if follow_button and click(follow_button):
+                                                follow_count += 1
+                                                print(f"{log_prefix} 已关注用户 (累计关注次数: {follow_count})")
+                                                time.sleep(random.uniform(visit_min, visit_max))
                                 finally:
                                     if prof:
                                         try:
