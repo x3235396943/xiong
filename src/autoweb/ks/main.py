@@ -37,6 +37,9 @@ VIDEO_REPLY_WAIT_MAX = 10  # 视频留言前最大等待时间
 VIDEO_COMMENTS = "这个视频不错！-&-内容很棒！-&-支持一下！-&-666-&-好看！-&-不错哦-&-赞一个"  # 视频评论列表，使用-&-分隔
 DEFAULT_BIT_BROWSER_IDS = ["57bd9953b5364d3db5c4ac7cfbb9a1b3"]  # 默认浏览器ID列表
 
+# 评论关键词过滤
+COMMENT_FILTER_KEYWORDS = ["美女", "帅哥", "喜欢"]  # 评论过滤关键词
+
 def get_browser_log_prefix(browser_id):
     """生成浏览器日志前缀，格式为'浏览器 #编号'"""
     # 提取浏览器ID的最后几位作为编号
@@ -181,6 +184,26 @@ def main():
             except Exception:
                 return False
 
+    # 文本标准化函数（转小写、去除多余空格）
+    def normalize_text(text):
+        """文本标准化（转小写、去除多余空格）"""
+        try:
+            s = str(text).lower()
+            import re
+            s = re.sub(r"\s+", " ", s).strip()
+            return s
+        except Exception:
+            return str(text)
+
+    # 检查评论是否包含关键词
+    def check_comment_contains_keywords(comment_text, keywords):
+        """检查评论是否包含指定关键词"""
+        norm_comment = normalize_text(comment_text)
+        for kw in keywords:
+            if normalize_text(kw) in norm_comment:
+                return True
+        return False
+
     try:
         print(f"{log_prefix} 访问快手搜索页面")
         # 清理浏览器句柄，确保只有快手首页的界面
@@ -314,7 +337,22 @@ def main():
                     # 处理每个评论项之间添加随机等待，模拟人工浏览
                     time.sleep(random.uniform(0.5, 1.5))
 
-                    if random.random() * 100 <= like_prob:
+                    # 检查评论是否包含关键词
+                    comment_ok = False
+                    try:
+                        content_el = it.find_element(By.CSS_SELECTOR, "div.comment-item-content > span")
+                        spans = content_el.find_elements(By.CSS_SELECTOR, "span")
+                        comment_text = "".join(span.text for span in spans).strip()
+                        print(comment_text)
+                        
+                        # 检查评论是否包含关键词
+                        if check_comment_contains_keywords(comment_text, COMMENT_FILTER_KEYWORDS):
+                            comment_ok = True
+                    except Exception:
+                        pass
+
+                    # 点赞逻辑 - 如果包含关键词则强制点赞，否则按概率点赞
+                    if comment_ok or (random.random() * 100 <= like_prob):
                         like_el = el(".comment-item-likeicon", it)
                         if like_el:
                             cls0 = ""
@@ -333,7 +371,9 @@ def main():
                                     print(f"{log_prefix} 已点赞评论 (累计点赞次数: {like_count})")
                                     time.sleep(random.uniform(like_wait_min, like_wait_max))
 
-                    if random.random() * 100 <= visit_profile_prob:
+                    # 访问主页逻辑 - 如果评论包含关键词则强制访问，否则按概率访问
+                    should_visit = comment_ok or (random.random() * 100 <= visit_profile_prob)
+                    if should_visit:
                         a = el(".author-name", it)
                         if a:
                             hs_a = set(driver.window_handles)
@@ -344,7 +384,10 @@ def main():
                                     driver.switch_to.window(prof)
                                 try:
                                     time.sleep(random.uniform(profile_wait_min, profile_wait_max))
-                                    if random.random() * 100 <= profile_follow_prob:
+                                    
+                                    # 如果评论包含关键词，则强制关注，否则按概率关注
+                                    follow_prob = 100 if comment_ok else profile_follow_prob
+                                    if random.random() * 100 <= follow_prob:
                                         follow_button = el(".btn-words")
                                         if follow_button and click(follow_button):
                                             follow_count += 1
