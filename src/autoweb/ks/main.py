@@ -1,4 +1,7 @@
 import json, os, random, time
+import concurrent.futures
+import threading
+from collections import deque
 import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -37,7 +40,7 @@ COMMENT_LIKE_COUNT_MAX = 8  # 每条视频最多点赞数量
 
 # 视频评论内容列表
 VIDEO_COMMENTS = "这个视频不错！-&-内容很棒！-&-支持一下！-&-666-&-好看！-&-不错哦-&-赞一个"  # 视频评论列表，使用-&-分隔
-DEFAULT_BIT_BROWSER_IDS = ["57bd9953b5364d3db5c4ac7cfbb9a1b3"]  # 默认浏览器ID列表
+DEFAULT_BIT_BROWSER_IDS = ["57bd9953b5364d3db5c4ac7cfbb9a1b3","4bbbe30c084a495796aaaff8a7082fda"]  # 默认浏览器ID列表
 
 # 评论关键词过滤
 COMMENT_FILTER_KEYWORDS = "美女-&-帅哥-&-喜欢"
@@ -106,6 +109,23 @@ def _kws(d):
     return r or d[:]
 
 
+def parse_browser_ids():
+    s = (os.getenv("BIT_BROWSER_IDS") or "").strip()
+    if not s:
+        return DEFAULT_BIT_BROWSER_IDS[:]
+    try:
+        v = json.loads(s)
+        if isinstance(v, list):
+            r = [str(x).strip() for x in v if str(x).strip()]
+            return r or DEFAULT_BIT_BROWSER_IDS[:]
+    except Exception:
+        pass
+    for sep in ["\n", "\r", "\t", "，", ";", "；", " "]:
+        s = s.replace(sep, ",")
+    r = [x.strip() for x in s.split(",") if x.strip()]
+    return r or DEFAULT_BIT_BROWSER_IDS[:]
+
+
 def _open_bit(browser_id):
     payload = {"id": str(browser_id), "queue": True, "ignoreDefaultUrls": True}
     if (os.getenv("HEADLESS") or "").strip().lower() in {"1", "true", "yes", "y"}:
@@ -118,8 +138,7 @@ def _open_bit(browser_id):
     ).json()
 
 
-def main():
-    browser_id = DEFAULT_BIT_BROWSER_IDS[0]
+def run_worker(browser_id, browser_number, kw_queue, kw_lock):
     log_prefix = get_browser_log_prefix(browser_id)
     
     wait_time = DEFAULT_WAIT_TIME
@@ -238,7 +257,16 @@ def main():
             print(f"{log_prefix} 已关闭额外窗口，保留主窗口")
         
         driver.get("https://www.kuaishou.com/search/video"); w(); time.sleep(0.8)
-        for kw in _kws(DEFAULT_KEYWORDS):
+        empty_retries = 0
+        while True:
+            with kw_lock:
+                kw = kw_queue.popleft() if kw_queue else None
+            if not kw:
+                empty_retries += 1
+                time.sleep(3.0)
+                if empty_retries >= 5:
+                    break
+                continue
             print(f"{log_prefix} 搜索关键词: {kw}")
             if "/search/" not in (driver.current_url or ""):
                 # 在每次进入搜索页面前清理浏览器句柄
@@ -500,6 +528,29 @@ def main():
         print(f"{log_prefix} 浏览器已关闭，任务完成")
         print(f"{log_prefix} 本次任务累计点赞次数: {like_count}")
         print(f"{log_prefix} 本次任务累计关注次数: {follow_count}")
+
+
+def main():
+    browser_ids = parse_browser_ids()
+    keywords = _kws(DEFAULT_KEYWORDS)
+    if len(browser_ids) <= 1:
+        kw_queue = deque(keywords)
+        kw_lock = threading.Lock()
+        run_worker(browser_ids[0], 1, kw_queue, kw_lock)
+        return
+    kw_queue = deque(keywords)
+    kw_lock = threading.Lock()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(browser_ids)) as ex:
+        futures = []
+        for i, bid in enumerate(browser_ids):
+            futures.append(ex.submit(run_worker, bid, i + 1, kw_queue, kw_lock))
+            if i < len(browser_ids) - 1:
+                time.sleep(2.5)
+        for f in concurrent.futures.as_completed(futures):
+            try:
+                f.result()
+            except Exception as e:
+                print(f"[并发] 线程执行出错: {e}")
 
 
 if __name__ == "__main__":
