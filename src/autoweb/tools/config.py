@@ -17,7 +17,6 @@ field_pairs = {
     "COMMENT_WAIT_MAX": "COMMENT_WAIT_MIN",
 }
 
-
 class ShareConfig(BaseSettings):
     LIKE_PROBABILITY: int = 8  # 点赞概率 (0-100)
     VISIT_ENABLE: int = 10  # 进入主页的概率 (0-100)
@@ -94,7 +93,7 @@ class KuSettings(ShareConfig):
     HEADLESS: bool = False # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str = "1.4.0"
+    VERSION: str = "1.2.5"
 
     # 抖音搜索模式配置（服务器下发）
     KEYWORDS: list = []
@@ -209,6 +208,57 @@ class PcConfig(ShareConfig):
     MAX_COMMENT: list = [2, 15]  # 评论区滚动次数
 
     model_config = SettingsConfigDict(extra="ignore")
+
+
+class KsConfig(ShareConfig):
+    # 快手相关配置参数（使用父类参数的快手特定默认值）
+    
+    # 搜索关键词
+    KEYWORDS: list = ["美女", "美食", "穿搭", "旅行"]
+    
+    # 视频浏览相关参数
+    MAX_SCROLL_VIDEO: list = [2, 3]  # 默认视频数量范围
+    MAX_COMMENT: list = [2, 5]  # 默认评论滚动范围
+    
+    # 视频评论内容列表
+    VIDEO_COMMENTS: str = "这个视频不错！-&-内容很棒！-&-支持一下！-&-666-&-好看！-&-不错哦-&-赞一个"  # 视频评论列表，使用-&-分隔
+    BIT_BROWSER_IDS: list = ["57bd9953b5364d3db5c4ac7cfbb9a1b3","4bbbe30c084a495796aaaff8a7082fda"]  # 默认浏览器ID列表
+    
+    # 评论关键词过滤
+    COMMENT_FILTER_KEYWORDS: list = ["美女", "帅哥", "喜欢"]
+    
+    # 互动操作相关参数（快手特定的默认值）
+    LIKE_PROBABILITY: int = 20  # 快手默认点赞概率
+    VISIT_ENABLE: int = 10  # 快手默认访问主页概率
+    PROFILE_FOLLOW_PROBABILITY: int = 20  # 快手默认主页关注概率
+    
+    # 新增：每条视频点赞和关注上限参数
+    MIN_FOLLOWS_PER_VIDEO: int = 2  # 快手每条视频最少关注数量
+    MAX_FOLLOWS_PER_VIDEO: int = 3  # 快手每条视频最多关注数量
+    COMMENT_LIKE_COUNT_MIN: int = 4  # 快手每条视频最少点赞数量
+    COMMENT_LIKE_COUNT_MAX: int = 8  # 快手每条视频最多点赞数量
+    
+    # 等待时间参数
+    LIKE_WAIT_MIN: int = 4  # 快手点赞后最小等待时间
+    LIKE_WAIT_MAX: int = 10  # 快手点赞后最大等待时间
+    VISIT_MIN: int = 2  # 快手关注后最小等待时间
+    VISIT_MAX: int = 5  # 快手关注后最大等待时间
+    COMMENT_WAIT_MIN: int = 5  # 快手评论等待最小时间
+    COMMENT_WAIT_MAX: int = 15  # 快手评论等待最大时间
+    
+    # 留言/回复等待时间参数
+    VIDEO_REPLY_WAIT_MIN: int = 5  # 快手视频留言前最小等待时间
+    VIDEO_REPLY_WAIT_MAX: int = 10  # 快手视频留言前最大等待时间
+    
+    # 功能开关
+    ENABLE_LIKE: bool = True
+    ENABLE_FOLLOW: bool = True
+    ENABLE_PROFILE_VISIT: bool = True
+    ENABLE_VIDEO_COMMENT: bool = True
+    ENABLE_SEARCH_KEYWORDS: bool = True
+    
+    # 快手特定参数
+    KS_DEFAULT_WAIT_TIME: int = 5  # 快手默认等待元素加载时间
 
 
 def extract_version() -> str | None:

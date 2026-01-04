@@ -11,52 +11,53 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+from ..tools.config import KsConfig
+
+# 初始化快手配置
+ks_config = KsConfig()
+
 # 搜索关键词
-DEFAULT_KEYWORDS = ["美女", "美食", "穿搭", "旅行"]
+DEFAULT_KEYWORDS = ks_config.KEYWORDS
 
 # 视频浏览相关参数
-DEFAULT_MAX_SCROLL_VIDEO = [2, 3]  # 默认视频数量范围
-DEFAULT_MAX_COMMENT = [2, 5]  # 默认评论滚动范围
+DEFAULT_MAX_SCROLL_VIDEO = ks_config.MAX_SCROLL_VIDEO
+DEFAULT_MAX_COMMENT = ks_config.MAX_COMMENT
 
 # 互动操作相关参数
-LIKE_PROBABILITY = 20  # 默认点赞概率
-VISIT_ENABLE = 10  # 默认访问主页概率
-PROFILE_FOLLOW_PROBABILITY = 20  # 默认主页关注概率
-DEFAULT_LIKE_WAIT_MIN = 4  # 点赞后最小等待时间
-DEFAULT_LIKE_WAIT_MAX = 10  # 点赞后最大等待时间
-DEFAULT_VISIT_MIN = 2  # 关注后最小等待时间
-DEFAULT_VISIT_MAX = 5  # 关注后最大等待时间
-DEFAULT_PROFILE_WAIT_MIN = 5  # 进入主页后最小等待时间
-DEFAULT_PROFILE_WAIT_MAX = 15  # 进入主页后最大等待时间
-VIDEO_REPLY_RATE = 20  # 视频留言概率
-VIDEO_REPLY_WAIT_MIN = 5  # 视频留言前最小等待时间
-VIDEO_REPLY_WAIT_MAX = 10  # 视频留言前最大等待时间
+LIKE_PROBABILITY = ks_config.LIKE_PROBABILITY
+VISIT_ENABLE = ks_config.VISIT_ENABLE
+PROFILE_FOLLOW_PROBABILITY = ks_config.PROFILE_FOLLOW_PROBABILITY
+DEFAULT_LIKE_WAIT_MIN = ks_config.LIKE_WAIT_MIN
+DEFAULT_LIKE_WAIT_MAX = ks_config.LIKE_WAIT_MAX
+DEFAULT_VISIT_MIN = ks_config.VISIT_MIN
+DEFAULT_VISIT_MAX = ks_config.VISIT_MAX
+DEFAULT_PROFILE_WAIT_MIN = ks_config.COMMENT_WAIT_MIN
+DEFAULT_PROFILE_WAIT_MAX = ks_config.COMMENT_WAIT_MAX
+VIDEO_REPLY_RATE = ks_config.VIDEO_REPLY_RATE
+VIDEO_REPLY_WAIT_MIN = ks_config.VIDEO_REPLY_WAIT_MIN
+VIDEO_REPLY_WAIT_MAX = ks_config.VIDEO_REPLY_WAIT_MAX
 
 # 新增：每条视频点赞和关注上限参数
-MIN_FOLLOWS_PER_VIDEO = 2  # 每条视频最少关注数量
-MAX_FOLLOWS_PER_VIDEO = 3  # 每条视频最多关注数量
-COMMENT_LIKE_COUNT_MIN = 4  # 每条视频最少点赞数量
-COMMENT_LIKE_COUNT_MAX = 8  # 每条视频最多点赞数量
+MIN_FOLLOWS_PER_VIDEO = ks_config.MIN_FOLLOWS_PER_VIDEO
+MAX_FOLLOWS_PER_VIDEO = ks_config.MAX_FOLLOWS_PER_VIDEO
+COMMENT_LIKE_COUNT_MIN = ks_config.COMMENT_LIKE_COUNT_MIN
+COMMENT_LIKE_COUNT_MAX = ks_config.COMMENT_LIKE_COUNT_MAX
 
 # 视频评论内容列表
-VIDEO_COMMENTS = "这个视频不错！-&-内容很棒！-&-支持一下！-&-666-&-好看！-&-不错哦-&-赞一个"  # 视频评论列表，使用-&-分隔
-DEFAULT_BIT_BROWSER_IDS = ["57bd9953b5364d3db5c4ac7cfbb9a1b3","4bbbe30c084a495796aaaff8a7082fda"]  # 默认浏览器ID列表
+VIDEO_COMMENTS = ks_config.VIDEO_COMMENTS
+DEFAULT_BIT_BROWSER_IDS = ks_config.BIT_BROWSER_IDS
 
 # 评论关键词过滤
-COMMENT_FILTER_KEYWORDS = "美女-&-帅哥-&-喜欢"
+COMMENT_FILTER_KEYWORDS = ks_config.COMMENT_FILTER_KEYWORDS
 
-# 是否启用点赞功能
-ENABLE_LIKE = True
-# 是否启用关注功能
-ENABLE_FOLLOW = True
-# 是否启用进入个人主页功能
-ENABLE_PROFILE_VISIT = True
-# 是否启用视频评论功能
-ENABLE_VIDEO_COMMENT = True
-# 是否启用关键词搜索功能
-ENABLE_SEARCH_KEYWORDS = True
+# 是否启用功能
+ENABLE_LIKE = ks_config.ENABLE_LIKE
+ENABLE_FOLLOW = ks_config.ENABLE_FOLLOW
+ENABLE_PROFILE_VISIT = ks_config.ENABLE_PROFILE_VISIT
+ENABLE_VIDEO_COMMENT = ks_config.ENABLE_VIDEO_COMMENT
+ENABLE_SEARCH_KEYWORDS = ks_config.ENABLE_SEARCH_KEYWORDS
 
-DEFAULT_WAIT_TIME = 5  # 默认等待元素加载时间
+DEFAULT_WAIT_TIME = ks_config.KS_DEFAULT_WAIT_TIME
 
 def get_browser_log_prefix(browser_id):
     """生成浏览器日志前缀，格式为'浏览器 #编号'"""
