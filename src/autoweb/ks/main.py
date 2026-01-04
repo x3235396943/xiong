@@ -8,30 +8,32 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-BIT_API_URL = "http://127.0.0.1:54345"
+# 搜索关键词
 DEFAULT_KEYWORDS = ["美女", "美食", "穿搭", "旅行"]
 
-# 滚动操作相关参数
-DEFAULT_SCROLL_DELTA = 400  # 默认滚动增量
-
 # 视频浏览相关参数
-DEFAULT_WAIT_TIME = 5  # 默认等待时间
 DEFAULT_MAX_SCROLL_VIDEO = [2, 3]  # 默认视频数量范围
 DEFAULT_MAX_COMMENT = [2, 5]  # 默认评论滚动范围
 
 # 互动操作相关参数
-LIKE_PROBABILITY = 20  # 默认点赞概率（百分比）
-VISIT_ENABLE = 10  # 默认访问主页概率（百分比）
-PROFILE_FOLLOW_PROBABILITY = 20  # 默认主页关注概率（百分比）
+LIKE_PROBABILITY = 20  # 默认点赞概率
+VISIT_ENABLE = 10  # 默认访问主页概率
+PROFILE_FOLLOW_PROBABILITY = 20  # 默认主页关注概率
 DEFAULT_LIKE_WAIT_MIN = 4  # 点赞后最小等待时间
 DEFAULT_LIKE_WAIT_MAX = 10  # 点赞后最大等待时间
 DEFAULT_VISIT_MIN = 2  # 关注后最小等待时间
 DEFAULT_VISIT_MAX = 5  # 关注后最大等待时间
 DEFAULT_PROFILE_WAIT_MIN = 5  # 进入主页后最小等待时间
 DEFAULT_PROFILE_WAIT_MAX = 15  # 进入主页后最大等待时间
-VIDEO_REPLY_RATE = 100  # 视频留言概率（百分比）
+VIDEO_REPLY_RATE = 20  # 视频留言概率
 VIDEO_REPLY_WAIT_MIN = 5  # 视频留言前最小等待时间
 VIDEO_REPLY_WAIT_MAX = 10  # 视频留言前最大等待时间
+
+# 新增：每条视频点赞和关注上限参数
+MIN_FOLLOWS_PER_VIDEO = 2  # 每条视频最少关注数量
+MAX_FOLLOWS_PER_VIDEO = 3  # 每条视频最多关注数量
+COMMENT_LIKE_COUNT_MIN = 4  # 每条视频最少点赞数量
+COMMENT_LIKE_COUNT_MAX = 8  # 每条视频最多点赞数量
 
 # 视频评论内容列表
 VIDEO_COMMENTS = "这个视频不错！-&-内容很棒！-&-支持一下！-&-666-&-好看！-&-不错哦-&-赞一个"  # 视频评论列表，使用-&-分隔
@@ -51,6 +53,7 @@ ENABLE_VIDEO_COMMENT = True
 # 是否启用关键词搜索功能
 ENABLE_SEARCH_KEYWORDS = True
 
+DEFAULT_WAIT_TIME = 5  # 默认等待元素加载时间
 
 def get_browser_log_prefix(browser_id):
     """生成浏览器日志前缀，格式为'浏览器 #编号'"""
@@ -58,7 +61,8 @@ def get_browser_log_prefix(browser_id):
     browser_num = browser_id.split("-")[-1] if "-" in browser_id else browser_id[:8]
     return f"[浏览器 #{browser_num}]"
 
-def scroll_ks_comment_container(driver, times=5, step=600, sleep=1.5):
+# 滚动距离
+def scroll_ks_comment_container(driver, times=5, step=500, sleep=1.5):
     css = "div.comment-container.vertical-comment"
     container = driver.find_element(By.CSS_SELECTOR, css)
     from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
@@ -107,7 +111,7 @@ def _open_bit(browser_id):
     if (os.getenv("HEADLESS") or "").strip().lower() in {"1", "true", "yes", "y"}:
         payload["args"] = ["--headless"]
     return requests.post(
-        f"{BIT_API_URL}/browser/open",
+        "http://127.0.0.1:54345/browser/open",
         data=json.dumps(payload),
         headers={"Content-Type": "application/json"},
         timeout=30,
@@ -150,6 +154,10 @@ def main():
     print(f"{log_prefix} 进入主页等待时间范围: {profile_wait_min}-{profile_wait_max}s")
     print(f"{log_prefix} 视频留言概率: {video_comment_prob}%")
     print(f"{log_prefix} 视频留言前等待时间范围: {video_comment_wait_min}-{video_comment_wait_max}s")
+    print(f"{log_prefix} 每条视频最少关注数量: {MIN_FOLLOWS_PER_VIDEO}")
+    print(f"{log_prefix} 每条视频最多关注数量: {MAX_FOLLOWS_PER_VIDEO}")
+    print(f"{log_prefix} 每条视频最少点赞数量: {COMMENT_LIKE_COUNT_MIN}")
+    print(f"{log_prefix} 每条视频最多点赞数量: {COMMENT_LIKE_COUNT_MAX}")
 
     res = _open_bit(browser_id)
     data = (res or {}).get("data") or {}
@@ -321,6 +329,13 @@ def main():
                 if ENABLE_VIDEO_COMMENT and (random.random() * 100 <= video_comment_prob):
                     print(f"{log_prefix} 根据概率决定进行视频留言")
                     leave_video_comment()
+                
+                # 为每个视频设置随机的点赞和关注上限
+                max_follow_per_video = random.randint(MIN_FOLLOWS_PER_VIDEO, MAX_FOLLOWS_PER_VIDEO)
+                max_like_per_video = random.randint(COMMENT_LIKE_COUNT_MIN, COMMENT_LIKE_COUNT_MAX)
+                current_follow_count = 0  # 当前视频关注计数器
+                current_like_count = 0    # 当前视频点赞计数器
+                
                 scroll_times = random.randint(scroll_min, scroll_max)
                 processed = 0
                 scroll_done = 0
@@ -365,8 +380,8 @@ def main():
                         pass
                     effective_comment_ok = comment_ok if ENABLE_SEARCH_KEYWORDS else False
 
-                    # 点赞逻辑 - 如果包含关键词则强制点赞，否则按概率点赞
-                    if ENABLE_LIKE and (effective_comment_ok or (random.random() * 100 <= like_prob)):
+                    # 点赞逻辑 - 如果包含关键词则强制点赞，否则按概率点赞，但不超过当前视频的点赞上限
+                    if ENABLE_LIKE and (effective_comment_ok or (current_like_count < max_like_per_video and random.random() * 100 <= like_prob)):
                         like_el = el(".comment-item-likeicon", it)
                         if like_el:
                             cls0 = ""
@@ -382,7 +397,8 @@ def main():
                                     cls1 = cls0
                                 if cls1 != cls0:
                                     like_count += 1
-                                    print(f"{log_prefix} 已点赞评论 (累计点赞次数: {like_count})")
+                                    current_like_count += 1  # 增加当前视频点赞计数
+                                    print(f"{log_prefix} 已点赞评论 (当前视频点赞数: {current_like_count}/{max_like_per_video}, 累计点赞次数: {like_count})")
                                     time.sleep(random.uniform(like_wait_min, like_wait_max))
 
                     # 访问主页逻辑 - 如果评论包含关键词则强制访问，否则按概率访问
@@ -399,14 +415,15 @@ def main():
                                 try:
                                     time.sleep(random.uniform(profile_wait_min, profile_wait_max))
                                     
-                                    # 如果评论包含关键词，则强制关注，否则按概率关注
-                                    if ENABLE_FOLLOW:
+                                    # 如果评论包含关键词，则强制关注，否则按概率关注，但不超过当前视频的关注上限
+                                    if ENABLE_FOLLOW and current_follow_count < max_follow_per_video:
                                         follow_prob = 100 if effective_comment_ok else profile_follow_prob
                                         if random.random() * 100 <= follow_prob:
                                             follow_button = el(".btn-words")
                                             if follow_button and click(follow_button):
                                                 follow_count += 1
-                                                print(f"{log_prefix} 已关注用户 (累计关注次数: {follow_count})")
+                                                current_follow_count += 1  # 增加当前视频关注计数
+                                                print(f"{log_prefix} 已关注用户 (当前视频关注数: {current_follow_count}/{max_follow_per_video}, 累计关注次数: {follow_count})")
                                                 time.sleep(random.uniform(visit_min, visit_max))
                                 finally:
                                     if prof:
@@ -431,13 +448,7 @@ def main():
                             scroll_done += 1
                             since_scroll = 0
 
-                if i < vids - 1:
-                    if not click(el(".switch-item.video-switch-next")):
-                        print(f"{log_prefix} 未找到下一个视频按钮，提前结束")
-                        break
-                    time.sleep(random.uniform(1.0, 2.0))
-                else:
-                    print(f"{log_prefix} 视频浏览完成")
+                print(f"{log_prefix} 第 {i+1} 个视频处理完成，点赞数: {current_like_count}/{max_like_per_video}，关注数: {current_follow_count}/{max_follow_per_video}")
 
             if new_h:
                 try:
