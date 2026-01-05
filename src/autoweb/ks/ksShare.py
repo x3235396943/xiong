@@ -1,4 +1,7 @@
-import json, os, random, time
+import json
+import os
+import random
+import time
 import concurrent.futures
 import threading
 from collections import deque
@@ -13,71 +16,70 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from ..tools.config import KsConfig
 
+from .base import KuaishouUtils
+
 # 初始化快手配置
 ks_config = KsConfig()
 
-# 搜索关键词
-DEFAULT_KEYWORDS = ks_config.KEYWORDS
+# URL列表配置
+DEFAULT_URLS = ks_config.KS_SHARE_URLS if hasattr(ks_config, 'KS_SHARE_URLS') else [
+    "https://www.kuaishou.com/f/X-2dKHX1NhEkj1oh",
+    "https://www.kuaishou.com/f/X-8KhLhFzsM9CW34",
+    "https://www.kuaishou.com/f/X-1XE4j64AuGQDfX"
+]
 
 # 视频浏览相关参数
-DEFAULT_MAX_SCROLL_VIDEO = ks_config.MAX_SCROLL_VIDEO
-DEFAULT_MAX_COMMENT = ks_config.MAX_COMMENT
+DEFAULT_MAX_VISIT_URLS = ks_config.MAX_VISIT_URLS if hasattr(ks_config, 'MAX_VISIT_URLS') else (5, 10)
+DEFAULT_MAX_COMMENT = ks_config.MAX_COMMENT if hasattr(ks_config, 'MAX_COMMENT') else (3, 5)
 
 # 互动操作相关参数
-LIKE_PROBABILITY = ks_config.LIKE_PROBABILITY
-VISIT_ENABLE = ks_config.VISIT_ENABLE
-PROFILE_FOLLOW_PROBABILITY = ks_config.PROFILE_FOLLOW_PROBABILITY
-DEFAULT_LIKE_WAIT_MIN = ks_config.LIKE_WAIT_MIN
-DEFAULT_LIKE_WAIT_MAX = ks_config.LIKE_WAIT_MAX
-DEFAULT_VISIT_MIN = ks_config.VISIT_MIN
-DEFAULT_VISIT_MAX = ks_config.VISIT_MAX
-DEFAULT_PROFILE_WAIT_MIN = ks_config.COMMENT_WAIT_MIN
-DEFAULT_PROFILE_WAIT_MAX = ks_config.COMMENT_WAIT_MAX
-VIDEO_REPLY_RATE = ks_config.VIDEO_REPLY_RATE
-VIDEO_REPLY_WAIT_MIN = ks_config.VIDEO_REPLY_WAIT_MIN
-VIDEO_REPLY_WAIT_MAX = ks_config.VIDEO_REPLY_WAIT_MAX
+LIKE_PROBABILITY = ks_config.LIKE_PROBABILITY if hasattr(ks_config, 'LIKE_PROBABILITY') else 30
+VISIT_ENABLE = ks_config.VISIT_ENABLE if hasattr(ks_config, 'VISIT_ENABLE') else True
+PROFILE_FOLLOW_PROBABILITY = ks_config.PROFILE_FOLLOW_PROBABILITY if hasattr(ks_config, 'PROFILE_FOLLOW_PROBABILITY') else 10
+DEFAULT_LIKE_WAIT_MIN = ks_config.LIKE_WAIT_MIN if hasattr(ks_config, 'LIKE_WAIT_MIN') else 1
+DEFAULT_LIKE_WAIT_MAX = ks_config.LIKE_WAIT_MAX if hasattr(ks_config, 'LIKE_WAIT_MAX') else 3
+DEFAULT_VISIT_MIN = ks_config.VISIT_MIN if hasattr(ks_config, 'VISIT_MIN') else 2
+DEFAULT_VISIT_MAX = ks_config.VISIT_MAX if hasattr(ks_config, 'VISIT_MAX') else 5
+DEFAULT_PROFILE_WAIT_MIN = ks_config.COMMENT_WAIT_MIN if hasattr(ks_config, 'COMMENT_WAIT_MIN') else 1
+DEFAULT_PROFILE_WAIT_MAX = ks_config.COMMENT_WAIT_MAX if hasattr(ks_config, 'COMMENT_WAIT_MAX') else 3
+VIDEO_REPLY_RATE = ks_config.VIDEO_REPLY_RATE if hasattr(ks_config, 'VIDEO_REPLY_RATE') else 15
+VIDEO_REPLY_WAIT_MIN = ks_config.VIDEO_REPLY_WAIT_MIN if hasattr(ks_config, 'VIDEO_REPLY_WAIT_MIN') else 2
+VIDEO_REPLY_WAIT_MAX = ks_config.VIDEO_REPLY_WAIT_MAX if hasattr(ks_config, 'VIDEO_REPLY_WAIT_MAX') else 4
 
 # 新增：每条视频点赞和关注上限参数
-MIN_FOLLOWS_PER_VIDEO = ks_config.MIN_FOLLOWS_PER_VIDEO
-MAX_FOLLOWS_PER_VIDEO = ks_config.MAX_FOLLOWS_PER_VIDEO
-COMMENT_LIKE_COUNT_MIN = ks_config.COMMENT_LIKE_COUNT_MIN
-COMMENT_LIKE_COUNT_MAX = ks_config.COMMENT_LIKE_COUNT_MAX
+MIN_FOLLOWS_PER_VIDEO = ks_config.MIN_FOLLOWS_PER_VIDEO if hasattr(ks_config, 'MIN_FOLLOWS_PER_VIDEO') else 0
+MAX_FOLLOWS_PER_VIDEO = ks_config.MAX_FOLLOWS_PER_VIDEO if hasattr(ks_config, 'MAX_FOLLOWS_PER_VIDEO') else 2
+COMMENT_LIKE_COUNT_MIN = ks_config.COMMENT_LIKE_COUNT_MIN if hasattr(ks_config, 'COMMENT_LIKE_COUNT_MIN') else 0
+COMMENT_LIKE_COUNT_MAX = ks_config.COMMENT_LIKE_COUNT_MAX if hasattr(ks_config, 'COMMENT_LIKE_COUNT_MAX') else 3
 
 # 视频评论内容列表
-VIDEO_COMMENTS = ks_config.VIDEO_COMMENTS
-DEFAULT_BIT_BROWSER_IDS = ks_config.BIT_BROWSER_IDS
+VIDEO_COMMENTS = ks_config.VIDEO_COMMENTS if hasattr(ks_config, 'VIDEO_COMMENTS') else [
+    "这个视频不错！", 
+    "内容很棒！", 
+    "支持一下！", 
+    "666", 
+    "好看！"
+]
+
+DEFAULT_BIT_BROWSER_IDS = ks_config.BIT_BROWSER_IDS if hasattr(ks_config, 'BIT_BROWSER_IDS') else []
 
 # 评论关键词过滤
-COMMENT_FILTER_KEYWORDS = ks_config.COMMENT_FILTER_KEYWORDS
+COMMENT_FILTER_KEYWORDS = ks_config.COMMENT_FILTER_KEYWORDS if hasattr(ks_config, 'COMMENT_FILTER_KEYWORDS') else ""
 
 # 是否启用功能
-ENABLE_LIKE = ks_config.ENABLE_LIKE
-ENABLE_FOLLOW = ks_config.ENABLE_FOLLOW
-ENABLE_PROFILE_VISIT = ks_config.ENABLE_PROFILE_VISIT
-ENABLE_VIDEO_COMMENT = ks_config.ENABLE_VIDEO_COMMENT
-ENABLE_SEARCH_KEYWORDS = ks_config.ENABLE_SEARCH_KEYWORDS
+ENABLE_LIKE = ks_config.ENABLE_LIKE if hasattr(ks_config, 'ENABLE_LIKE') else True
+ENABLE_FOLLOW = ks_config.ENABLE_FOLLOW if hasattr(ks_config, 'ENABLE_FOLLOW') else True
+ENABLE_PROFILE_VISIT = ks_config.ENABLE_PROFILE_VISIT if hasattr(ks_config, 'ENABLE_PROFILE_VISIT') else True
+ENABLE_VIDEO_COMMENT = ks_config.ENABLE_VIDEO_COMMENT if hasattr(ks_config, 'ENABLE_VIDEO_COMMENT') else True
+ENABLE_SEARCH_KEYWORDS = ks_config.ENABLE_SEARCH_KEYWORDS if hasattr(ks_config, 'ENABLE_SEARCH_KEYWORDS') else False
 
-DEFAULT_WAIT_TIME = ks_config.KS_DEFAULT_WAIT_TIME
+DEFAULT_WAIT_TIME = ks_config.KS_DEFAULT_WAIT_TIME if hasattr(ks_config, 'KS_DEFAULT_WAIT_TIME') else 8
 
 def get_browser_log_prefix(browser_id):
     """生成浏览器日志前缀，格式为'浏览器 #编号'"""
     # 提取浏览器ID的最后几位作为编号
     browser_num = browser_id.split("-")[-1] if "-" in browser_id else browser_id[:8]
     return f"[浏览器 #{browser_num}]"
-
-# 滚动距离
-def scroll_ks_comment_container(driver, times=5, step=500, sleep=1.5):
-    css = "div.comment-container.vertical-comment"
-    container = driver.find_element(By.CSS_SELECTOR, css)
-    from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
-
-    for _ in range(times):
-        ActionChains(driver).move_to_element(container).pause(0.05).scroll_from_origin(
-            ScrollOrigin.from_element(container), 0, step
-        ).perform()
-        time.sleep(sleep)
-    return True
-
 
 def _rng(name, d):
     s = (os.getenv(name) or "").strip()
@@ -92,9 +94,8 @@ def _rng(name, d):
         pass
     return d
 
-
-def _kws(d):
-    s = (os.getenv("KEYWORDS") or "").strip()
+def _urls(d):
+    s = (os.getenv("KS_SHARE_URLS") or "").strip()
     if not s:
         return d[:]
     try:
@@ -108,7 +109,6 @@ def _kws(d):
         s = s.replace(sep, ",")
     r = [x.strip() for x in s.split(",") if x.strip()]
     return r or d[:]
-
 
 def parse_browser_ids():
     s = (os.getenv("BIT_BROWSER_IDS") or "").strip()
@@ -126,7 +126,6 @@ def parse_browser_ids():
     r = [x.strip() for x in s.split(",") if x.strip()]
     return r or DEFAULT_BIT_BROWSER_IDS[:]
 
-
 def _open_bit(browser_id):
     payload = {"id": str(browser_id), "queue": True, "ignoreDefaultUrls": True}
     if (os.getenv("HEADLESS") or "").strip().lower() in {"1", "true", "yes", "y"}:
@@ -138,12 +137,11 @@ def _open_bit(browser_id):
         timeout=30,
     ).json()
 
-
-def run_worker(browser_id, browser_number, kw_queue, kw_lock):
+def run_worker(browser_id, browser_number, url_queue, url_lock):
     log_prefix = get_browser_log_prefix(browser_id)
     
     wait_time = DEFAULT_WAIT_TIME
-    video_min, video_max = DEFAULT_MAX_SCROLL_VIDEO
+    url_min, url_max = DEFAULT_MAX_VISIT_URLS
     scroll_min, scroll_max = DEFAULT_MAX_COMMENT
     like_prob = LIKE_PROBABILITY
     visit_profile_prob = VISIT_ENABLE
@@ -159,12 +157,11 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
     video_comment_wait_max = VIDEO_REPLY_WAIT_MAX
     like_count = 0
     follow_count = 0
-    
 
-    print(f"{log_prefix} 开始执行快手自动化任务")
+    print(f"{log_prefix} 开始执行快手分享链接访问任务")
     print(f"{log_prefix} 浏览器ID: {browser_id}")
     print(f"{log_prefix} 等待时间: {wait_time}s")
-    print(f"{log_prefix} 视频数量范围: {video_min}-{video_max}")
+    print(f"{log_prefix} 访问链接数量范围: {url_min}-{url_max}")
     print(f"{log_prefix} 评论滚动范围: {scroll_min}-{scroll_max}")
     print(f"{log_prefix} 点赞概率: {like_prob}%")
     print(f"{log_prefix} 访问主页概率: {visit_profile_prob}%")
@@ -193,61 +190,8 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
     def w(t=None):
         WebDriverWait(driver, t or max(8, wait_time)).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 
-    def el(css, root=None):
-        try:
-            return (root or driver).find_element(By.CSS_SELECTOR, css)
-        except Exception:
-            return None
-
-    def els(css, root=None):
-        try:
-            return (root or driver).find_elements(By.CSS_SELECTOR, css)
-        except Exception:
-            return []
-
-    def human_like_delay(min_delay=0.3, max_delay=0.8):
-        """模拟人工点击的随机延迟"""
-        delay = random.uniform(min_delay, max_delay)
-        time.sleep(delay)
-
-    def click(x):
-        if not x:
-            return False
-        try:
-            driver.execute_script("arguments[0].click();", x)
-            human_like_delay(0.3, 0.8)  # 点击后添加随机等待
-            return True
-        except Exception:
-            try:
-                x.click()
-                human_like_delay(0.3, 0.8)  # 点击后添加随机等待
-                return True
-            except Exception:
-                return False
-
-    # 文本标准化函数（转小写、去除多余空格）
-    def normalize_text(text):
-        """文本标准化（转小写、去除多余空格）"""
-        try:
-            s = str(text).lower()
-            import re
-            s = re.sub(r"\s+", " ", s).strip()
-            return s
-        except Exception:
-            return str(text)
-
-    # 检查评论是否包含关键词
-    def check_comment_contains_keywords(comment_text, keywords):
-        """检查评论是否包含指定关键词"""
-        keyword_list = [x.strip() for x in keywords.split("-&-") if x.strip()]
-        norm_comment = normalize_text(comment_text)
-        for kw in keyword_list:
-            if normalize_text(kw) in norm_comment:
-                return True
-        return False
-
     try:
-        print(f"{log_prefix} 访问快手搜索页面")
+        print(f"{log_prefix} 开始访问快手分享链接")
         # 清理浏览器句柄，确保只有快手首页的界面
         if len(driver.window_handles) > 1:
             print(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
@@ -257,97 +201,31 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
             driver.switch_to.window(driver.window_handles[0])
             print(f"{log_prefix} 已关闭额外窗口，保留主窗口")
         
-        driver.get("https://www.kuaishou.com/search/video"); w(); time.sleep(0.8)
         empty_retries = 0
-        while True:
-            with kw_lock:
-                kw = kw_queue.popleft() if kw_queue else None
-            if not kw:
+        urls_to_visit = random.randint(url_min, url_max)
+        print(f"{log_prefix} 计划访问 {urls_to_visit} 个链接")
+        
+        visited_count = 0
+        while visited_count < urls_to_visit:
+            with url_lock:
+                url = url_queue.popleft() if url_queue else None
+            if not url:
                 empty_retries += 1
                 time.sleep(3.0)
                 if empty_retries >= 5:
                     break
                 continue
-            print(f"{log_prefix} 搜索关键词: {kw}")
-            if "/search/" not in (driver.current_url or ""):
-                # 在每次进入搜索页面前清理浏览器句柄
-                if len(driver.window_handles) > 1:
-                    print(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
-                    for handle in driver.window_handles[1:]:
-                        driver.switch_to.window(handle)
-                        driver.close()
-                    driver.switch_to.window(driver.window_handles[0])
-                    print(f"{log_prefix} 已关闭额外窗口，保留主窗口")
-                
-                driver.get("https://www.kuaishou.com/search/video"); w(); time.sleep(0.5)
-            inp = el("input.search-input") or el(".search-input")
-            if not inp:
-                print(f"{log_prefix} 未找到搜索输入框，跳过关键词: {kw}")
-                continue
+            
+            print(f"{log_prefix} 访问链接: {url}")
             try:
-                inp.click(); inp.send_keys(Keys.CONTROL, "a"); inp.send_keys(Keys.BACKSPACE)
-            except Exception:
-                pass
-            ActionChains(driver).send_keys(kw).perform(); time.sleep(0.2)
-            if not click(el(".search-icon")):
-                ActionChains(driver).send_keys(Keys.RETURN).perform()
-            time.sleep(1.0)
-
-            cont = el("div.video-container"); cards = els(".video-card .card-link", cont) or els(".card-link", cont)
-            if not cards:
-                print(f"{log_prefix} 未找到视频卡片，跳过关键词: {kw}")
-                continue
-            main_h = driver.current_window_handle; hs0 = set(driver.window_handles)
-            click(cards[0]); time.sleep(0.8)
-            new_h = next(iter(set(driver.window_handles) - hs0), None)
-            if new_h:
-                driver.switch_to.window(new_h)
-            w(); time.sleep(0.5)
-            
-            def leave_video_comment():
-                """在当前视频页面留下评论"""
-                try:
-                    # 等待视频加载并等待一段时间后进行评论
-                    wait_time = random.uniform(video_comment_wait_min, video_comment_wait_max)
-                    print(f"{log_prefix} 等待 {wait_time:.2f} 秒后进行视频留言")
-                    time.sleep(wait_time)
-                    
-                    # 查找评论输入框
-                    comment_input = el(".pl-textarea")
-                    if comment_input:
-                        # 点击输入框
-                        click(comment_input)
-                        time.sleep(0.5)
-                        
-                        # 输入评论内容
-                        comment_text = random.choice(["这个视频不错！", "内容很棒！", "支持一下！", "666", "好看！"])
-                        comment_input.send_keys(comment_text)
-                        time.sleep(0.5)
-                        
-                        # 尝试找到并点击发送按钮
-                        send_button = el(".pl-send-btn") or el(".send-btn") or el(".comment-send-btn")
-                        if send_button:
-                            click(send_button)
-                            print(f"{log_prefix} 已留言: {comment_text}")
-                            return True
-                        else:
-                            # 如果没有找到发送按钮，尝试按回车键
-                            comment_input.send_keys(Keys.RETURN)
-                            print(f"{log_prefix} 已留言: {comment_text}")
-                            return True
-                    else:
-                        print(f"{log_prefix} 未找到评论输入框")
-                        return False
-                except Exception as e:
-                    print(f"{log_prefix} 留言失败: {e}")
-                    return False
+                # 访问分享链接
+                driver.get(url)
+                w()
+                time.sleep(2.0)
                 
-            vids = random.randint(video_min, video_max)
-            print(f"{log_prefix} 开始浏览 {vids} 个视频")
-            
-            for i in range(vids):
-                print(f"{log_prefix} 正在处理第 {i+1}/{vids} 个视频")
+                # 等待页面加载完成
                 try:
+                    # 等待视频元素出现
                     WebDriverWait(driver, max(8, wait_time)).until(
                         lambda d: d.find_elements(By.CSS_SELECTOR, ".comment-item.comment-list-item.dark-mode")
                         or d.find_elements(By.CSS_SELECTOR, ".comment-item")
@@ -355,9 +233,10 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                 except Exception:
                     time.sleep(1.0)
                 
+                # 根据概率决定是否进行视频留言
                 if ENABLE_VIDEO_COMMENT and (random.random() * 100 <= video_comment_prob):
                     print(f"{log_prefix} 根据概率决定进行视频留言")
-                    leave_video_comment()
+                    KuaishouUtils.leave_video_comment(driver, video_comment_wait_min, video_comment_wait_max, log_prefix)
                 
                 # 为每个视频设置随机的点赞和关注上限
                 max_follow_per_video = random.randint(MIN_FOLLOWS_PER_VIDEO, MAX_FOLLOWS_PER_VIDEO)
@@ -369,14 +248,16 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                 processed = 0
                 scroll_done = 0
                 since_scroll = 0
+                
+                # 滚动并处理评论
                 while scroll_done < scroll_times:
-                    items = els(".comment-item.comment-list-item.dark-mode") or els(".comment-item")
+                    items = KuaishouUtils.els(driver, ".comment-item.comment-list-item.dark-mode") or KuaishouUtils.els(driver, ".comment-item")
                     if not items:
                         time.sleep(0.8)
                         continue
                     if processed >= len(items):
                         try:
-                            scroll_ks_comment_container(driver, times=1)
+                            KuaishouUtils.scroll_ks_comment_container(driver, times=1)
                             scroll_done += 1
                             since_scroll = 0
                             print(f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})")
@@ -403,7 +284,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                         print(comment_text)
                         
                         # 检查评论是否包含关键词
-                        if check_comment_contains_keywords(comment_text, COMMENT_FILTER_KEYWORDS):
+                        if KuaishouUtils.check_comment_contains_keywords(comment_text, COMMENT_FILTER_KEYWORDS):
                             comment_ok = True
                     except Exception:
                         pass
@@ -411,14 +292,14 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
 
                     # 点赞逻辑 - 如果包含关键词则强制点赞，否则按概率点赞，但不超过当前视频的点赞上限
                     if ENABLE_LIKE and (effective_comment_ok or (current_like_count < max_like_per_video and random.random() * 100 <= like_prob)):
-                        like_el = el(".comment-item-likeicon", it)
+                        like_el = KuaishouUtils.el(driver, ".comment-item-likeicon", it)
                         if like_el:
                             cls0 = ""
                             try:
                                 cls0 = like_el.get_attribute("class") or ""
                             except Exception:
                                 cls0 = ""
-                            if click(like_el):
+                            if KuaishouUtils.click(driver, like_el):
                                 cls1 = ""
                                 try:
                                     cls1 = like_el.get_attribute("class") or ""
@@ -433,10 +314,10 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                     # 访问主页逻辑 - 如果评论包含关键词则强制访问，否则按概率访问
                     should_visit = ENABLE_PROFILE_VISIT and (effective_comment_ok or (random.random() * 100 <= visit_profile_prob))
                     if should_visit:
-                        a = el(".author-name", it)
+                        a = KuaishouUtils.el(driver, ".author-name", it)
                         if a:
                             hs_a = set(driver.window_handles)
-                            if click(a):
+                            if KuaishouUtils.click(driver, a):
                                 time.sleep(random.uniform(1.0, 2.0))  # 点击头像后等待
                                 prof = next(iter(set(driver.window_handles) - hs_a), None)
                                 if prof:
@@ -448,8 +329,8 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                                     if ENABLE_FOLLOW and current_follow_count < max_follow_per_video:
                                         follow_prob = 100 if effective_comment_ok else profile_follow_prob
                                         if random.random() * 100 <= follow_prob:
-                                            follow_button = el(".btn-words")
-                                            if follow_button and click(follow_button):
+                                            follow_button = KuaishouUtils.el(driver, ".btn-words")
+                                            if follow_button and KuaishouUtils.click(driver, follow_button):
                                                 follow_count += 1
                                                 current_follow_count += 1  # 增加当前视频关注计数
                                                 print(f"{log_prefix} 已关注用户 (当前视频关注数: {current_follow_count}/{max_follow_per_video}, 累计关注次数: {follow_count})")
@@ -460,13 +341,13 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                                             driver.close()
                                         except Exception:
                                             pass
-                                    driver.switch_to.window(new_h or main_h)
+                                    driver.switch_to.window(driver.window_handles[0])  # 切换回主窗口
                                     # 关闭用户主页后等待
                                     time.sleep(random.uniform(1.0, 2.0))
 
                     if since_scroll >= 3:
                         try:
-                            scroll_ks_comment_container(driver, times=1)
+                            KuaishouUtils.scroll_ks_comment_container(driver, times=1)
                             scroll_done += 1
                             since_scroll = 0
                             print(f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})")
@@ -477,50 +358,29 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                             scroll_done += 1
                             since_scroll = 0
 
-                print(f"{log_prefix} 第 {i+1} 个视频处理完成，点赞数: {current_like_count}/{max_like_per_video}，关注数: {current_follow_count}/{max_follow_per_video}")
-
-                # 如果不是最后一个视频，尝试切换到下一个视频
-                if i < vids - 1:
-                    print(f"{log_prefix} 尝试切换到下一个视频")
-                    switch_next_btn = el(".switch-item.video-switch-next")
-                    if switch_next_btn:
-                        if click(switch_next_btn):
-                            print(f"{log_prefix} 成功点击下一个视频按钮")
-                            # 等待新视频加载
-                            time.sleep(2.0)
-                        else:
-                            print(f"{log_prefix} 点击下一个视频按钮失败")
-                    else:
-                        print(f"{log_prefix} 未找到下一个视频按钮")
-                        # 如果找不到切换按钮，则继续执行（可能已经在最后一个视频）
-                else:
-                    # 最后一个视频处理完成后，退出视频播放页面
-                    if new_h:
-                        try:
-                            driver.close()
-                        except Exception:
-                            pass
-                        driver.switch_to.window(main_h)
-                    else:
-                        root = el(".short-video-info-container") or el("div.comment-container.vertical-comment")
-                        if not click(el(".close-page", root) if root else None):
-                            click(el(".close-page"))
-                            try:
-                                ActionChains(driver).send_keys(Keys.ESCAPE).perform()
-                            except Exception:
-                                pass
-                        time.sleep(0.7)
+                print(f"{log_prefix} 链接 {url} 处理完成，点赞数: {current_like_count}/{max_like_per_video}，关注数: {current_follow_count}/{max_follow_per_video}")
+                
+                visited_count += 1
+                
+                # 访问完一个链接后等待一段时间
+                time.sleep(random.uniform(3, 6))
+                
+            except Exception as e:
+                print(f"{log_prefix} 访问链接 {url} 时出错: {e}")
+                continue
+        
+        print(f"{log_prefix} 完成 {visited_count} 个链接的访问")
             
-            # 确保只保留主窗口，清理可能残留的窗口
-            if len(driver.window_handles) > 1:
-                print(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
-                for handle in driver.window_handles[1:]:
-                    driver.switch_to.window(handle)
-                    driver.close()
-                driver.switch_to.window(driver.window_handles[0])
-                print(f"{log_prefix} 已关闭额外窗口，保留主窗口")
-            
-            time.sleep(random.uniform(1.0, 2.0))
+        # 确保只保留主窗口，清理可能残留的窗口
+        if len(driver.window_handles) > 1:
+            print(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
+            for handle in driver.window_handles[1:]:
+                driver.switch_to.window(handle)
+                driver.close()
+            driver.switch_to.window(driver.window_handles[0])
+            print(f"{log_prefix} 已关闭额外窗口，保留主窗口")
+        
+        time.sleep(random.uniform(1.0, 2.0))
     finally:
         try:
             driver.quit()
@@ -530,21 +390,20 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
         print(f"{log_prefix} 本次任务累计点赞次数: {like_count}")
         print(f"{log_prefix} 本次任务累计关注次数: {follow_count}")
 
-
 def main():
     browser_ids = parse_browser_ids()
-    keywords = _kws(DEFAULT_KEYWORDS)
+    urls = _urls(DEFAULT_URLS)
     if len(browser_ids) <= 1:
-        kw_queue = deque(keywords)
-        kw_lock = threading.Lock()
-        run_worker(browser_ids[0], 1, kw_queue, kw_lock)
+        url_queue = deque(urls)
+        url_lock = threading.Lock()
+        run_worker(browser_ids[0], 1, url_queue, url_lock)
         return
-    kw_queue = deque(keywords)
-    kw_lock = threading.Lock()
+    url_queue = deque(urls)
+    url_lock = threading.Lock()
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(browser_ids)) as ex:
         futures = []
         for i, bid in enumerate(browser_ids):
-            futures.append(ex.submit(run_worker, bid, i + 1, kw_queue, kw_lock))
+            futures.append(ex.submit(run_worker, bid, i + 1, url_queue, url_lock))
             if i < len(browser_ids) - 1:
                 time.sleep(2.5)
         for f in concurrent.futures.as_completed(futures):
@@ -552,7 +411,6 @@ def main():
                 f.result()
             except Exception as e:
                 print(f"[并发] 线程执行出错: {e}")
-
 
 if __name__ == "__main__":
     main()
