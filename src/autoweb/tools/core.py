@@ -18,6 +18,7 @@ import logging
 import os
 import queue
 import threading
+import time
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Callable, Dict
@@ -169,7 +170,16 @@ class DataReporter:
         self._send_thread = threading.Thread(target=send_worker, daemon=True)
         self._send_thread.start()
 
-    def _stop_send_thread(self):
+    def _stop_send_thread(self, flush_timeout: float = 2.0):
+        if not self._send_thread_running:
+            return
+
+        end_time = time.time() + max(0.0, float(flush_timeout))
+        while time.time() < end_time:
+            if self._send_queue.empty():
+                break
+            time.sleep(0.05)
+
         self._send_thread_running = False
         if self._send_thread:
             try:

@@ -74,6 +74,17 @@ pong_received = threading.Event()
 heartbeat_timeout_count = 0
 MAX_HEARTBEAT_TIMEOUTS = 3
 
+def _sleep_interruptible(seconds: float):
+    end_time = time.time() + max(0.0, float(seconds))
+    while time.time() < end_time:
+        if STOP_EVENT.is_set():
+            raise KeyboardInterrupt("收到停止信号")
+        time.sleep(min(0.1, end_time - time.time()))
+
+def _ensure_not_stopped():
+    if STOP_EVENT.is_set():
+        raise KeyboardInterrupt("收到停止信号")
+
 def _send_ws_message(message_dict):
     try:
         import json as _json
@@ -380,8 +391,20 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
     _send_ws_message({"browserId": browser_id, "cmd": "RunStateReq", "id": cfg.DEVICE_CODE, "state": "running" if len(browser_id) == 32 else "error"})
 
     def w(t=None):
-        WebDriverWait(driver, t or max(8, wait_time)).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        timeout = t or max(8, wait_time)
+        end_time = time.time() + timeout
+        while True:
+            _ensure_not_stopped()
+            try:
+                WebDriverWait(driver, 0.5).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
+                return
+            except Exception:
+                if time.time() >= end_time:
+                    raise
 
+    finished_normally = False
     try:
         try:
             license_manager.check_license_validity()
@@ -398,12 +421,10 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
             driver.switch_to.window(driver.window_handles[0])
             log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
         
-        driver.get("https://www.kuaishou.com/search/video"); w(); time.sleep(0.8)
+        driver.get("https://www.kuaishou.com/search/video"); w(); _sleep_interruptible(0.8)
         empty_retries = 0
         while True:
-            if STOP_EVENT.is_set():
-                log.info(f"{log_prefix} 收到停止信号，退出任务")
-                break
+            _ensure_not_stopped()
             try:
                 license_manager.check_license_validity()
             except LicenseException:
@@ -413,8 +434,9 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                 kw = kw_queue.popleft() if kw_queue else None
             if not kw:
                 empty_retries += 1
-                time.sleep(3.0)
+                _sleep_interruptible(3.0)
                 if empty_retries >= 5:
+                    finished_normally = True
                     break
                 continue
             settings = _current_settings_search()
@@ -455,7 +477,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                     driver.switch_to.window(driver.window_handles[0])
                     print(f"{log_prefix} 已关闭额外窗口，保留主窗口")
                 
-                driver.get("https://www.kuaishou.com/search/video"); w(); time.sleep(0.5)
+                driver.get("https://www.kuaishou.com/search/video"); w(); _sleep_interruptible(0.5)
             inp = KuaishouUtils.el(driver, "input.search-input") or KuaishouUtils.el(driver, ".search-input")
             if not inp:
                 log.warning(f"{log_prefix} 未找到搜索输入框，跳过关键词: {kw}")
@@ -464,21 +486,21 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                 inp.click(); inp.send_keys(Keys.CONTROL, "a"); inp.send_keys(Keys.BACKSPACE)
             except Exception:
                 pass
-            ActionChains(driver).send_keys(kw).perform(); time.sleep(0.2)
+            ActionChains(driver).send_keys(kw).perform(); _sleep_interruptible(0.2)
             if not KuaishouUtils.click(driver, KuaishouUtils.el(driver, ".search-icon")):
                 ActionChains(driver).send_keys(Keys.RETURN).perform()
-            time.sleep(1.0)
+            _sleep_interruptible(1.0)
 
             cont = KuaishouUtils.el(driver, "div.video-container"); cards = KuaishouUtils.els(driver, ".video-card .card-link", cont) or KuaishouUtils.els(driver, ".card-link", cont)
             if not cards:
                 log.warning(f"{log_prefix} 未找到视频卡片，跳过关键词: {kw}")
                 continue
             main_h = driver.current_window_handle; hs0 = set(driver.window_handles)
-            KuaishouUtils.click(driver, cards[0]); time.sleep(0.8)
+            KuaishouUtils.click(driver, cards[0]); _sleep_interruptible(0.8)
             new_h = next(iter(set(driver.window_handles) - hs0), None)
             if new_h:
                 driver.switch_to.window(new_h)
-            w(); time.sleep(0.5)
+            w(); _sleep_interruptible(0.5)
             
             def leave_video_comment():
                 """在当前视频页面留下评论"""
@@ -494,6 +516,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
             print(f"{log_prefix} 开始浏览 {vids} 个视频")
             
             for i in range(vids):
+                _ensure_not_stopped()
                 print(f"{log_prefix} 正在处理第 {i+1}/{vids} 个视频")
                 try:
                     WebDriverWait(driver, max(8, wait_time)).until(
@@ -501,7 +524,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                         or d.find_elements(By.CSS_SELECTOR, ".comment-item")
                     )
                 except Exception:
-                    time.sleep(1.0)
+                    _sleep_interruptible(1.0)
                 
                 if ENABLE_VIDEO_COMMENT and (random.random() * 100 <= video_comment_prob):
                     log.info(f"{log_prefix} 根据概率决定进行视频留言")
@@ -523,9 +546,10 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                 scroll_done = 0
                 since_scroll = 0
                 while scroll_done < scroll_times:
+                    _ensure_not_stopped()
                     items = KuaishouUtils.els(driver, ".comment-item.comment-list-item.dark-mode") or KuaishouUtils.els(driver, ".comment-item")
                     if not items:
-                        time.sleep(0.8)
+                        _sleep_interruptible(0.8)
                         continue
                     if processed >= len(items):
                         try:
@@ -534,7 +558,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                             since_scroll = 0
                             print(f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})")
                             # 滚动后添加随机等待，模拟人工操作
-                            time.sleep(random.uniform(2, 4))
+                            _sleep_interruptible(random.uniform(2, 4))
                         except Exception as e:
                             print(f"{log_prefix} 滚动评论区失败: {e}")
                             scroll_done += 1
@@ -545,7 +569,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                     since_scroll += 1
                     
                     # 处理每个评论项之间添加随机等待，模拟人工浏览
-                    time.sleep(random.uniform(0.5, 1.5))
+                    _sleep_interruptible(random.uniform(0.5, 1.5))
 
                     # 检查评论是否包含关键词
                     comment_ok = False
@@ -581,7 +605,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                                     like_count += 1
                                     current_like_count += 1  # 增加当前视频点赞计数
                                     log.info(f"{log_prefix} 已点赞评论 (当前视频点赞数: {current_like_count}/{max_like_per_video}, 累计点赞次数: {like_count})")
-                                    time.sleep(random.uniform(like_wait_min, like_wait_max))
+                                    _sleep_interruptible(random.uniform(like_wait_min, like_wait_max))
                                     try:
                                         reporter.set_action("like")
                                         reporter.increment_like(1)
@@ -595,12 +619,12 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                         if a:
                             hs_a = set(driver.window_handles)
                             if KuaishouUtils.click(driver, a):
-                                time.sleep(random.uniform(1.0, 2.0))  # 点击头像后等待
+                                _sleep_interruptible(random.uniform(1.0, 2.0))
                                 prof = next(iter(set(driver.window_handles) - hs_a), None)
                                 if prof:
                                     driver.switch_to.window(prof)
                                 try:
-                                    time.sleep(random.uniform(profile_wait_min, profile_wait_max))
+                                    _sleep_interruptible(random.uniform(profile_wait_min, profile_wait_max))
                                     
                                     # 如果评论包含关键词，则强制关注，否则按概率关注，但不超过当前视频的关注上限
                                     if enable_follow and current_follow_count < max_follow_per_video:
@@ -611,7 +635,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                                                 follow_count += 1
                                                 current_follow_count += 1  # 增加当前视频关注计数
                                                 log.info(f"{log_prefix} 已关注用户 (当前视频关注数: {current_follow_count}/{max_follow_per_video}, 累计关注次数: {follow_count})")
-                                                time.sleep(random.uniform(visit_min, visit_max))
+                                                _sleep_interruptible(random.uniform(visit_min, visit_max))
                                                 try:
                                                     reporter.set_action("follow")
                                                     reporter.increment_follow(1)
@@ -625,7 +649,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                                             pass
                                     driver.switch_to.window(new_h or main_h)
                                     # 关闭用户主页后等待
-                                    time.sleep(random.uniform(1.0, 2.0))
+                                    _sleep_interruptible(random.uniform(1.0, 2.0))
 
                     if since_scroll >= 3:
                         try:
@@ -634,7 +658,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                             since_scroll = 0
                             log.info(f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})")
                             # 滚动后添加随机等待，模拟人工操作
-                            time.sleep(random.uniform(2, 4))
+                            _sleep_interruptible(random.uniform(2, 4))
                         except Exception as e:
                             log.error(f"{log_prefix} 滚动评论区失败: {e}")
                             scroll_done += 1
@@ -650,7 +674,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                         if KuaishouUtils.click(driver, switch_next_btn):
                             log.info(f"{log_prefix} 成功点击下一个视频按钮")
                             # 等待新视频加载
-                            time.sleep(2.0)
+                            _sleep_interruptible(2.0)
                         else:
                             log.error(f"{log_prefix} 点击下一个视频按钮失败")
                     else:
@@ -672,7 +696,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                                 ActionChains(driver).send_keys(Keys.ESCAPE).perform()
                             except Exception:
                                 pass
-                        time.sleep(0.7)
+                        _sleep_interruptible(0.7)
             
             # 确保只保留主窗口，清理可能残留的窗口
             if len(driver.window_handles) > 1:
@@ -683,10 +707,17 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                 driver.switch_to.window(driver.window_handles[0])
                 log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
             
-            time.sleep(random.uniform(1.0, 2.0))
+            _sleep_interruptible(random.uniform(1.0, 2.0))
+        if not STOP_EVENT.is_set():
+            finished_normally = True
     finally:
         try:
             driver.quit()
+        except Exception:
+            pass
+        try:
+            if finished_normally and not STOP_EVENT.is_set():
+                reporter.set_completed(True)
         except Exception:
             pass
         try:
