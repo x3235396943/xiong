@@ -11,6 +11,7 @@ import time
 import requests
 import os
 from selenium import webdriver
+from selenium.webdriver import Keys
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -127,6 +128,68 @@ def follow_user_if_needed(driver, timeout=8, sleep_after=True):
     except Exception as e:
         print(f"[follow] 点击关注失败: {e}")
         return False
+
+
+def activate_video_comment(driver, timeout=10):
+    try:
+        inner = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable(
+                (By.CSS_SELECTOR, "div.inner")
+            )
+        )
+
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block:'center'});",
+            inner
+        )
+        time.sleep(0.3)
+
+        # JS 点击，避免被 span 拦
+        driver.execute_script("arguments[0].click();", inner)
+        return True
+    except Exception as e:
+        print(f"激活视频评论失败: {e}")
+        return False
+
+
+def wait_content_textarea(driver, timeout=10):
+    return WebDriverWait(driver, timeout).until(
+        EC.presence_of_element_located(
+            (By.ID, "content-textarea")
+        )
+    )
+
+
+def input_and_send(driver, text):
+    try:
+        textarea = wait_content_textarea(driver)
+
+        # 强制 focus（核心）
+        driver.execute_script("arguments[0].focus();", textarea)
+        time.sleep(0.2)
+
+        # 清空
+        driver.execute_script("arguments[0].innerText = '';", textarea)
+
+        # 模拟人类输入
+        for ch in text:
+            textarea.send_keys(ch)
+            time.sleep(random.uniform(0.06, 0.12))
+
+        time.sleep(0.3)
+
+        # 回车发送
+        textarea.send_keys(Keys.ENTER)
+        return True
+    except Exception as e:
+        print(f"输入并发送评论失败: {e}")
+        return False
+
+
+def send_video_comment(driver, text):
+    if activate_video_comment(driver):
+        return input_and_send(driver, text)
+    return False
 
 
 # 比特浏览器API配置
@@ -448,7 +511,14 @@ def get_search_result_covers(driver):
         els = driver.find_elements(By.CSS_SELECTOR, "section.note-item a.cover")
     return els
 
-def visit_video_and_operate(driver, actions_per_video=3):
+def visit_video_and_operate(driver, actions_per_video=3, enable_comment=True):
+    # 视频留言功能
+    if enable_comment:
+        comment_texts = ["这个视频氛围感太强了，点赞支持一下", "内容很棒，学习了", "视频很有创意，支持一下"]
+        selected_comment = random.choice(comment_texts)
+        send_video_comment(driver, selected_comment)
+        time.sleep(0.5)  # 您偏好的点击间隔时间
+    
     process_comments_sequentially(driver, enable_like=True, enable_reply=False, enable_visit_avatar=True, max_count=actions_per_video)
 
 def browse_search_results_and_operate(driver, items_to_visit=2, actions_per_video=3):
