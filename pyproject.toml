@@ -28,7 +28,6 @@ ipykernel = ">=7.1.0,<8"
 websockets = ">=15.0.1,<16"
 pixi-pycharm = ">=0.0.10,<0.0.11"
 playwright-python = ">=1.57.0,<2"
-playwright-stealth = ">=1.1.0,<2"
 
 [tool.pixi.tasks]
 web = "python -m autoweb.main"

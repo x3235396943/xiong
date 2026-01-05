@@ -1,8 +1,8 @@
 from .tools import config, log
 from .dyShare import DouyinShareCrawler
 from .dySearch import DouyinSearchCrawler
-from .ksShare import KuaishouShareCrawler
-from .ksSearch import KuaishouSearchCrawler
+from .ks.ksShare import main as ks_share_main
+from .ks.ksSearch import main as ks_search_main
 
 
 def main():
@@ -21,12 +21,10 @@ def main():
 
     if config.PLATFORM == "ks":
         if config.RUN_MODE == "share":
-            o = KuaishouShareCrawler()
-            o.start()
+            ks_share_main()
             return
         if config.RUN_MODE == "search":
-            o = KuaishouSearchCrawler()
-            o.start()
+            ks_search_main()
             return
         print(f"❌ 错误：不支持的模式 '{config.RUN_MODE}'.")
         return
