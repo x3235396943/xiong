@@ -446,8 +446,6 @@ def get_search_result_covers(driver):
     els = driver.find_elements(By.CSS_SELECTOR, "section.note-item a.cover.mask.ld")
     if not els:
         els = driver.find_elements(By.CSS_SELECTOR, "section.note-item a.cover")
-    if not els:
-        els = driver.find_elements(By.CSS_SELECTOR, "a.cover")
     return els
 
 def visit_video_and_operate(driver, actions_per_video=3):
