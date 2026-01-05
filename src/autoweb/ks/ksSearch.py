@@ -11,11 +11,12 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from ..tools.config import KsConfig
+from ..tools.config import KsConfig, get_config
 from .base import KuaishouUtils
 
-from ..tools.core import log
+from ..tools.core import log, DataReporter
 from ..tools.license import LicenseManager, LicenseException
+from ..tools.ws_client import create_websocket_client, start_websocket_client_in_thread
 
 # 初始化快手配置
 ks_config = KsConfig()
@@ -65,6 +66,152 @@ DEFAULT_WAIT_TIME = ks_config.KS_DEFAULT_WAIT_TIME
 license_manager = LicenseManager()
 STOP_EVENT = threading.Event()
 
+ws_client = None
+ws_thread = None
+ws_loop = None
+heartbeat_task = None
+pong_received = threading.Event()
+heartbeat_timeout_count = 0
+MAX_HEARTBEAT_TIMEOUTS = 3
+
+def _send_ws_message(message_dict):
+    try:
+        import json as _json
+        try:
+            log.info(f"发送到服务器的消息: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}")
+        except Exception:
+            pass
+        if not ws_client or ws_client.stop_requested:
+            return
+        loop = getattr(ws_client, "event_loop", None) or ws_loop
+        if not loop or not loop.is_running():
+            return
+        import asyncio
+        asyncio.run_coroutine_threadsafe(
+            ws_client.send_queue.put(_json.dumps(message_dict, ensure_ascii=False)), loop
+        )
+    except Exception:
+        pass
+
+def _send_ws_message_for_reporter_search(message_dict):
+    try:
+        if isinstance(message_dict, dict) and message_dict.get("cmd") == "PcDataReq":
+            data = message_dict.get("data")
+            if isinstance(data, dict):
+                data.pop("comment", None)
+                data.pop("urlIndex", None)
+                data.pop("urlOk", None)
+                data.pop("urlFail", None)
+            try:
+                import json as _json
+                log.info(f"PcDataReq 上报: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}")
+            except Exception:
+                pass
+    except Exception:
+        pass
+    _send_ws_message(message_dict)
+
+def _handle_heartbeat_response(data: dict):
+    global heartbeat_timeout_count
+    try:
+        if isinstance(data, dict) and data.get("cmd") == "HeartbeatRes":
+            pong_received.set()
+            heartbeat_timeout_count = 0
+    except Exception:
+        pass
+
+def _handle_login_res_command(data: dict):
+    try:
+        if isinstance(data, dict) and data.get("cmd") in ("StopReq", "StopPubForce"):
+            STOP_EVENT.set()
+            cfg = get_config()
+            cfg.request_stop()
+            return
+        if isinstance(data, dict) and "data" in data:
+            cfg = get_config()
+            cfg.update_from_dict(data.get("data", {}))
+            if "SIBERIAN_URL" in data["data"]:
+                license_manager.url = data["data"]["SIBERIAN_URL"]
+            if "SIBERIAN_KEY" in data["data"]:
+                license_manager.key = data["data"]["SIBERIAN_KEY"]
+            if "DEVICE_CODE" in data["data"]:
+                license_manager.code = data["data"]["DEVICE_CODE"]
+    except Exception:
+        pass
+
+async def _heartbeat_task():
+    global heartbeat_timeout_count
+    import asyncio
+    from datetime import datetime
+    cfg = get_config()
+    while not STOP_EVENT.is_set():
+        try:
+            _send_ws_message(
+                {
+                    "cmd": "HeartbeatReq",
+                    "id": cfg.DEVICE_CODE,
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
+            try:
+                await asyncio.wait_for(asyncio.get_event_loop().run_in_executor(None, pong_received.wait), timeout=5.0)
+                heartbeat_timeout_count = 0
+                pong_received.clear()
+            except asyncio.TimeoutError:
+                heartbeat_timeout_count += 1
+                if heartbeat_timeout_count >= MAX_HEARTBEAT_TIMEOUTS:
+                    STOP_EVENT.set()
+                    break
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            break
+
+def _start_ws_client():
+    global ws_client, ws_thread, ws_loop, heartbeat_task
+    try:
+        cfg = get_config()
+        ws_client = create_websocket_client(cfg)
+        if ws_client:
+            ws_client.set_external_send_func(_send_ws_message)
+            ws_client.set_config_update_handler(lambda d: _handle_login_res_command({"data": d}))
+            ws_thread = start_websocket_client_in_thread(ws_client, lambda: STOP_EVENT.set())
+            ws_client.register_command_handler("HeartbeatRes", _handle_heartbeat_response)
+            ws_client.register_command_handler("LoginRes", _handle_login_res_command)
+            ws_loop = getattr(ws_client, "event_loop", None)
+            if ws_loop and ws_loop.is_running():
+                import asyncio
+                heartbeat_task = asyncio.run_coroutine_threadsafe(_heartbeat_task(), ws_loop)
+            # 发送登录请求
+            from urllib.parse import parse_qs, urlparse
+            parsed = urlparse(cfg.WS_URL)
+            device_id = parse_qs(parsed.query).get("id", [cfg.DEVICE_CODE])[0]
+            _send_ws_message({"cmd": "LoginReq", "id": device_id, "mode": "pc", "version": getattr(cfg, "VERSION", None)})
+    except Exception:
+        pass
+
+def _stop_ws_client():
+    global ws_client, ws_thread, ws_loop, heartbeat_task
+    try:
+        if heartbeat_task:
+            try:
+                heartbeat_task.cancel()
+            except Exception:
+                pass
+        if ws_client:
+            ws_client.stop_requested = True
+            loop = getattr(ws_client, "event_loop", None) or ws_loop
+            if loop and loop.is_running():
+                import asyncio
+                asyncio.run_coroutine_threadsafe(ws_client.close(), loop)
+        if ws_thread and ws_thread.is_alive():
+            try:
+                ws_thread.join(timeout=5.0)
+            except Exception:
+                pass
+    except Exception:
+        pass
 def get_browser_log_prefix(browser_id):
     """生成浏览器日志前缀，格式为'浏览器 #编号'"""
     # 提取浏览器ID的最后几位作为编号
@@ -181,6 +328,9 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
     opt = webdriver.ChromeOptions()
     opt.add_experimental_option("debuggerAddress", data["http"])
     driver = webdriver.Chrome(service=Service(data["driver"]), options=opt)
+    cfg = get_config()
+    reporter = DataReporter(device_code=cfg.DEVICE_CODE, browser_id=browser_id, send_ws_message_func=_send_ws_message_for_reporter_search)
+    _send_ws_message({"browserId": browser_id, "cmd": "RunStateReq", "id": cfg.DEVICE_CODE, "state": "running" if len(browser_id) == 32 else "error"})
 
     def w(t=None):
         WebDriverWait(driver, t or max(8, wait_time)).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
@@ -221,6 +371,10 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                     break
                 continue
             log.info(f"{log_prefix} 搜索关键词: {kw}")
+            try:
+                reporter.set_keywords(kw)
+            except Exception:
+                pass
             if "/search/" not in (driver.current_url or ""):
                 # 在每次进入搜索页面前清理浏览器句柄
                 if len(driver.window_handles) > 1:
@@ -275,7 +429,12 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                 
                 if ENABLE_VIDEO_COMMENT and (random.random() * 100 <= video_comment_prob):
                     log.info(f"{log_prefix} 根据概率决定进行视频留言")
-                    leave_video_comment()
+                    if leave_video_comment():
+                        try:
+                            reporter.set_action("videoComment")
+                            reporter.increment_video_comment(1)
+                        except Exception:
+                            pass
                 
                 # 为每个视频设置随机的点赞和关注上限
                 max_follow_per_video = random.randint(MIN_FOLLOWS_PER_VIDEO, MAX_FOLLOWS_PER_VIDEO)
@@ -347,6 +506,11 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                                     current_like_count += 1  # 增加当前视频点赞计数
                                     log.info(f"{log_prefix} 已点赞评论 (当前视频点赞数: {current_like_count}/{max_like_per_video}, 累计点赞次数: {like_count})")
                                     time.sleep(random.uniform(like_wait_min, like_wait_max))
+                                    try:
+                                        reporter.set_action("like")
+                                        reporter.increment_like(1)
+                                    except Exception:
+                                        pass
 
                     # 访问主页逻辑 - 如果评论包含关键词则强制访问，否则按概率访问
                     should_visit = ENABLE_PROFILE_VISIT and (effective_comment_ok or (random.random() * 100 <= visit_profile_prob))
@@ -372,6 +536,11 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                                                 current_follow_count += 1  # 增加当前视频关注计数
                                                 log.info(f"{log_prefix} 已关注用户 (当前视频关注数: {current_follow_count}/{max_follow_per_video}, 累计关注次数: {follow_count})")
                                                 time.sleep(random.uniform(visit_min, visit_max))
+                                                try:
+                                                    reporter.set_action("follow")
+                                                    reporter.increment_follow(1)
+                                                except Exception:
+                                                    pass
                                 finally:
                                     if prof:
                                         try:
@@ -444,6 +613,10 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
             driver.quit()
         except Exception:
             pass
+        try:
+            reporter.force_report()
+        except Exception:
+            pass
         log.info(f"{log_prefix} 浏览器已关闭，任务完成")
         log.info(f"{log_prefix} 本次任务累计点赞次数: {like_count}")
         log.info(f"{log_prefix} 本次任务累计关注次数: {follow_count}")
@@ -453,8 +626,10 @@ def main():
     browser_ids = parse_browser_ids()
     keywords = _kws(DEFAULT_KEYWORDS)
     license_manager.set_stop_callback(lambda: STOP_EVENT.set())
+    _start_ws_client()
     if not license_manager.verify_license():
         log.error("卡密验证失败")
+        _stop_ws_client()
         return
     license_manager.start_periodic_check()
     try:
@@ -484,6 +659,7 @@ def main():
                     log.error(f"[并发] 线程执行出错: {e}")
     finally:
         license_manager.stop_periodic_check()
+        _stop_ws_client()
 
 
 if __name__ == "__main__":
