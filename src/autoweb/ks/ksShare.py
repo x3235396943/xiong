@@ -206,7 +206,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock):
             driver.switch_to.window(driver.window_handles[0])
             log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
         
-        print(f"{log_prefix} 开始处理所有可用链接")
+        log.info(f"{log_prefix} 开始处理所有可用链接")
         
         visited_count = 0
         while True:  # 持续处理直到队列为空
@@ -245,13 +245,12 @@ def run_worker(browser_id, browser_number, url_queue, url_lock):
                 current_follow_count = 0  # 当前视频关注计数器
                 current_like_count = 0    # 当前视频点赞计数器
                 
-                scroll_times = random.randint(scroll_min, scroll_max)
                 processed = 0
                 scroll_done = 0
                 since_scroll = 0
                 
-                # 滚动并处理评论
-                while scroll_done < scroll_times:
+                # 滚动并处理评论，直到达到点赞和关注上限
+                while current_like_count < max_like_per_video or current_follow_count < max_follow_per_video:
                     items = KuaishouUtils.els(driver, ".comment-item.comment-list-item.dark-mode") or KuaishouUtils.els(driver, ".comment-item")
                     if not items:
                         time.sleep(0.8)
@@ -261,11 +260,11 @@ def run_worker(browser_id, browser_number, url_queue, url_lock):
                             KuaishouUtils.scroll_ks_comment_container(driver, times=1)
                             scroll_done += 1
                             since_scroll = 0
-                            print(f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})")
+                            log.info(f"{log_prefix} 已滚动评论区 (第 {scroll_done} 次)")
                             # 滚动后添加随机等待，模拟人工操作
                             time.sleep(random.uniform(2, 4))
                         except Exception as e:
-                            print(f"{log_prefix} 滚动评论区失败: {e}")
+                            log.error(f"{log_prefix} 滚动评论区失败: {e}")
                             scroll_done += 1
                         continue
 
@@ -351,7 +350,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock):
                             KuaishouUtils.scroll_ks_comment_container(driver, times=1)
                             scroll_done += 1
                             since_scroll = 0
-                            log.info(f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})")
+                            log.info(f"{log_prefix} 已滚动评论区 (第 {scroll_done} 次)")
                             # 滚动后添加随机等待，模拟人工操作
                             time.sleep(random.uniform(2, 4))
                         except Exception as e:
@@ -359,7 +358,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock):
                             scroll_done += 1
                             since_scroll = 0
 
-                log.info(f"{log_prefix} 链接 {url} 处理完成，点赞数: {current_like_count}/{max_like_per_video}，关注数: {current_follow_count}/{max_follow_per_video}")
+                log.info(f"{log_prefix} 链接 {url} 处理完成，已达到点赞/关注上限，点赞数: {current_like_count}/{max_like_per_video}，关注数: {current_follow_count}/{max_follow_per_video}")
                 
                 visited_count += 1
                 
