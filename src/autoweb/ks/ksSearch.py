@@ -15,6 +15,7 @@ from ..tools.config import KsConfig
 from .base import KuaishouUtils
 
 from ..tools.core import log
+from ..tools.license import LicenseManager, LicenseException
 
 # 初始化快手配置
 ks_config = KsConfig()
@@ -61,6 +62,8 @@ ENABLE_VIDEO_COMMENT = ks_config.ENABLE_VIDEO_COMMENT
 ENABLE_SEARCH_KEYWORDS = ks_config.ENABLE_SEARCH_KEYWORDS
 
 DEFAULT_WAIT_TIME = ks_config.KS_DEFAULT_WAIT_TIME
+license_manager = LicenseManager()
+STOP_EVENT = threading.Event()
 
 def get_browser_log_prefix(browser_id):
     """生成浏览器日志前缀，格式为'浏览器 #编号'"""
@@ -183,6 +186,11 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
         WebDriverWait(driver, t or max(8, wait_time)).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 
     try:
+        try:
+            license_manager.check_license_validity()
+        except LicenseException:
+            log.error(f"{log_prefix} 卡密无效，停止任务")
+            return
         log.info(f"{log_prefix} 访问快手搜索页面")
         # 清理浏览器句柄，确保只有快手首页的界面
         if len(driver.window_handles) > 1:
@@ -196,6 +204,14 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
         driver.get("https://www.kuaishou.com/search/video"); w(); time.sleep(0.8)
         empty_retries = 0
         while True:
+            if STOP_EVENT.is_set():
+                log.info(f"{log_prefix} 收到停止信号，退出任务")
+                break
+            try:
+                license_manager.check_license_validity()
+            except LicenseException:
+                log.error(f"{log_prefix} 卡密无效，停止任务")
+                break
             with kw_lock:
                 kw = kw_queue.popleft() if kw_queue else None
             if not kw:
@@ -436,24 +452,38 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
 def main():
     browser_ids = parse_browser_ids()
     keywords = _kws(DEFAULT_KEYWORDS)
-    if len(browser_ids) <= 1:
+    license_manager.set_stop_callback(lambda: STOP_EVENT.set())
+    if not license_manager.verify_license():
+        log.error("卡密验证失败")
+        return
+    license_manager.start_periodic_check()
+    try:
+        if len(browser_ids) <= 1:
+            kw_queue = deque(keywords)
+            kw_lock = threading.Lock()
+            run_worker(browser_ids[0], 1, kw_queue, kw_lock)
+            return
         kw_queue = deque(keywords)
         kw_lock = threading.Lock()
-        run_worker(browser_ids[0], 1, kw_queue, kw_lock)
-        return
-    kw_queue = deque(keywords)
-    kw_lock = threading.Lock()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(browser_ids)) as ex:
-        futures = []
-        for i, bid in enumerate(browser_ids):
-            futures.append(ex.submit(run_worker, bid, i + 1, kw_queue, kw_lock))
-            if i < len(browser_ids) - 1:
-                time.sleep(2.5)
-        for f in concurrent.futures.as_completed(futures):
-            try:
-                f.result()
-            except Exception as e:
-                log.error(f"[并发] 线程执行出错: {e}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(browser_ids)) as ex:
+            futures = []
+            for i, bid in enumerate(browser_ids):
+                futures.append(ex.submit(run_worker, bid, i + 1, kw_queue, kw_lock))
+                if i < len(browser_ids) - 1:
+                    time.sleep(2.5)
+            for f in concurrent.futures.as_completed(futures):
+                try:
+                    f.result()
+                except LicenseException:
+                    log.error("卡密无效，取消剩余任务")
+                    STOP_EVENT.set()
+                    for fut in futures:
+                        fut.cancel()
+                    break
+                except Exception as e:
+                    log.error(f"[并发] 线程执行出错: {e}")
+    finally:
+        license_manager.stop_periodic_check()
 
 
 if __name__ == "__main__":
