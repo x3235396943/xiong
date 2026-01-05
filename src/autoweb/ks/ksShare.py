@@ -2,6 +2,7 @@ import json
 import os
 import random
 import time
+import sys
 import concurrent.futures
 import threading
 from collections import deque
@@ -26,7 +27,7 @@ from ..tools.license import LicenseManager, LicenseException
 ks_config = KsConfig()
 
 # URL列表配置
-DEFAULT_URLS = ks_config.KS_SHARE_URLS if hasattr(ks_config, 'KS_SHARE_URLS') else [
+URLS = ks_config.KS_SHARE_URLS if hasattr(ks_config, 'KS_SHARE_URLS') else [
     "https://www.kuaishou.com/f/X-2dKHX1NhEkj1oh",
     "https://www.kuaishou.com/f/X-8KhLhFzsM9CW34",
     "https://www.kuaishou.com/f/X-1XE4j64AuGQDfX",
@@ -290,24 +291,72 @@ def _open_bit(browser_id):
         timeout=30,
     ).json()
 
+def _as_int_range(value, fallback):
+    try:
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            a, b = int(value[0]), int(value[1])
+            return (a, b) if a <= b else (b, a)
+    except Exception:
+        pass
+    return fallback
+
+def _current_settings_share():
+    cfg = get_config()
+    wait_time = getattr(cfg, "WAIT_TIME", DEFAULT_WAIT_TIME) or DEFAULT_WAIT_TIME
+    url_range = getattr(cfg, "MAX_VISIT_URLS", None)
+    url_range = _as_int_range(url_range, _as_int_range(getattr(cfg, "MAX_SCROLL_VIDEO", None), DEFAULT_MAX_VISIT_URLS))
+    comment_range = _as_int_range(getattr(cfg, "MAX_COMMENT", None), DEFAULT_MAX_COMMENT)
+    return {
+        "wait_time": int(wait_time),
+        "url_range": url_range,
+        "comment_range": comment_range,
+        "like_probability": int(getattr(cfg, "LIKE_PROBABILITY", LIKE_PROBABILITY)),
+        "visit_enable": int(getattr(cfg, "VISIT_ENABLE", VISIT_ENABLE)),
+        "profile_follow_probability": int(getattr(cfg, "PROFILE_FOLLOW_PROBABILITY", PROFILE_FOLLOW_PROBABILITY)),
+        "like_wait_range": _as_int_range([getattr(cfg, "LIKE_WAIT_MIN", DEFAULT_LIKE_WAIT_MIN), getattr(cfg, "LIKE_WAIT_MAX", DEFAULT_LIKE_WAIT_MAX)], (DEFAULT_LIKE_WAIT_MIN, DEFAULT_LIKE_WAIT_MAX)),
+        "visit_wait_range": _as_int_range([getattr(cfg, "VISIT_MIN", DEFAULT_VISIT_MIN), getattr(cfg, "VISIT_MAX", DEFAULT_VISIT_MAX)], (DEFAULT_VISIT_MIN, DEFAULT_VISIT_MAX)),
+        "profile_wait_range": _as_int_range([getattr(cfg, "COMMENT_WAIT_MIN", DEFAULT_PROFILE_WAIT_MIN), getattr(cfg, "COMMENT_WAIT_MAX", DEFAULT_PROFILE_WAIT_MAX)], (DEFAULT_PROFILE_WAIT_MIN, DEFAULT_PROFILE_WAIT_MAX)),
+        "video_reply_rate": int(getattr(cfg, "VIDEO_REPLY_RATE", VIDEO_REPLY_RATE)),
+        "video_reply_wait_range": _as_int_range([getattr(cfg, "VIDEO_REPLY_WAIT_MIN", VIDEO_REPLY_WAIT_MIN), getattr(cfg, "VIDEO_REPLY_WAIT_MAX", VIDEO_REPLY_WAIT_MAX)], (VIDEO_REPLY_WAIT_MIN, VIDEO_REPLY_WAIT_MAX)),
+        "min_follows_per_video": int(getattr(cfg, "MIN_FOLLOWS_PER_VIDEO", MIN_FOLLOWS_PER_VIDEO)),
+        "max_follows_per_video": int(getattr(cfg, "MAX_FOLLOWS_PER_VIDEO", MAX_FOLLOWS_PER_VIDEO)),
+        "comment_like_count_min": int(getattr(cfg, "COMMENT_LIKE_COUNT_MIN", COMMENT_LIKE_COUNT_MIN)),
+        "comment_like_count_max": int(getattr(cfg, "COMMENT_LIKE_COUNT_MAX", COMMENT_LIKE_COUNT_MAX)),
+        "video_comments": getattr(cfg, "VIDEO_COMMENTS", VIDEO_COMMENTS),
+        "comment_filter_keywords": getattr(cfg, "COMMENT_FILTER_KEYWORDS", COMMENT_FILTER_KEYWORDS),
+        "enable_like": bool(getattr(cfg, "ENABLE_LIKE", ENABLE_LIKE)),
+        "enable_follow": bool(getattr(cfg, "ENABLE_FOLLOW", ENABLE_FOLLOW)),
+        "enable_profile_visit": bool(getattr(cfg, "ENABLE_PROFILE_VISIT", ENABLE_PROFILE_VISIT)),
+        "enable_video_comment": bool(getattr(cfg, "ENABLE_VIDEO_COMMENT", ENABLE_VIDEO_COMMENT)),
+        "enable_search_keywords": bool(getattr(cfg, "ENABLE_SEARCH_KEYWORDS", ENABLE_SEARCH_KEYWORDS)),
+    }
+
 def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
     log_prefix = get_browser_log_prefix(browser_id)
-    
-    wait_time = DEFAULT_WAIT_TIME
-    url_min, url_max = DEFAULT_MAX_VISIT_URLS
-    scroll_min, scroll_max = DEFAULT_MAX_COMMENT
-    like_prob = LIKE_PROBABILITY
-    visit_profile_prob = VISIT_ENABLE
-    profile_follow_prob = PROFILE_FOLLOW_PROBABILITY
-    like_wait_min = DEFAULT_LIKE_WAIT_MIN
-    like_wait_max = DEFAULT_LIKE_WAIT_MAX
-    visit_min = DEFAULT_VISIT_MIN
-    visit_max = DEFAULT_VISIT_MAX
-    profile_wait_min = DEFAULT_PROFILE_WAIT_MIN
-    profile_wait_max = DEFAULT_PROFILE_WAIT_MAX
-    video_comment_prob = VIDEO_REPLY_RATE
-    video_comment_wait_min = VIDEO_REPLY_WAIT_MIN
-    video_comment_wait_max = VIDEO_REPLY_WAIT_MAX
+
+    settings = _current_settings_share()
+    wait_time = settings["wait_time"]
+    url_min, url_max = settings["url_range"]
+    scroll_min, scroll_max = settings["comment_range"]
+    like_prob = settings["like_probability"]
+    visit_profile_prob = settings["visit_enable"]
+    profile_follow_prob = settings["profile_follow_probability"]
+    like_wait_min, like_wait_max = settings["like_wait_range"]
+    visit_min, visit_max = settings["visit_wait_range"]
+    profile_wait_min, profile_wait_max = settings["profile_wait_range"]
+    video_comment_prob = settings["video_reply_rate"]
+    video_comment_wait_min, video_comment_wait_max = settings["video_reply_wait_range"]
+    min_follows_per_video = settings["min_follows_per_video"]
+    max_follows_per_video = settings["max_follows_per_video"]
+    comment_like_count_min = settings["comment_like_count_min"]
+    comment_like_count_max = settings["comment_like_count_max"]
+    enable_like = settings["enable_like"]
+    enable_follow = settings["enable_follow"]
+    enable_profile_visit = settings["enable_profile_visit"]
+    enable_video_comment = settings["enable_video_comment"]
+    enable_search_keywords = settings["enable_search_keywords"]
+    comment_filter_keywords = settings["comment_filter_keywords"]
+    video_comments = settings["video_comments"]
     like_count = 0
     follow_count = 0
 
@@ -324,10 +373,10 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
     log.info(f"{log_prefix} 进入主页等待时间范围: {profile_wait_min}-{profile_wait_max}s")
     log.info(f"{log_prefix} 视频留言概率: {video_comment_prob}%")
     log.info(f"{log_prefix} 视频留言前等待时间范围: {video_comment_wait_min}-{video_comment_wait_max}s")
-    log.info(f"{log_prefix} 每条视频最少关注数量: {MIN_FOLLOWS_PER_VIDEO}")
-    log.info(f"{log_prefix} 每条视频最多关注数量: {MAX_FOLLOWS_PER_VIDEO}")
-    log.info(f"{log_prefix} 每条视频最少点赞数量: {COMMENT_LIKE_COUNT_MIN}")
-    log.info(f"{log_prefix} 每条视频最多点赞数量: {COMMENT_LIKE_COUNT_MAX}")
+    log.info(f"{log_prefix} 每条视频最少关注数量: {min_follows_per_video}")
+    log.info(f"{log_prefix} 每条视频最多关注数量: {max_follows_per_video}")
+    log.info(f"{log_prefix} 每条视频最少点赞数量: {comment_like_count_min}")
+    log.info(f"{log_prefix} 每条视频最多点赞数量: {comment_like_count_max}")
 
     res = _open_bit(browser_id)
     data = (res or {}).get("data") or {}
@@ -387,6 +436,30 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
             
             log.info(f"{log_prefix} 访问链接: {url}")
             try:
+                settings = _current_settings_share()
+                wait_time = settings["wait_time"]
+                url_min, url_max = settings["url_range"]
+                scroll_min, scroll_max = settings["comment_range"]
+                like_prob = settings["like_probability"]
+                visit_profile_prob = settings["visit_enable"]
+                profile_follow_prob = settings["profile_follow_probability"]
+                like_wait_min, like_wait_max = settings["like_wait_range"]
+                visit_min, visit_max = settings["visit_wait_range"]
+                profile_wait_min, profile_wait_max = settings["profile_wait_range"]
+                video_comment_prob = settings["video_reply_rate"]
+                video_comment_wait_min, video_comment_wait_max = settings["video_reply_wait_range"]
+                min_follows_per_video = settings["min_follows_per_video"]
+                max_follows_per_video = settings["max_follows_per_video"]
+                comment_like_count_min = settings["comment_like_count_min"]
+                comment_like_count_max = settings["comment_like_count_max"]
+                enable_like = settings["enable_like"]
+                enable_follow = settings["enable_follow"]
+                enable_profile_visit = settings["enable_profile_visit"]
+                enable_video_comment = settings["enable_video_comment"]
+                enable_search_keywords = settings["enable_search_keywords"]
+                comment_filter_keywords = settings["comment_filter_keywords"]
+                video_comments = settings["video_comments"]
+
                 # 访问分享链接
                 driver.get(url)
                 w()
@@ -404,9 +477,15 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                     time.sleep(1.0)
                 
                 # 根据概率决定是否进行视频留言
-                if ENABLE_VIDEO_COMMENT and (random.random() * 100 <= video_comment_prob):
+                if enable_video_comment and (random.random() * 100 <= video_comment_prob):
                     log.info(f"{log_prefix} 根据概率决定进行视频留言")
-                    if KuaishouUtils.leave_video_comment(driver, video_comment_wait_min, video_comment_wait_max, log_prefix):
+                    if KuaishouUtils.leave_video_comment(
+                        driver,
+                        video_comment_wait_min,
+                        video_comment_wait_max,
+                        log_prefix,
+                        video_comments,
+                    ):
                         try:
                             reporter.set_action("videoComment")
                             reporter.increment_video_comment(1)
@@ -414,8 +493,8 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                             pass
                 
                 # 为每个视频设置随机的点赞和关注上限
-                max_follow_per_video = random.randint(MIN_FOLLOWS_PER_VIDEO, MAX_FOLLOWS_PER_VIDEO)
-                max_like_per_video = random.randint(COMMENT_LIKE_COUNT_MIN, COMMENT_LIKE_COUNT_MAX)
+                max_follow_per_video = random.randint(min_follows_per_video, max_follows_per_video)
+                max_like_per_video = random.randint(comment_like_count_min, comment_like_count_max)
                 current_follow_count = 0  # 当前视频关注计数器
                 current_like_count = 0    # 当前视频点赞计数器
                 
@@ -458,14 +537,14 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                         log.info(f"{log_prefix} 评论内容: {comment_text}")
                         
                         # 检查评论是否包含关键词
-                        if KuaishouUtils.check_comment_contains_keywords(comment_text, COMMENT_FILTER_KEYWORDS):
+                        if KuaishouUtils.check_comment_contains_keywords(comment_text, comment_filter_keywords):
                             comment_ok = True
                     except Exception:
                         pass
-                    effective_comment_ok = comment_ok if ENABLE_SEARCH_KEYWORDS else False
+                    effective_comment_ok = comment_ok if enable_search_keywords else False
 
                     # 点赞逻辑 - 如果包含关键词则强制点赞，否则按概率点赞，但不超过当前视频的点赞上限
-                    if ENABLE_LIKE and (effective_comment_ok or (current_like_count < max_like_per_video and random.random() * 100 <= like_prob)):
+                    if enable_like and (effective_comment_ok or (current_like_count < max_like_per_video and random.random() * 100 <= like_prob)):
                         like_el = KuaishouUtils.el(driver, ".comment-item-likeicon", it)
                         if like_el:
                             cls0 = ""
@@ -491,7 +570,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                                         pass
 
                     # 访问主页逻辑 - 如果评论包含关键词则强制访问，否则按概率访问
-                    should_visit = ENABLE_PROFILE_VISIT and (effective_comment_ok or (random.random() * 100 <= visit_profile_prob))
+                    should_visit = enable_profile_visit and (effective_comment_ok or (random.random() * 100 <= visit_profile_prob))
                     if should_visit:
                         a = KuaishouUtils.el(driver, ".author-name", it)
                         if a:
@@ -505,7 +584,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                                     time.sleep(random.uniform(profile_wait_min, profile_wait_max))
                                     
                                     # 如果评论包含关键词，则强制关注，否则按概率关注，但不超过当前视频的关注上限
-                                    if ENABLE_FOLLOW and current_follow_count < max_follow_per_video:
+                                    if enable_follow and current_follow_count < max_follow_per_video:
                                         follow_prob = 100 if effective_comment_ok else profile_follow_prob
                                         if random.random() * 100 <= follow_prob:
                                             follow_button = KuaishouUtils.el(driver, ".btn-words")
@@ -588,10 +667,17 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
         log.info(f"{log_prefix} 本次任务累计关注次数: {follow_count}")
 
 def main():
-    browser_ids = parse_browser_ids()
-    urls = _urls(DEFAULT_URLS)
+    cfg = get_config()
     license_manager.set_stop_callback(lambda: STOP_EVENT.set())
     _start_ws_client()
+    try:
+        cfg.wait_for_initialization()
+    except TimeoutError as e:
+        log.error(f"等待服务器配置初始化超时: {e}")
+        _stop_ws_client()
+        sys.exit(1)
+    browser_ids = cfg.BIT_BROWSER_IDS or parse_browser_ids()
+    urls = cfg.URLS or _urls(URLS)
     if not license_manager.verify_license():
         log.error("卡密验证失败")
         _stop_ws_client()

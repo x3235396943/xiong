@@ -9,7 +9,23 @@ import re
 
 class KuaishouUtils:
     """快手自动化工具类"""
-    
+
+    @staticmethod
+    def _normalize_keywords(keywords):
+        if keywords is None:
+            return []
+        if isinstance(keywords, (list, tuple, set)):
+            return [str(x).strip() for x in keywords if str(x).strip()]
+        s = str(keywords).strip()
+        if not s:
+            return []
+        parts = [x.strip() for x in s.split("-&-") if x.strip()]
+        if parts:
+            return parts
+        for sep in ["\n", "\r", "\t", "，", ";", "；", " "]:
+            s = s.replace(sep, ",")
+        return [x.strip() for x in s.split(",") if x.strip()]
+
     @staticmethod
     def scroll_ks_comment_container(driver, times=5, step=500, sleep=1.5):
         """滚动快手评论容器"""
@@ -37,7 +53,7 @@ class KuaishouUtils:
     @staticmethod
     def check_comment_contains_keywords(comment_text, keywords):
         """检查评论是否包含指定关键词"""
-        keyword_list = [x.strip() for x in keywords.split("-&-") if x.strip()]
+        keyword_list = KuaishouUtils._normalize_keywords(keywords)
         norm_comment = KuaishouUtils.normalize_text(comment_text)
         for kw in keyword_list:
             if KuaishouUtils.normalize_text(kw) in norm_comment:
@@ -45,7 +61,9 @@ class KuaishouUtils:
         return False
 
     @staticmethod
-    def leave_video_comment(driver, video_comment_wait_min, video_comment_wait_max, log_prefix):
+    def leave_video_comment(
+        driver, video_comment_wait_min, video_comment_wait_max, log_prefix, comments=None
+    ):
         """在当前视频页面留下评论"""
         try:
             # 等待视频加载并等待一段时间后进行评论
@@ -61,7 +79,14 @@ class KuaishouUtils:
                 time.sleep(0.5)
                 
                 # 输入评论内容
-                comment_text = random.choice(["这个视频不错！", "内容很棒！", "支持一下！", "666", "好看！"])
+                comment_candidates = KuaishouUtils._normalize_keywords(comments) or [
+                    "这个视频不错！",
+                    "内容很棒！",
+                    "支持一下！",
+                    "666",
+                    "好看！",
+                ]
+                comment_text = random.choice(comment_candidates)
                 comment_input.send_keys(comment_text)
                 time.sleep(0.5)
                 

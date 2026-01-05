@@ -34,6 +34,7 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
             if isinstance(message_dict, dict) and message_dict.get("cmd") == "PcDataReq":
                 data = message_dict.get("data")
                 if isinstance(data, dict):
+                    data.pop("comment", None)
                     for k in ("urlIndex", "urlOk", "urlFail"):
                         data.pop(k, None)
         except Exception:
