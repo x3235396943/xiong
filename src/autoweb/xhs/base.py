@@ -277,7 +277,8 @@ def process_comments_sequentially(
         enable_visit_avatar: 是否启用访问头像功能
     """
     try:
-        print("开始逐条遍历处理评论...")
+        from ..tools.core import log
+        log.info("开始逐条遍历处理评论...")
 
         # 等待评论区加载
         wait = WebDriverWait(driver, 10)
@@ -297,7 +298,7 @@ def process_comments_sequentially(
             "div.comments-container > div.list-container > div.parent-comment"
         )
 
-        print(f"初始找到 {len(comment_items)} 条评论")
+        log.info(f"初始找到 {len(comment_items)} 条评论")
 
         like_target = rand_int_range([comment_like_count_min, comment_like_count_max], 0, 0) if enable_like else 0
         profile_target = rand_int_range([min_follows_per_video, max_follows_per_video], 0,
@@ -329,7 +330,7 @@ def process_comments_sequentially(
                    (max_count is not None and processed_count >= max_count):
                     break
                     
-                print(f"\n处理第 {processed_count + 1} 条评论:")
+                log.info(f"\n处理第 {processed_count + 1} 条评论:")
 
                 try:
                     # 获取评论容器的第一个子元素
@@ -344,10 +345,10 @@ def process_comments_sequentially(
                             By.CSS_SELECTOR,
                             "div.content span span"
                         ).text
-                        print(f"  评论内容: {comment_text[:50]}..." if len(
+                        log.info(f"  评论内容: {comment_text[:50]}..." if len(
                             comment_text) > 50 else f"  评论内容: {comment_text}")
                     except:
-                        print("  无法获取评论内容")
+                        log.info("  无法获取评论内容")
 
                     # 检查评论内容是否包含过滤关键字
                     comment_contains_keyword = False
@@ -361,15 +362,18 @@ def process_comments_sequentially(
                             for keyword in comment_filter_keywords:
                                 if keyword.lower() in comment_text_for_keyword.lower():
                                     comment_contains_keyword = True
-                                    print(f"  评论包含关键字 '{keyword}'，执行特殊操作")
+                                    log.info(f"  评论包含关键字 '{keyword}'，执行特殊操作")
                                     break
                     except:
-                        print("  无法获取评论内容用于关键字匹配")
+                        log.info("  无法获取评论内容用于关键字匹配")
                     
-                    # 如果包含关键字，则执行访问头像操作（不受上限限制）
-                    if (enable_visit_avatar and (not has_filter_keywords or comment_contains_keyword) and 
-                        visited_count < profile_target and random.randint(1, 100) <= int(visit_probability)) or \
-                       (enable_visit_avatar and has_filter_keywords and comment_contains_keyword):
+                    # 正常按概率执行访问头像操作，关键字命中时强制执行
+                    should_visit = enable_visit_avatar and \
+                                   visited_count < profile_target and \
+                                   ((not has_filter_keywords and random.randint(1, 100) <= int(visit_probability)) or \
+                                    (has_filter_keywords and comment_contains_keyword) or \
+                                    (has_filter_keywords and not comment_contains_keyword and random.randint(1, 100) <= int(visit_probability)))
+                    if should_visit:
                         try:
                             avatar_link = item.find_element(
                                 By.CSS_SELECTOR,
@@ -381,7 +385,7 @@ def process_comments_sequentially(
                                 pass
                             # 点击头像链接
                             driver.execute_script("arguments[0].click();", avatar_link)
-                            print("  已点击头像")
+                            log.info("  已点击头像")
                             time.sleep(2)
 
                             # 切换到新标签页
@@ -391,7 +395,7 @@ def process_comments_sequentially(
                                 # 如果是关键字匹配的评论，则不受上限限制
                                 if not (has_filter_keywords and comment_contains_keyword):
                                     visited_count += 1
-                                print("  已切换到用户主页")
+                                log.info("  已切换到用户主页")
                                 rand_sleep(profile_wait_min, profile_wait_max)
                                 if ENABLE_FOLLOW and (random.randint(1, 100) <= int(follow_probability) or 
                                                       (has_filter_keywords and comment_contains_keyword)):
@@ -404,24 +408,27 @@ def process_comments_sequentially(
                                 # 关闭用户主页标签页，切回原页面
                                 driver.close()
                                 driver.switch_to.window(all_handles[0])
-                                print("  已关闭用户主页，切回原页面")
+                                log.info("  已关闭用户主页，切回原页面")
                             else:
-                                print("  未打开新标签页")
+                                log.info("  未打开新标签页")
 
                             time.sleep(0.5)
                         except:
-                            print("  未找到头像链接或点击失败")
+                            log.info("  未找到头像链接或点击失败")
                     else:
                         if not enable_visit_avatar:
-                            print("  访问头像功能已禁用")
+                            log.info("  访问头像功能已禁用")
                         else:
-                            print("  访问头像已跳过")
+                            log.info("  访问头像已跳过")
 
                     # 点赞按钮
-                    # 如果包含关键字，则执行点赞操作（不受上限限制）
-                    if (enable_like and (not has_filter_keywords or comment_contains_keyword) and 
-                        liked_count < like_target and random.randint(1, 100) <= int(like_probability)) or \
-                       (enable_like and has_filter_keywords and comment_contains_keyword):
+                    # 正常按概率执行点赞操作，关键字命中时强制执行
+                    should_like = enable_like and \
+                                  liked_count < like_target and \
+                                  ((not has_filter_keywords and random.randint(1, 100) <= int(like_probability)) or \
+                                   (has_filter_keywords and comment_contains_keyword) or \
+                                   (has_filter_keywords and not comment_contains_keyword and random.randint(1, 100) <= int(like_probability)))
+                    if should_like:
                         try:
                             # 使用完整的CSS选择器路径在parent-comment元素下寻找点赞按钮
                             like_btn = comment_item.find_element(
@@ -434,24 +441,26 @@ def process_comments_sequentially(
                                 pass
                             # 使用JavaScript点击，避免被其他元素遮挡
                             driver.execute_script("arguments[0].click();", like_btn)
-                            print("  已点击点赞按钮")
+                            log.info("  已点击点赞按钮")
                             # 如果是关键字匹配的评论，则不受上限限制
                             if not (has_filter_keywords and comment_contains_keyword):
                                 liked_count += 1
                             rand_sleep(like_wait_min, like_wait_max)
                         except:
-                            print("  未找到点赞按钮或点击失败")
+                            log.info("  未找到点赞按钮或点击失败")
                     else:
                         if not enable_like:
-                            print("  点赞功能已禁用")
+                            log.info("  点赞功能已禁用")
                         else:
-                            print("  点赞已跳过")
+                            log.info("  点赞已跳过")
 
                     # 回复按钮
-                    # 如果包含关键字，则执行回复操作（不受上限限制）
-                    if (enable_reply and (not has_filter_keywords or comment_contains_keyword) and 
-                        random.randint(1, 100) <= int(comment_reply_probability)) or \
-                       (enable_reply and has_filter_keywords and comment_contains_keyword):
+                    # 正常按概率执行回复操作，关键字命中时强制执行
+                    should_reply = enable_reply and \
+                                   ((not has_filter_keywords and random.randint(1, 100) <= int(comment_reply_probability)) or \
+                                    (has_filter_keywords and comment_contains_keyword) or \
+                                    (has_filter_keywords and not comment_contains_keyword and random.randint(1, 100) <= int(comment_reply_probability)))
+                    if should_reply:
                         try:
                             # 添加评论回复前的等待时间
                             if not (has_filter_keywords and comment_contains_keyword):
@@ -468,7 +477,7 @@ def process_comments_sequentially(
                                 pass
                             # 使用JavaScript点击，避免被其他元素遮挡
                             driver.execute_script("arguments[0].click();", reply_btn)
-                            print("  已点击回复按钮")
+                            log.info("  已点击回复按钮")
                             time.sleep(0.5)  # 您偏好的点击间隔时间
                             try:
                                 # 从多个可能的回复中随机选择一个
@@ -487,7 +496,7 @@ def process_comments_sequentially(
                                     except Exception:
                                         editor = None
                                 if not editor:
-                                    print("  未找到回复输入框")
+                                    log.info("  未找到回复输入框")
                                 else:
                                     ensure_element_centered(driver, editor)
                                     try:
@@ -498,35 +507,35 @@ def process_comments_sequentially(
                                         from selenium.webdriver.common.action_chains import ActionChains
                                         ActionChains(driver).move_to_element(editor).click(editor).send_keys(
                                             reply_text).perform()
-                                        print(f"  已输入回复内容: {reply_text}")
+                                        log.info(f"  已输入回复内容: {reply_text}")
                                     except Exception:
                                         try:
                                             editor.send_keys(reply_text)
-                                            print(f"  已输入回复内容: {reply_text}")
+                                            log.info(f"  已输入回复内容: {reply_text}")
                                         except Exception:
-                                            print("  输入回复内容失败")
+                                            log.info("  输入回复内容失败")
                                     try:
                                         send_btn = comment_item.find_element(By.XPATH, ".//span[contains(., '发送')]")
                                         ensure_element_centered(driver, send_btn)
                                         driver.execute_script("arguments[0].click();", send_btn)
-                                        print("  已点击发送按钮")
+                                        log.info("  已点击发送按钮")
                                     except Exception:
                                         try:
                                             editor.send_keys(WebDriverWait.Keys.ENTER)
-                                            print("  已按回车发送")
+                                            log.info("  已按回车发送")
                                         except Exception:
-                                            print("  按回车发送失败")
+                                            log.info("  按回车发送失败")
                                     time.sleep(0.5)
                             except Exception as e:
-                                print(f"  回复输入或发送失败: {e}")
+                                log.info(f"  回复输入或发送失败: {e}")
 
                         except:
-                            print("  未找到回复按钮或点击失败")
+                            log.info("  未找到回复按钮或点击失败")
                     else:
                         if not enable_reply:
-                            print("  回复功能已禁用")
+                            log.info("  回复功能已禁用")
                         else:
-                            print("  回复已跳过（概率未满足）")
+                            log.info("  回复已跳过（概率未满足）")
 
                     # 尝试获取点赞数
                     try:
@@ -534,12 +543,12 @@ def process_comments_sequentially(
                             By.CSS_SELECTOR,
                             "div.interactions span.count"
                         ).text
-                        print(f"  点赞数: {like_count}")
+                        log.info(f"  点赞数: {like_count}")
                     except:
-                        print("  无法获取点赞数")
+                        log.info("  无法获取点赞数")
 
                 except Exception as e:
-                    print(f"  处理第 {processed_count + 1} 条评论时出错: {e}")
+                    log.info(f"  处理第 {processed_count + 1} 条评论时出错: {e}")
                 
                 # 在处理每条评论之间添加随机间隔，模拟人工浏览
                 time.sleep(random.uniform(0.5, 1.5))
@@ -549,7 +558,7 @@ def process_comments_sequentially(
                 # 每处理3条评论就滚动一次，加载更多评论
                 if processed_count % 3 == 0:
                     if scroll_done < scroll_times:
-                        print(f"已处理 {processed_count} 条评论，进行第 {scroll_done + 1} 次滚动...")
+                        log.info(f"已处理 {processed_count} 条评论，进行第 {scroll_done + 1} 次滚动...")
                         scroll_to_load_more_comments(driver, count=1)
                         scroll_done += 1
                         
@@ -561,15 +570,16 @@ def process_comments_sequentially(
                             By.CSS_SELECTOR,
                             "div.comments-container > div.list-container > div.parent-comment"
                         )
-                        print(f"滚动后找到 {len(comment_items)} 条评论")
+                        log.info(f"滚动后找到 {len(comment_items)} 条评论")
 
-        print(f"评论处理完成，共处理 {processed_count} 条评论，进行了 {scroll_done} 次滚动")
+        log.info(f"评论处理完成，共处理 {processed_count} 条评论，进行了 {scroll_done} 次滚动")
 
     except Exception as e:
-        print(f"遍历处理评论区时出错: {e}")
+        log.info(f"遍历处理评论区时出错: {e}")
 
 
 def visit_video_and_operate(driver):
+    from ..tools.core import log
     if ENABLE_VIDEO_COMMENT and random.randint(1, 100) <= int(VIDEO_REPLY_RATE):
         rand_sleep(VIDEO_REPLY_WAIT_MIN, VIDEO_REPLY_WAIT_MAX)
         comment_texts = parse_video_comments(VIDEO_COMMENTS)

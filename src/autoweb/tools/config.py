@@ -18,7 +18,7 @@ field_pairs = {
 }
 
 class ShareConfig(BaseSettings):
-    LIKE_PROBABILITY: int = 8  # 点赞概率 (0-100)
+    LIKE_PROBABILITY: int = 100  # 点赞概率 (0-100)
     VISIT_ENABLE: int = 10  # 进入主页的概率 (0-100)
     PROFILE_FOLLOW_PROBABILITY: int = 10  # 进入主页后关注的概率 (0-100)
     ENABLE_FOLLOW: bool = True  # 是否启用关注功能
@@ -93,7 +93,7 @@ class KuSettings(ShareConfig):
     HEADLESS: bool = False # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str = "1.4.1"
+    VERSION: str = "1.4.2"
 
     # 抖音搜索模式配置（服务器下发）
     KEYWORDS: list = []
@@ -279,9 +279,9 @@ class XhsConfig(ShareConfig):
     COMMENT_FILTER_KEYWORDS: list = ["善"]
     
     # 互动操作相关参数（小红书特定的默认值）
-    LIKE_PROBABILITY: int = 1  # 小红书默认点赞概率
-    VISIT_ENABLE: int = 1  # 小红书默认访问主页概率
-    PROFILE_FOLLOW_PROBABILITY: int = 1  # 小红书默认主页关注概率
+    LIKE_PROBABILITY: int = 60  # 小红书默认点赞概率
+    VISIT_ENABLE: int = 10  # 小红书默认访问主页概率
+    PROFILE_FOLLOW_PROBABILITY: int = 10  # 小红书默认主页关注概率
     
     # 新增：每条视频点赞和关注上限参数
     MIN_FOLLOWS_PER_VIDEO: int = 2  # 小红书每条视频最少关注数量
