@@ -46,6 +46,11 @@ ENABLE_LIKE = True  # 是否启用点赞功能
 ENABLE_FOLLOW = True  # 是否启用关注功能
 ENABLE_PROFILE_VISIT = True  # 是否启用访问用户主页功能
 ENABLE_VIDEO_COMMENT = True  # 是否启用视频留言功能
+ENABLE_COMMENT_REPLY = True  # 是否启用评论回复功能
+COMMENT_REPLY_PROBABILITY = 1  # 评论回复概率 (0-100)
+COMMENT_WAIT_MIN = 5  # 评论回复前最小等待时间（秒）
+COMMENT_WAIT_MAX = 8  # 评论回复前最大等待时间（秒)
+COMMENT_REPLIES = "牛-&-666"  # 回复评论的内容
 BIT_BROWSER_IDS = DEFAULT_BIT_BROWSER_IDS[0]  # 默认比特浏览器ID
 
 
@@ -293,7 +298,7 @@ def scroll_to_load_more_comments(driver, count: int = 5, delta_y: int = 400, sle
 def process_comments_sequentially(
         driver,
         enable_like=ENABLE_LIKE,
-        enable_reply=False,
+        enable_reply=ENABLE_COMMENT_REPLY,  # 使用新添加的常量作为默认值
         enable_visit_avatar=ENABLE_PROFILE_VISIT,
         max_count=None,
         like_probability=LIKE_PROBABILITY,
@@ -310,6 +315,10 @@ def process_comments_sequentially(
         comment_like_count_min=COMMENT_LIKE_COUNT_MIN,
         comment_like_count_max=COMMENT_LIKE_COUNT_MAX,
         comment_scroll_minmax=DEFAULT_MAX_COMMENT,
+        comment_reply_probability=COMMENT_REPLY_PROBABILITY,  # 新增评论回复概率参数
+        comment_wait_min=COMMENT_WAIT_MIN,  # 新增评论回复前最小等待时间
+        comment_wait_max=COMMENT_WAIT_MAX,  # 新增评论回复前最大等待时间
+        comment_replies=COMMENT_REPLIES,  # 新增评论回复内容
 ):
     """
     逐条遍历处理评论区的点赞和回复操作
@@ -461,8 +470,11 @@ def process_comments_sequentially(
                             print("  点赞已跳过")
 
                     # 回复按钮
-                    if enable_reply:
+                    if enable_reply and random.randint(1, 100) <= int(comment_reply_probability):
                         try:
+                            # 添加评论回复前的等待时间
+                            rand_sleep(comment_wait_min, comment_wait_max)
+                            
                             # 使用完整的CSS选择器路径在parent-comment元素下寻找回复按钮
                             reply_btn = comment_item.find_element(
                                 By.CSS_SELECTOR,
@@ -477,7 +489,9 @@ def process_comments_sequentially(
                             print("  已点击回复按钮")
                             time.sleep(0.5)  # 您偏好的点击间隔时间
                             try:
-                                reply_text = "牛"
+                                # 从多个可能的回复中随机选择一个
+                                possible_replies = comment_replies.split('-&-') if '-&-' in comment_replies else [comment_replies]
+                                reply_text = random.choice(possible_replies)
                                 wait = WebDriverWait(driver, 5)
                                 try:
                                     editor = comment_item.find_element(By.CSS_SELECTOR,
@@ -506,11 +520,11 @@ def process_comments_sequentially(
                                         from selenium.webdriver.common.action_chains import ActionChains
                                         ActionChains(driver).move_to_element(editor).click(editor).send_keys(
                                             reply_text).perform()
-                                        print("  已输入回复内容")
+                                        print(f"  已输入回复内容: {reply_text}")
                                     except Exception:
                                         try:
                                             editor.send_keys(reply_text)
-                                            print("  已输入回复内容")
+                                            print(f"  已输入回复内容: {reply_text}")
                                         except Exception:
                                             print("  输入回复内容失败")
                                     try:
@@ -532,7 +546,10 @@ def process_comments_sequentially(
                         except:
                             print("  未找到回复按钮或点击失败")
                     else:
-                        print("  回复功能已禁用")
+                        if not enable_reply:
+                            print("  回复功能已禁用")
+                        else:
+                            print("  回复已跳过（概率未满足）")
 
                     # 尝试获取点赞数
                     try:
@@ -720,7 +737,7 @@ def main():
         print("WebDriver连接成功")
 
         process_search_keywords(driver)
-        input("\n按Enter键退出...")
+        print("\n所有关键词处理完成，程序自动退出...")
 
     except Exception as e:
         print(f"连接浏览器或访问链接时出现错误: {e}")
