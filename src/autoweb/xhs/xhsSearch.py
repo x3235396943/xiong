@@ -21,16 +21,16 @@ from selenium.webdriver.support import expected_conditions as EC
 KEYWORDS = ["御姐", "美食", "穿搭", "旅行"]  # 默认搜索关键词列表，脚本会使用这些关键词在小红书进行搜索
 DEFAULT_MAX_SCROLL_VIDEO = [1, 1]  # 每次搜索结果中要滚动浏览的视频数量范围，随机选择2-3个视频
 DEFAULT_MAX_COMMENT = [2, 2]  # 每个视频评论区滚动加载的次数范围，随机选择2-5次
-LIKE_PROBABILITY = 1  # 点赞操作的概率（百分比）
-VISIT_ENABLE = 1  # 访问用户头像的概率（百分比）
-PROFILE_FOLLOW_PROBABILITY = 1  # 在用户主页关注的概率（百分比）
+LIKE_PROBABILITY = 1  # 点赞操作的概率
+VISIT_ENABLE = 1  # 访问用户头像的概率
+PROFILE_FOLLOW_PROBABILITY = 1  # 在用户主页关注的概率
 DEFAULT_LIKE_WAIT_MIN = 10  # 点赞操作后最小等待时间（秒）
 DEFAULT_LIKE_WAIT_MAX = 10  # 点赞操作后最大等待时间（秒）
 DEFAULT_VISIT_MIN = 2  # 访问用户主页后最小等待时间（秒）
 DEFAULT_VISIT_MAX = 5  # 访问用户主页后最大等待时间（秒）
 DEFAULT_PROFILE_WAIT_MIN = 5  # 在用户主页最小停留时间（秒）
 DEFAULT_PROFILE_WAIT_MAX = 10  # 在用户主页最大停留时间（秒）
-VIDEO_REPLY_RATE = 1  # 视频留言的概率（百分比）
+VIDEO_REPLY_RATE = 1  # 视频留言的概率
 VIDEO_REPLY_WAIT_MIN = 5  # 视频留言前最小等待时间（秒）
 VIDEO_REPLY_WAIT_MAX = 10  # 视频留言前最大等待时间（秒）
 MIN_FOLLOWS_PER_VIDEO = 2  # 每个视频最少关注数量
@@ -47,10 +47,12 @@ ENABLE_FOLLOW = True  # 是否启用关注功能
 ENABLE_PROFILE_VISIT = True  # 是否启用访问用户主页功能
 ENABLE_VIDEO_COMMENT = True  # 是否启用视频留言功能
 ENABLE_COMMENT_REPLY = True  # 是否启用评论回复功能
+ENABLE_SEARCH_KEYWORDS = True  # 是否启用搜索关键字功能
 COMMENT_REPLY_PROBABILITY = 1  # 评论回复概率 (0-100)
 COMMENT_WAIT_MIN = 5  # 评论回复前最小等待时间（秒）
 COMMENT_WAIT_MAX = 8  # 评论回复前最大等待时间（秒)
 COMMENT_REPLIES = "牛-&-666"  # 回复评论的内容
+COMMENT_FILTER_KEYWORDS = ['的']  # 筛选评论区关键字
 BIT_BROWSER_IDS = DEFAULT_BIT_BROWSER_IDS[0]  # 默认比特浏览器ID
 
 
@@ -319,6 +321,8 @@ def process_comments_sequentially(
         comment_wait_min=COMMENT_WAIT_MIN,  # 新增评论回复前最小等待时间
         comment_wait_max=COMMENT_WAIT_MAX,  # 新增评论回复前最大等待时间
         comment_replies=COMMENT_REPLIES,  # 新增评论回复内容
+        enable_search_keywords=ENABLE_SEARCH_KEYWORDS,  # 新增是否启用搜索关键字功能
+        comment_filter_keywords=COMMENT_FILTER_KEYWORDS,  # 新增筛选评论区关键字
 ):
     """
     逐条遍历处理评论区的点赞和回复操作
@@ -358,6 +362,9 @@ def process_comments_sequentially(
         liked_count = 0
         visited_count = 0
         followed_count = 0
+        
+        # 检查是否有设置评论过滤关键字
+        has_filter_keywords = enable_search_keywords and comment_filter_keywords and len(comment_filter_keywords) > 0
 
         # 循环处理评论，直到达到目标或滚动次数用完
         while scroll_done < scroll_times:
@@ -399,8 +406,27 @@ def process_comments_sequentially(
                     except:
                         print("  无法获取评论内容")
 
-                    if enable_visit_avatar and visited_count < profile_target and random.randint(1, 100) <= int(
-                            visit_probability):
+                    # 检查评论内容是否包含过滤关键字
+                    comment_contains_keyword = False
+                    comment_text_for_keyword = ""
+                    try:
+                        comment_text_for_keyword = item.find_element(
+                            By.CSS_SELECTOR,
+                            "div.content span span"
+                        ).text
+                        if has_filter_keywords:
+                            for keyword in comment_filter_keywords:
+                                if keyword.lower() in comment_text_for_keyword.lower():
+                                    comment_contains_keyword = True
+                                    print(f"  评论包含关键字 '{keyword}'，执行特殊操作")
+                                    break
+                    except:
+                        print("  无法获取评论内容用于关键字匹配")
+                    
+                    # 如果包含关键字，则执行访问头像操作（不受上限限制）
+                    if (enable_visit_avatar and (not has_filter_keywords or comment_contains_keyword) and 
+                        visited_count < profile_target and random.randint(1, 100) <= int(visit_probability)) or \
+                       (enable_visit_avatar and has_filter_keywords and comment_contains_keyword):
                         try:
                             avatar_link = item.find_element(
                                 By.CSS_SELECTOR,
@@ -419,14 +445,18 @@ def process_comments_sequentially(
                             all_handles = driver.window_handles
                             if len(all_handles) > 1:
                                 driver.switch_to.window(all_handles[-1])
-                                visited_count += 1
+                                # 如果是关键字匹配的评论，则不受上限限制
+                                if not (has_filter_keywords and comment_contains_keyword):
+                                    visited_count += 1
                                 print("  已切换到用户主页")
                                 rand_sleep(profile_wait_min, profile_wait_max)
-                                if ENABLE_FOLLOW and random.randint(1, 100) <= int(
-                                        follow_probability) and followed_count < profile_target:
+                                if ENABLE_FOLLOW and (random.randint(1, 100) <= int(follow_probability) or 
+                                                      (has_filter_keywords and comment_contains_keyword)):
                                     followed = follow_user_if_needed(driver)
                                     if followed:
-                                        followed_count += 1
+                                        # 如果是关键字匹配的评论，则不受上限限制
+                                        if not (has_filter_keywords and comment_contains_keyword):
+                                            followed_count += 1
                                         rand_sleep(follow_wait_min, follow_wait_max)
                                 # 关闭用户主页标签页，切回原页面
                                 driver.close()
@@ -445,7 +475,10 @@ def process_comments_sequentially(
                             print("  访问头像已跳过")
 
                     # 点赞按钮
-                    if enable_like and liked_count < like_target and random.randint(1, 100) <= int(like_probability):
+                    # 如果包含关键字，则执行点赞操作（不受上限限制）
+                    if (enable_like and (not has_filter_keywords or comment_contains_keyword) and 
+                        liked_count < like_target and random.randint(1, 100) <= int(like_probability)) or \
+                       (enable_like and has_filter_keywords and comment_contains_keyword):
                         try:
                             # 使用完整的CSS选择器路径在parent-comment元素下寻找点赞按钮
                             like_btn = comment_item.find_element(
@@ -459,7 +492,9 @@ def process_comments_sequentially(
                             # 使用JavaScript点击，避免被其他元素遮挡
                             driver.execute_script("arguments[0].click();", like_btn)
                             print("  已点击点赞按钮")
-                            liked_count += 1
+                            # 如果是关键字匹配的评论，则不受上限限制
+                            if not (has_filter_keywords and comment_contains_keyword):
+                                liked_count += 1
                             rand_sleep(like_wait_min, like_wait_max)
                         except:
                             print("  未找到点赞按钮或点击失败")
@@ -470,10 +505,14 @@ def process_comments_sequentially(
                             print("  点赞已跳过")
 
                     # 回复按钮
-                    if enable_reply and random.randint(1, 100) <= int(comment_reply_probability):
+                    # 如果包含关键字，则执行回复操作（不受上限限制）
+                    if (enable_reply and (not has_filter_keywords or comment_contains_keyword) and 
+                        random.randint(1, 100) <= int(comment_reply_probability)) or \
+                       (enable_reply and has_filter_keywords and comment_contains_keyword):
                         try:
                             # 添加评论回复前的等待时间
-                            rand_sleep(comment_wait_min, comment_wait_max)
+                            if not (has_filter_keywords and comment_contains_keyword):
+                                rand_sleep(comment_wait_min, comment_wait_max)
                             
                             # 使用完整的CSS选择器路径在parent-comment元素下寻找回复按钮
                             reply_btn = comment_item.find_element(
