@@ -27,10 +27,38 @@ xhs_config = XhsConfig()
 
 # 小红书链接列表
 URLS = [
-    "https://www.xiaohongshu.com/explore/some-note-id-1",
-    "https://www.xiaohongshu.com/explore/some-note-id-2",
-    "https://www.xiaohongshu.com/explore/some-note-id-3"
-]
+    "黑暗时代来和我https://www.xiaohongshu.com/discovery/item/6718b2c8000000001b0105fa?source=webshare&xhsshare=pc_web&xsec_token=ABfPA5AZwCLuncyIMZ1MYbPNlLuh-ysjQ-KUI1oRKFe3U=&xsec_source=pc_share",
+    "40 【这个时节不穿衬衫简直可惜 - 僵僵鱼 | 小红书 - 你的生活兴趣社区】 😆 k5gxtaE4RYMtliE 😆 https://www.xiaohongshu.com/discovery/item/6720cff0000000001a037707?source=webshare&xhsshare=pc_web&xsec_token=ABQVwG6gSi2q-LHdyeaiMv27pO9bMu6RrwSWNEQ-5sNUU=&xsec_source=pc_share",
+    "95 【姐姐是种感觉 - 四点七七 | 小红书 - 你的生活兴趣社区】 😆 l5O54XSgt1yqrXr 😆 https://www.xiaohongshu.com/discovery/item/6943fb17000000001e0331e5?source=webshare&xhsshare=pc_web&xsec_token=ABZ3QQAPbVPfU1jwjeVFVhU5L1w8c3gku9eQkcYh5eh-k=&xsec_source=pc_share",
+    "29 【 宗蕊zr | 小红书 - 你的生活兴趣社区】 😆vj4YSdBXUdnyVu2 😆https://www.xiaohongshu.com/discovery/item/68a854f1000000001d0212f0?source=webshare&xhsshare=pc_web&xsec_token=ABvFJ2hHO8TxFUsGcBattDn7t9azj0dDIQpo2fC-9FJls=&xsec_source=pc_share"
+
+    ]
+
+def extract_urls_from_text(text):
+    """
+    从文本中提取小红书URL
+    """
+    import re
+    # 匹配小红书URL的正则表达式
+    url_pattern = r'https://www\.xiaohongshu\.com/(?:explore|discovery/item)/[a-zA-Z0-9\-_&=%?.]+'
+    urls = re.findall(url_pattern, text)
+    return urls
+
+
+def clean_urls(urls):
+    """
+    清洗URL列表，提取出有效的URL
+    """
+    cleaned_urls = []
+    for item in urls:
+        if item.startswith('http'):  # 如果已经是完整URL
+            cleaned_urls.append(item)
+        else:
+            # 如果是包含URL的文本，尝试从中提取URL
+            extracted = extract_urls_from_text(item)
+            cleaned_urls.extend(extracted)
+    return cleaned_urls
+
 
 # 互动操作相关参数
 LIKE_PROBABILITY = xhs_config.LIKE_PROBABILITY
@@ -163,12 +191,15 @@ def process_share_urls(driver, urls, log_prefix=""):
     """
     处理小红书分享链接列表
     """
+    # 清洗URL列表
+    cleaned_urls = clean_urls(urls)
+    
     wait_seconds = 10
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
     
-    for url in urls:
+    for url in cleaned_urls:
         print(f"{log_prefix} 访问链接: {url}")
         try:
             driver.get(url)
