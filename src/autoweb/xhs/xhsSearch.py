@@ -10,6 +10,9 @@ import random
 import time
 import requests
 import os
+import concurrent.futures
+import threading
+from collections import deque
 from selenium import webdriver
 from selenium.webdriver import Keys
 from selenium.webdriver.chrome.service import Service
@@ -18,19 +21,19 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 # 单文件常量与解析
-KEYWORDS = ["御姐", "美食", "穿搭", "旅行"]  # 默认搜索关键词列表，脚本会使用这些关键词在小红书进行搜索
-DEFAULT_MAX_SCROLL_VIDEO = [1, 1]  # 每次搜索结果中要滚动浏览的视频数量范围，随机选择2-3个视频
-DEFAULT_MAX_COMMENT = [2, 2]  # 每个视频评论区滚动加载的次数范围，随机选择2-5次
-LIKE_PROBABILITY = 1  # 点赞操作的概率
-VISIT_ENABLE = 1  # 访问用户头像的概率
-PROFILE_FOLLOW_PROBABILITY = 1  # 在用户主页关注的概率
+KEYWORDS = ["御姐", "美食", "jk","美女", "巴黎世家"]  # 默认搜索关键词列表，脚本会使用这些关键词在小红书进行搜索
+DEFAULT_MAX_SCROLL_VIDEO = [2, 3]  # 每次搜索结果中要滚动浏览的视频数量范围，随机选择2-3个视频
+DEFAULT_MAX_COMMENT = [2, 5]  # 每个视频评论区滚动加载的次数范围，随机选择2-5次
+LIKE_PROBABILITY = 1  # 点赞操作的概率（百分比）
+VISIT_ENABLE = 1  # 访问用户头像的概率（百分比）
+PROFILE_FOLLOW_PROBABILITY = 1  # 在用户主页关注的概率（百分比）
 DEFAULT_LIKE_WAIT_MIN = 10  # 点赞操作后最小等待时间（秒）
 DEFAULT_LIKE_WAIT_MAX = 10  # 点赞操作后最大等待时间（秒）
 DEFAULT_VISIT_MIN = 2  # 访问用户主页后最小等待时间（秒）
 DEFAULT_VISIT_MAX = 5  # 访问用户主页后最大等待时间（秒）
 DEFAULT_PROFILE_WAIT_MIN = 5  # 在用户主页最小停留时间（秒）
 DEFAULT_PROFILE_WAIT_MAX = 10  # 在用户主页最大停留时间（秒）
-VIDEO_REPLY_RATE = 1  # 视频留言的概率
+VIDEO_REPLY_RATE = 1  # 视频留言的概率（百分比）
 VIDEO_REPLY_WAIT_MIN = 5  # 视频留言前最小等待时间（秒）
 VIDEO_REPLY_WAIT_MAX = 10  # 视频留言前最大等待时间（秒）
 MIN_FOLLOWS_PER_VIDEO = 2  # 每个视频最少关注数量
@@ -38,10 +41,10 @@ MAX_FOLLOWS_PER_VIDEO = 3  # 每个视频最多关注数量
 COMMENT_LIKE_COUNT_MIN = 4  # 每个视频最少点赞评论数
 COMMENT_LIKE_COUNT_MAX = 8  # 每个视频最多点赞评论数
 VIDEO_COMMENTS = "美女！-&-漂亮！-&-好美！-&-666-&-好看！-&-不错哦"  # 视频留言的备选文本，使用"-&-"分隔多个评论
-DEFAULT_BIT_BROWSER_IDS = [
+BIT_BROWSER_IDS = [  # 比特浏览器ID列表，脚本会使用所有这些ID并发执行任务
     "57bd9953b5364d3db5c4ac7cfbb9a1b3",
-
-]  # 默认比特浏览器ID列表，脚本会从中随机选择一个"4bbbe30c084a495796aaaff8a7082fda",
+    "4bbbe30c084a495796aaaff8a7082fda"
+]  # 默认比特浏览器ID列表
 ENABLE_LIKE = True  # 是否启用点赞功能
 ENABLE_FOLLOW = True  # 是否启用关注功能
 ENABLE_PROFILE_VISIT = True  # 是否启用访问用户主页功能
@@ -52,8 +55,13 @@ COMMENT_REPLY_PROBABILITY = 1  # 评论回复概率 (0-100)
 COMMENT_WAIT_MIN = 5  # 评论回复前最小等待时间（秒）
 COMMENT_WAIT_MAX = 8  # 评论回复前最大等待时间（秒)
 COMMENT_REPLIES = "牛-&-666"  # 回复评论的内容
-COMMENT_FILTER_KEYWORDS = ['的']  # 筛选评论区关键字
-BIT_BROWSER_IDS = DEFAULT_BIT_BROWSER_IDS[0]  # 默认比特浏览器ID
+COMMENT_FILTER_KEYWORDS = ['善']  # 筛选评论区关键字
+
+def get_browser_log_prefix(browser_id):
+    """生成浏览器日志前缀，格式为'浏览器 #编号'"""
+    # 提取浏览器ID的最后几位作为编号
+    browser_num = browser_id.split("-")[-1] if "-" in browser_id else browser_id[:8]
+    return f"[浏览器 #{browser_num}]"
 
 
 def rand_int_range(v, fallback_min=0, fallback_max=0):
@@ -631,9 +639,7 @@ def process_comments_sequentially(
         print(f"遍历处理评论区时出错: {e}")
 
 
-def process_search_keywords(driver):
-    raw_env = os.getenv("KEYWORDS")
-    kws = parse_keywords(raw_env)
+def process_search_keywords(driver, keywords, log_prefix=""):
     wait_seconds = 10
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
@@ -643,7 +649,8 @@ def process_search_keywords(driver):
         EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
     time.sleep(1)
-    for kw in kws:
+    for kw in keywords:
+        print(f"{log_prefix} 搜索关键词: {kw}")
         input_el = None
         btn_el = None
         for css in ["input.search-input", "input[placeholder*='搜索']", "input[autocomplete='off']"]:
@@ -654,7 +661,7 @@ def process_search_keywords(driver):
             except Exception:
                 continue
         if not input_el:
-            print("[xhs] 未找到搜索输入框")
+            print(f"{log_prefix} [xhs] 未找到搜索输入框")
             continue
         try:
             ensure_element_centered(driver, input_el)
@@ -697,12 +704,12 @@ def process_search_keywords(driver):
             scroll_element_sync(driver, body, 400, 1.0)
         except Exception:
             pass
-        print(f"[xhs] 搜索完成: {kw}")
+        print(f"{log_prefix} [xhs] 搜索完成: {kw}")
         try:
             items_to_visit = rand_int_range(DEFAULT_MAX_SCROLL_VIDEO, 2, 3)
             browse_search_results_and_operate(driver, items_to_visit=items_to_visit)
         except Exception as e:
-            print(f"[xhs] 浏览并操作失败: {e}")
+            print(f"{log_prefix} [xhs] 浏览并操作失败: {e}")
 
 
 def get_search_result_covers(driver):
@@ -748,24 +755,26 @@ def browse_search_results_and_operate(driver, items_to_visit=2):
         covers = get_search_result_covers(driver)
 
 
-def main():
+def run_worker(browser_id, browser_number, kw_queue, kw_lock, log_prefix=""):
     """
-    主函数 - 打开指定ID的比特浏览器并访问小红书链接
+    工作线程函数，为每个浏览器ID执行搜索任务
     """
-    browser_id = os.getenv("BIT_BROWSER_ID") or random.choice(DEFAULT_BIT_BROWSER_IDS)
-    print(f"正在打开比特浏览器 (ID: {browser_id})...")
+    log_prefix = get_browser_log_prefix(browser_id)
+    print(f"{log_prefix} 开始执行小红书自动化任务")
+    print(f"{log_prefix} 浏览器ID: {browser_id}")
+
     res = open_bit_browser(browser_id)
 
     if not res or "data" not in res:
-        print("无法打开比特浏览器")
+        print(f"{log_prefix} 无法打开比特浏览器")
         return
 
     driver_path = res["data"].get("driver")
     debugger_address = res["data"].get("http")
 
-    print(f"浏览器已成功打开")
-    print(f"驱动路径: {driver_path}")
-    print(f"调试地址: {debugger_address}")
+    print(f"{log_prefix} 浏览器已成功打开")
+    print(f"{log_prefix} 驱动路径: {driver_path}")
+    print(f"{log_prefix} 调试地址: {debugger_address}")
 
     try:
         from selenium.webdriver.chrome.options import Options
@@ -773,13 +782,80 @@ def main():
         chrome_options.add_experimental_option("debuggerAddress", debugger_address)
         chrome_service = Service(driver_path)
         driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-        print("WebDriver连接成功")
+        print(f"{log_prefix} WebDriver连接成功")
 
-        process_search_keywords(driver)
-        print("\n所有关键词处理完成，程序自动退出...")
+        # 获取关键词列表
+        with kw_lock:
+            keywords = list(kw_queue)  # 从队列获取关键词列表
+
+        # 执行搜索任务
+        process_search_keywords(driver, keywords, log_prefix)
+
+        print(f"{log_prefix} 所有关键词处理完成，浏览器任务完成...")
 
     except Exception as e:
-        print(f"连接浏览器或访问链接时出现错误: {e}")
+        print(f"{log_prefix} 连接浏览器或访问链接时出现错误: {e}")
+    finally:
+        try:
+            driver.quit()
+            print(f"{log_prefix} 浏览器已关闭")
+        except:
+            pass  # 如果driver没有成功初始化，忽略错误
+
+
+def main():
+    """
+    主函数 - 使用多个比特浏览器ID并发执行搜索任务
+    """
+    # 解析环境变量或使用默认值
+    raw_env = os.getenv("BIT_BROWSER_IDS")
+    if raw_env:
+        browser_ids = parse_keywords(raw_env)  # 使用现有的关键词解析函数来解析浏览器ID
+    else:
+        browser_ids = BIT_BROWSER_IDS
+
+    raw_env = os.getenv("KEYWORDS")
+    keywords = parse_keywords(raw_env)
+
+    print(f"使用浏览器ID列表: {browser_ids}")
+    print(f"使用关键词列表: {keywords}")
+
+    if not browser_ids:
+        print("没有配置浏览器ID，程序退出")
+        return
+
+    if not keywords:
+        print("没有配置关键词，程序退出")
+        return
+
+    # 创建关键词队列和锁
+    kw_queue = deque(keywords)
+    kw_lock = threading.Lock()
+
+    if len(browser_ids) <= 1:
+        # 如果只有一个浏览器ID，直接运行
+        run_worker(browser_ids[0], 1, kw_queue, kw_lock)
+        return
+
+    # 多线程执行
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(browser_ids)) as executor:
+        futures = []
+        for i, bid in enumerate(browser_ids):
+            # 提交任务到线程池
+            future = executor.submit(run_worker, bid, i + 1, kw_queue, kw_lock, "")
+            futures.append(future)
+            # 间隔启动浏览器，避免同时启动造成资源竞争
+            if i < len(browser_ids) - 1:
+                time.sleep(2.5)
+
+        # 等待所有任务完成
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()  # 获取执行结果，如有异常会抛出
+            except Exception as e:
+                print(f"[并发] 线程执行出错: {e}")
+
+    print("\n所有浏览器任务完成，程序退出...")
 
 
 if __name__ == "__main__":
