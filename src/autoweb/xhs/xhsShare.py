@@ -187,6 +187,43 @@ def open_bit_browser(browser_id: str) -> dict:
         return {}
 
 
+def process_single_url(driver, url, log_prefix=""):
+    """
+    处理单个小红书分享链接
+    """
+    # 清洗单个URL
+    cleaned_urls = clean_urls([url])
+    
+    if not cleaned_urls:
+        print(f"{log_prefix} URL清洗失败: {url}")
+        return
+    
+    url = cleaned_urls[0]  # 获取清洗后的URL
+    
+    wait_seconds = 10
+    WebDriverWait(driver, max(10, wait_seconds)).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
+    
+    print(f"{log_prefix} 访问链接: {url}")
+    try:
+        driver.get(url)
+        WebDriverWait(driver, max(10, wait_seconds)).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        time.sleep(2)
+        
+        # 使用base模块中的方法对视频进行操作处理
+        visit_video_and_operate(driver)
+        
+        print(f"{log_prefix} 链接 {url} 处理完成")
+    except Exception as e:
+        print(f"{log_prefix} 处理链接 {url} 时出现错误: {e}")
+    
+    # 在处理不同链接之间添加间隔
+    time.sleep(2)
+
+
 def process_share_urls(driver, urls, log_prefix=""):
     """
     处理小红书分享链接列表
@@ -248,12 +285,18 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, log_prefix=""):
         driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
         print(f"{log_prefix} WebDriver连接成功")
 
-        # 获取链接列表
-        with url_lock:
-            urls = list(url_queue)  # 从队列获取链接列表
-
-        # 执行分享链接任务
-        process_share_urls(driver, urls, log_prefix)
+        # 从队列中获取链接并处理，直到队列为空
+        while True:
+            with url_lock:
+                if url_queue:  # 检查队列是否非空
+                    url = url_queue.popleft()  # 从队列左侧取出一个URL
+                else:
+                    print(f"{log_prefix} 队列已空，浏览器任务完成")
+                    break
+            
+            print(f"{log_prefix} 处理链接: {url}")
+            # 处理单个链接
+            process_single_url(driver, url, log_prefix)
 
         print(f"{log_prefix} 所有链接处理完成，浏览器任务完成...")
 
