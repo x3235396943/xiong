@@ -18,18 +18,73 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 # 单文件常量与解析
-SEARCH_KEYWORDS_DEFAULT = ["美女","美食", "穿搭", "旅行"]
-BROWSER_ID_DEFAULT = "57bd9953b5364d3db5c4ac7cfbb9a1b3"
+KEYWORDS = ["御姐", "美食", "穿搭", "旅行"]  # 默认搜索关键词列表，脚本会使用这些关键词在小红书进行搜索
+DEFAULT_MAX_SCROLL_VIDEO = [1, 1]  # 每次搜索结果中要滚动浏览的视频数量范围，随机选择2-3个视频
+DEFAULT_MAX_COMMENT = [2, 2]  # 每个视频评论区滚动加载的次数范围，随机选择2-5次
+LIKE_PROBABILITY = 1  # 点赞操作的概率（百分比）
+VISIT_ENABLE = 1  # 访问用户头像的概率（百分比）
+PROFILE_FOLLOW_PROBABILITY = 1  # 在用户主页关注的概率（百分比）
+DEFAULT_LIKE_WAIT_MIN = 10  # 点赞操作后最小等待时间（秒）
+DEFAULT_LIKE_WAIT_MAX = 10  # 点赞操作后最大等待时间（秒）
+DEFAULT_VISIT_MIN = 2  # 访问用户主页后最小等待时间（秒）
+DEFAULT_VISIT_MAX = 5  # 访问用户主页后最大等待时间（秒）
+DEFAULT_PROFILE_WAIT_MIN = 5  # 在用户主页最小停留时间（秒）
+DEFAULT_PROFILE_WAIT_MAX = 10  # 在用户主页最大停留时间（秒）
+VIDEO_REPLY_RATE = 1  # 视频留言的概率（百分比）
+VIDEO_REPLY_WAIT_MIN = 5  # 视频留言前最小等待时间（秒）
+VIDEO_REPLY_WAIT_MAX = 10  # 视频留言前最大等待时间（秒）
+MIN_FOLLOWS_PER_VIDEO = 2  # 每个视频最少关注数量
+MAX_FOLLOWS_PER_VIDEO = 3  # 每个视频最多关注数量
+COMMENT_LIKE_COUNT_MIN = 4  # 每个视频最少点赞评论数
+COMMENT_LIKE_COUNT_MAX = 8  # 每个视频最多点赞评论数
+VIDEO_COMMENTS = "美女！-&-漂亮！-&-好美！-&-666-&-好看！-&-不错哦"  # 视频留言的备选文本，使用"-&-"分隔多个评论
+DEFAULT_BIT_BROWSER_IDS = [
+    "57bd9953b5364d3db5c4ac7cfbb9a1b3",
+
+]  # 默认比特浏览器ID列表，脚本会从中随机选择一个"4bbbe30c084a495796aaaff8a7082fda",
+ENABLE_LIKE = True  # 是否启用点赞功能
+ENABLE_FOLLOW = True  # 是否启用关注功能
+ENABLE_PROFILE_VISIT = True  # 是否启用访问用户主页功能
+ENABLE_VIDEO_COMMENT = True  # 是否启用视频留言功能
+BIT_BROWSER_IDS = DEFAULT_BIT_BROWSER_IDS[0]  # 默认比特浏览器ID
+
+
+def rand_int_range(v, fallback_min=0, fallback_max=0):
+    try:
+        if isinstance(v, (list, tuple)) and len(v) >= 2:
+            a, b = int(v[0]), int(v[1])
+            lo, hi = (a, b) if a <= b else (b, a)
+            return random.randint(lo, hi)
+    except Exception:
+        pass
+    return random.randint(int(fallback_min), int(fallback_max))
+
+
+def rand_sleep(min_s, max_s):
+    try:
+        a, b = float(min_s), float(max_s)
+        lo, hi = (a, b) if a <= b else (b, a)
+        time.sleep(random.uniform(lo, hi))
+    except Exception:
+        time.sleep(0.5)
+
+
+def parse_video_comments(raw: str):
+    if not raw:
+        return []
+    parts = [x.strip() for x in str(raw).split("-&-")]
+    return [x for x in parts if x]
+
 
 def parse_keywords(raw):
     s = raw
     if not s:
-        return SEARCH_KEYWORDS_DEFAULT[:]
+        return KEYWORDS[:]
     try:
         if isinstance(s, str):
             t = s.strip()
             if not t:
-                return SEARCH_KEYWORDS_DEFAULT[:]
+                return KEYWORDS[:]
             # 尝试按 JSON 列表解析
             try:
                 data = json.loads(t)
@@ -44,8 +99,9 @@ def parse_keywords(raw):
         elif isinstance(s, list):
             return [str(x).strip() for x in s if str(x).strip()]
     except Exception:
-        return SEARCH_KEYWORDS_DEFAULT[:]
-    return SEARCH_KEYWORDS_DEFAULT[:]
+        return KEYWORDS[:]
+    return KEYWORDS[:]
+
 
 def clear_input(element):
     import sys
@@ -234,7 +290,27 @@ def scroll_to_load_more_comments(driver, count: int = 5, delta_y: int = 400, sle
         print(f"第 {i + 1} 次滚动完成")
 
 
-def process_comments_sequentially(driver, enable_like=True, enable_reply=True, enable_visit_avatar=True, max_count=None):
+def process_comments_sequentially(
+        driver,
+        enable_like=ENABLE_LIKE,
+        enable_reply=False,
+        enable_visit_avatar=ENABLE_PROFILE_VISIT,
+        max_count=None,
+        like_probability=LIKE_PROBABILITY,
+        visit_probability=VISIT_ENABLE,
+        follow_probability=PROFILE_FOLLOW_PROBABILITY,
+        like_wait_min=DEFAULT_LIKE_WAIT_MIN,
+        like_wait_max=DEFAULT_LIKE_WAIT_MAX,
+        profile_wait_min=DEFAULT_PROFILE_WAIT_MIN,
+        profile_wait_max=DEFAULT_PROFILE_WAIT_MAX,
+        follow_wait_min=DEFAULT_VISIT_MIN,
+        follow_wait_max=DEFAULT_VISIT_MAX,
+        min_follows_per_video=MIN_FOLLOWS_PER_VIDEO,
+        max_follows_per_video=MAX_FOLLOWS_PER_VIDEO,
+        comment_like_count_min=COMMENT_LIKE_COUNT_MIN,
+        comment_like_count_max=COMMENT_LIKE_COUNT_MAX,
+        comment_scroll_minmax=DEFAULT_MAX_COMMENT,
+):
     """
     逐条遍历处理评论区的点赞和回复操作
 
@@ -254,8 +330,8 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
             "div.comments-container > div.list-container > div.parent-comment"
         )))
 
-        # 滚动加载更多评论
-        scroll_to_load_more_comments(driver)
+        scroll_times = rand_int_range(comment_scroll_minmax, 2, 5)
+        scroll_to_load_more_comments(driver, count=scroll_times)
 
         # 获取所有评论项
         comment_items = driver.find_elements(
@@ -265,9 +341,18 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
 
         print(f"总共找到 {len(comment_items)} 条评论")
 
+        like_target = rand_int_range([comment_like_count_min, comment_like_count_max], 0, 0) if enable_like else 0
+        profile_target = rand_int_range([min_follows_per_video, max_follows_per_video], 0,
+                                        0) if enable_visit_avatar else 0
+        liked_count = 0
+        visited_count = 0
+        followed_count = 0
+
         # 逐条处理所有评论
         for i, comment_item in enumerate(comment_items):
             if max_count is not None and i >= max_count:
+                break
+            if liked_count >= like_target and visited_count >= profile_target:
                 break
             print(f"\n处理第 {i + 1} 条评论:")
 
@@ -289,8 +374,8 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                 except:
                     print("  无法获取评论内容")
 
-                # 访问头像功能
-                if enable_visit_avatar:
+                if enable_visit_avatar and visited_count < profile_target and random.randint(1, 100) <= int(
+                        visit_probability):
                     try:
                         avatar_link = item.find_element(
                             By.CSS_SELECTOR,
@@ -303,15 +388,21 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                         # 点击头像链接
                         driver.execute_script("arguments[0].click();", avatar_link)
                         print("  已点击头像")
-                        time.sleep(2)  # 等待页面加载
+                        time.sleep(2)
 
                         # 切换到新标签页
                         all_handles = driver.window_handles
                         if len(all_handles) > 1:
                             driver.switch_to.window(all_handles[-1])
+                            visited_count += 1
                             print("  已切换到用户主页")
-                            time.sleep(3)  # 等待页面加载
-                            follow_user_if_needed(driver)
+                            rand_sleep(profile_wait_min, profile_wait_max)
+                            if ENABLE_FOLLOW and random.randint(1, 100) <= int(
+                                    follow_probability) and followed_count < profile_target:
+                                followed = follow_user_if_needed(driver)
+                                if followed:
+                                    followed_count += 1
+                                    rand_sleep(follow_wait_min, follow_wait_max)
                             # 关闭用户主页标签页，切回原页面
                             driver.close()
                             driver.switch_to.window(all_handles[0])
@@ -323,10 +414,13 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                     except:
                         print("  未找到头像链接或点击失败")
                 else:
-                    print("  访问头像功能已禁用")
+                    if not enable_visit_avatar:
+                        print("  访问头像功能已禁用")
+                    else:
+                        print("  访问头像已跳过")
 
                 # 点赞按钮
-                if enable_like:
+                if enable_like and liked_count < like_target and random.randint(1, 100) <= int(like_probability):
                     try:
                         # 使用完整的CSS选择器路径在parent-comment元素下寻找点赞按钮
                         like_btn = comment_item.find_element(
@@ -340,12 +434,16 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                         # 使用JavaScript点击，避免被其他元素遮挡
                         driver.execute_script("arguments[0].click();", like_btn)
                         print("  已点击点赞按钮")
-                        time.sleep(0.5)  # 您偏好的点击间隔时间
+                        liked_count += 1
+                        rand_sleep(like_wait_min, like_wait_max)
                     except:
                         print("  未找到点赞按钮或点击失败")
                 else:
-                    print("  点赞功能已禁用")
-                
+                    if not enable_like:
+                        print("  点赞功能已禁用")
+                    else:
+                        print("  点赞已跳过")
+
                 # 回复按钮
                 if enable_reply:
                     try:
@@ -366,11 +464,13 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                             reply_text = "牛"
                             wait = WebDriverWait(driver, 5)
                             try:
-                                editor = comment_item.find_element(By.CSS_SELECTOR, "div.reply-box [contenteditable='true']")
+                                editor = comment_item.find_element(By.CSS_SELECTOR,
+                                                                   "div.reply-box [contenteditable='true']")
                             except Exception:
                                 try:
                                     editor = wait.until(EC.presence_of_element_located(
-                                        (By.XPATH, ".//*[contains(@placeholder,'回复') or contains(@placeholder,'评论') or @contenteditable='true']")
+                                        (By.XPATH,
+                                         ".//*[contains(@placeholder,'回复') or contains(@placeholder,'评论') or @contenteditable='true']")
                                     ))
                                 except Exception:
                                     editor = None
@@ -388,7 +488,8 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                                     pass
                                 try:
                                     from selenium.webdriver.common.action_chains import ActionChains
-                                    ActionChains(driver).move_to_element(editor).click(editor).send_keys(reply_text).perform()
+                                    ActionChains(driver).move_to_element(editor).click(editor).send_keys(
+                                        reply_text).perform()
                                     print("  已输入回复内容")
                                 except Exception:
                                     try:
@@ -411,7 +512,7 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
                                 time.sleep(0.5)
                         except Exception as e:
                             print(f"  回复输入或发送失败: {e}")
-                        
+
                     except:
                         print("  未找到回复按钮或点击失败")
                 else:
@@ -429,9 +530,13 @@ def process_comments_sequentially(driver, enable_like=True, enable_reply=True, e
 
             except Exception as e:
                 print(f"  处理第 {i + 1} 条评论时出错: {e}")
+            
+            # 在处理每条评论之间添加随机间隔，模拟人工浏览
+            time.sleep(random.uniform(0.5, 1.5))
 
     except Exception as e:
         print(f"遍历处理评论区时出错: {e}")
+
 
 def process_search_keywords(driver):
     raw_env = os.getenv("KEYWORDS")
@@ -501,9 +606,11 @@ def process_search_keywords(driver):
             pass
         print(f"[xhs] 搜索完成: {kw}")
         try:
-            browse_search_results_and_operate(driver, items_to_visit=2, actions_per_video=3)
+            items_to_visit = rand_int_range(DEFAULT_MAX_SCROLL_VIDEO, 2, 3)
+            browse_search_results_and_operate(driver, items_to_visit=items_to_visit)
         except Exception as e:
             print(f"[xhs] 浏览并操作失败: {e}")
+
 
 def get_search_result_covers(driver):
     els = driver.find_elements(By.CSS_SELECTOR, "section.note-item a.cover.mask.ld")
@@ -511,17 +618,20 @@ def get_search_result_covers(driver):
         els = driver.find_elements(By.CSS_SELECTOR, "section.note-item a.cover")
     return els
 
-def visit_video_and_operate(driver, actions_per_video=3, enable_comment=True):
-    # 视频留言功能
-    if enable_comment:
-        comment_texts = ["这个视频氛围感太强了，点赞支持一下", "内容很棒，学习了", "视频很有创意，支持一下"]
-        selected_comment = random.choice(comment_texts)
-        send_video_comment(driver, selected_comment)
-        time.sleep(0.5)  # 您偏好的点击间隔时间
-    
-    process_comments_sequentially(driver, enable_like=True, enable_reply=False, enable_visit_avatar=True, max_count=actions_per_video)
 
-def browse_search_results_and_operate(driver, items_to_visit=2, actions_per_video=3):
+def visit_video_and_operate(driver):
+    if ENABLE_VIDEO_COMMENT and random.randint(1, 100) <= int(VIDEO_REPLY_RATE):
+        rand_sleep(VIDEO_REPLY_WAIT_MIN, VIDEO_REPLY_WAIT_MAX)
+        comment_texts = parse_video_comments(VIDEO_COMMENTS)
+        if comment_texts:
+            selected_comment = random.choice(comment_texts)
+            send_video_comment(driver, selected_comment)
+            time.sleep(0.5)
+
+    process_comments_sequentially(driver)
+
+
+def browse_search_results_and_operate(driver, items_to_visit=2):
     covers = get_search_result_covers(driver)
     n = min(items_to_visit, len(covers))
     for i in range(n):
@@ -534,7 +644,7 @@ def browse_search_results_and_operate(driver, items_to_visit=2, actions_per_vide
         if len(handles) > 1:
             driver.switch_to.window(handles[-1])
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        visit_video_and_operate(driver, actions_per_video)
+        visit_video_and_operate(driver)
         if len(driver.window_handles) > 1:
             driver.close()
             driver.switch_to.window(driver.window_handles[0])
@@ -544,11 +654,12 @@ def browse_search_results_and_operate(driver, items_to_visit=2, actions_per_vide
         time.sleep(1)
         covers = get_search_result_covers(driver)
 
+
 def main():
     """
     主函数 - 打开指定ID的比特浏览器并访问小红书链接
     """
-    browser_id = os.getenv("BIT_BROWSER_ID") or BROWSER_ID_DEFAULT
+    browser_id = os.getenv("BIT_BROWSER_ID") or random.choice(DEFAULT_BIT_BROWSER_IDS)
     print(f"正在打开比特浏览器 (ID: {browser_id})...")
     res = open_bit_browser(browser_id)
 
