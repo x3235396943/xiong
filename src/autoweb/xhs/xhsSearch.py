@@ -322,6 +322,79 @@ def scroll_to_load_more_comments(driver, count: int = 5, delta_y: int = 400, sle
         print(f"第 {i + 1} 次滚动完成")
 
 
+def process_single_keyword(driver, keyword, log_prefix=""):
+    wait_seconds = 10
+    WebDriverWait(driver, max(10, wait_seconds)).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
+    driver.get("https://www.xiaohongshu.com")
+    WebDriverWait(driver, max(10, wait_seconds)).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
+    time.sleep(1)
+    
+    print(f"{log_prefix} 搜索关键词: {keyword}")
+    input_el = None
+    btn_el = None
+    for css in ["input.search-input", "input[placeholder*='搜索']", "input[autocomplete='off']"]:
+        try:
+            input_el = driver.find_element(By.CSS_SELECTOR, css)
+            if input_el:
+                break
+        except Exception:
+            continue
+    if not input_el:
+        print(f"{log_prefix} [xhs] 未找到搜索输入框")
+        return
+    try:
+        ensure_element_centered(driver, input_el)
+    except Exception:
+        pass
+    try:
+        clear_input(input_el)
+    except Exception:
+        pass
+    input_el.click()
+    time.sleep(0.2)
+    from selenium.webdriver.common.action_chains import ActionChains
+    ActionChains(driver).send_keys(keyword).perform()
+    time.sleep(0.2)
+    for css in [".search-icon", "button.search-icon", "[class*='search'] svg"]:
+        try:
+            btn_el = driver.find_element(By.CSS_SELECTOR, css)
+            if btn_el:
+                break
+        except Exception:
+            continue
+    if btn_el is not None:
+        try:
+            ensure_element_centered(driver, btn_el)
+        except Exception:
+            pass
+        try:
+            driver.execute_script("arguments[0].click();", btn_el)
+        except Exception:
+            btn_el.click()
+    else:
+        from selenium.webdriver.common.keys import Keys
+        ActionChains(driver).send_keys(Keys.RETURN).perform()
+    WebDriverWait(driver, max(10, wait_seconds)).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
+    time.sleep(1)
+    try:
+        body = driver.find_element(By.TAG_NAME, "body")
+        scroll_element_sync(driver, body, 400, 1.0)
+    except Exception:
+        pass
+    print(f"{log_prefix} [xhs] 搜索完成: {keyword}")
+    try:
+        items_to_visit = rand_int_range(DEFAULT_MAX_SCROLL_VIDEO, 2, 3)
+        browse_search_results_and_operate(driver, items_to_visit=items_to_visit)
+    except Exception as e:
+        print(f"{log_prefix} [xhs] 浏览并操作失败: {e}")
+
+
 def process_search_keywords(driver, keywords, log_prefix=""):
     wait_seconds = 10
     WebDriverWait(driver, max(10, wait_seconds)).until(
@@ -424,12 +497,18 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock, log_prefix=""):
         driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
         print(f"{log_prefix} WebDriver连接成功")
 
-        # 获取关键词列表
-        with kw_lock:
-            keywords = list(kw_queue)  # 从队列获取关键词列表
-
-        # 执行搜索任务
-        process_search_keywords(driver, keywords, log_prefix)
+        # 从队列中获取关键词并处理，直到队列为空
+        while True:
+            with kw_lock:
+                if kw_queue:  # 检查队列是否非空
+                    keyword = kw_queue.popleft()  # 从队列左侧取出一个关键词
+                else:
+                    print(f"{log_prefix} 队列已空，浏览器任务完成")
+                    break
+            
+            print(f"{log_prefix} 处理关键词: {keyword}")
+            # 处理单个关键词
+            process_single_keyword(driver, keyword, log_prefix)
 
         print(f"{log_prefix} 所有关键词处理完成，浏览器任务完成...")
 
