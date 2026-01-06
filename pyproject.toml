@@ -34,7 +34,7 @@ web = "python -m autoweb.main"
 server = "python -m autoweb.server"
 
 [tool.pixi.tasks.build-web]
-cmd = "pyinstaller --onefile --noconsole --icon assets\\ICO.ico --name web .\\src\\in.py"
+cmd = "python install/build.py"
 
 [tool.pyright]
 # 所有虚拟环境的父目录
