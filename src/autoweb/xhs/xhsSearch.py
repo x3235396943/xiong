@@ -20,42 +20,58 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# 单文件常量与解析
-KEYWORDS = ["御姐", "美食", "jk","美女", "巴黎世家"]  # 默认搜索关键词列表，脚本会使用这些关键词在小红书进行搜索
-DEFAULT_MAX_SCROLL_VIDEO = [2, 3]  # 每次搜索结果中要滚动浏览的视频数量范围，随机选择2-3个视频
-DEFAULT_MAX_COMMENT = [2, 5]  # 每个视频评论区滚动加载的次数范围，随机选择2-5次
-LIKE_PROBABILITY = 1  # 点赞操作的概率（百分比）
-VISIT_ENABLE = 1  # 访问用户头像的概率（百分比）
-PROFILE_FOLLOW_PROBABILITY = 1  # 在用户主页关注的概率（百分比）
-DEFAULT_LIKE_WAIT_MIN = 10  # 点赞操作后最小等待时间（秒）
-DEFAULT_LIKE_WAIT_MAX = 10  # 点赞操作后最大等待时间（秒）
-DEFAULT_VISIT_MIN = 2  # 访问用户主页后最小等待时间（秒）
-DEFAULT_VISIT_MAX = 5  # 访问用户主页后最大等待时间（秒）
-DEFAULT_PROFILE_WAIT_MIN = 5  # 在用户主页最小停留时间（秒）
-DEFAULT_PROFILE_WAIT_MAX = 10  # 在用户主页最大停留时间（秒）
-VIDEO_REPLY_RATE = 1  # 视频留言的概率（百分比）
-VIDEO_REPLY_WAIT_MIN = 5  # 视频留言前最小等待时间（秒）
-VIDEO_REPLY_WAIT_MAX = 10  # 视频留言前最大等待时间（秒）
-MIN_FOLLOWS_PER_VIDEO = 2  # 每个视频最少关注数量
-MAX_FOLLOWS_PER_VIDEO = 3  # 每个视频最多关注数量
-COMMENT_LIKE_COUNT_MIN = 4  # 每个视频最少点赞评论数
-COMMENT_LIKE_COUNT_MAX = 8  # 每个视频最多点赞评论数
-VIDEO_COMMENTS = "美女！-&-漂亮！-&-好美！-&-666-&-好看！-&-不错哦"  # 视频留言的备选文本，使用"-&-"分隔多个评论
-BIT_BROWSER_IDS = [  # 比特浏览器ID列表，脚本会使用所有这些ID并发执行任务
-    "57bd9953b5364d3db5c4ac7cfbb9a1b3",
-    "4bbbe30c084a495796aaaff8a7082fda"
-]  # 默认比特浏览器ID列表
-ENABLE_LIKE = True  # 是否启用点赞功能
-ENABLE_FOLLOW = True  # 是否启用关注功能
-ENABLE_PROFILE_VISIT = True  # 是否启用访问用户主页功能
-ENABLE_VIDEO_COMMENT = True  # 是否启用视频留言功能
-ENABLE_COMMENT_REPLY = True  # 是否启用评论回复功能
-ENABLE_SEARCH_KEYWORDS = True  # 是否启用搜索关键字功能
-COMMENT_REPLY_PROBABILITY = 1  # 评论回复概率 (0-100)
-COMMENT_WAIT_MIN = 5  # 评论回复前最小等待时间（秒）
-COMMENT_WAIT_MAX = 8  # 评论回复前最大等待时间（秒)
-COMMENT_REPLIES = "牛-&-666"  # 回复评论的内容
-COMMENT_FILTER_KEYWORDS = ['善']  # 筛选评论区关键字
+from ..tools.config import XhsConfig, get_config
+
+# 初始化小红书配置
+xhs_config = XhsConfig()
+
+# 搜索关键词
+KEYWORDS = xhs_config.KEYWORDS
+
+# 视频浏览相关参数
+DEFAULT_MAX_SCROLL_VIDEO = xhs_config.MAX_SCROLL_VIDEO
+DEFAULT_MAX_COMMENT = xhs_config.MAX_COMMENT
+
+# 互动操作相关参数
+LIKE_PROBABILITY = xhs_config.LIKE_PROBABILITY
+VISIT_ENABLE = xhs_config.VISIT_ENABLE
+PROFILE_FOLLOW_PROBABILITY = xhs_config.PROFILE_FOLLOW_PROBABILITY
+DEFAULT_LIKE_WAIT_MIN = xhs_config.LIKE_WAIT_MIN
+DEFAULT_LIKE_WAIT_MAX = xhs_config.LIKE_WAIT_MAX
+DEFAULT_VISIT_MIN = xhs_config.VISIT_MIN
+DEFAULT_VISIT_MAX = xhs_config.VISIT_MAX
+DEFAULT_PROFILE_WAIT_MIN = xhs_config.COMMENT_WAIT_MIN
+DEFAULT_PROFILE_WAIT_MAX = xhs_config.COMMENT_WAIT_MAX
+VIDEO_REPLY_RATE = xhs_config.VIDEO_REPLY_RATE
+VIDEO_REPLY_WAIT_MIN = xhs_config.VIDEO_REPLY_WAIT_MIN
+VIDEO_REPLY_WAIT_MAX = xhs_config.VIDEO_REPLY_WAIT_MAX
+
+# 新增：每条视频点赞和关注上限参数
+MIN_FOLLOWS_PER_VIDEO = xhs_config.MIN_FOLLOWS_PER_VIDEO
+MAX_FOLLOWS_PER_VIDEO = xhs_config.MAX_FOLLOWS_PER_VIDEO
+COMMENT_LIKE_COUNT_MIN = xhs_config.COMMENT_LIKE_COUNT_MIN
+COMMENT_LIKE_COUNT_MAX = xhs_config.COMMENT_LIKE_COUNT_MAX
+
+# 视频评论内容列表
+VIDEO_COMMENTS = xhs_config.VIDEO_COMMENTS
+BIT_BROWSER_IDS = xhs_config.BIT_BROWSER_IDS
+
+# 评论关键词过滤
+COMMENT_FILTER_KEYWORDS = xhs_config.COMMENT_FILTER_KEYWORDS
+
+# 是否启用功能
+ENABLE_LIKE = xhs_config.ENABLE_LIKE
+ENABLE_FOLLOW = xhs_config.ENABLE_FOLLOW
+ENABLE_PROFILE_VISIT = xhs_config.ENABLE_PROFILE_VISIT
+ENABLE_VIDEO_COMMENT = xhs_config.ENABLE_VIDEO_COMMENT
+ENABLE_SEARCH_KEYWORDS = xhs_config.ENABLE_SEARCH_KEYWORDS
+ENABLE_COMMENT_REPLY = xhs_config.ENABLE_COMMENT_REPLY
+
+# 评论相关参数
+COMMENT_REPLY_PROBABILITY = xhs_config.COMMENT_REPLY_PROBABILITY
+COMMENT_WAIT_MIN = xhs_config.COMMENT_WAIT_MIN
+COMMENT_WAIT_MAX = xhs_config.COMMENT_WAIT_MAX
+COMMENT_REPLIES = xhs_config.COMMENT_REPLIES
 
 def get_browser_log_prefix(browser_id):
     """生成浏览器日志前缀，格式为'浏览器 #编号'"""
@@ -807,7 +823,10 @@ def main():
     """
     主函数 - 使用多个比特浏览器ID并发执行搜索任务
     """
-    # 解析环境变量或使用默认值
+    # 获取配置
+    cfg = get_config()
+    
+    # 解析环境变量或使用配置中心的值
     raw_env = os.getenv("BIT_BROWSER_IDS")
     if raw_env:
         browser_ids = parse_keywords(raw_env)  # 使用现有的关键词解析函数来解析浏览器ID
@@ -816,6 +835,12 @@ def main():
 
     raw_env = os.getenv("KEYWORDS")
     keywords = parse_keywords(raw_env)
+    
+    # 如果配置中心有值，优先使用配置中心的值
+    if hasattr(cfg, 'BIT_BROWSER_IDS') and cfg.BIT_BROWSER_IDS:
+        browser_ids = cfg.BIT_BROWSER_IDS
+    if hasattr(cfg, 'KEYWORDS') and cfg.KEYWORDS:
+        keywords = cfg.KEYWORDS
 
     print(f"使用浏览器ID列表: {browser_ids}")
     print(f"使用关键词列表: {keywords}")
