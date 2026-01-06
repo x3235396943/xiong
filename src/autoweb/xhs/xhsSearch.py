@@ -330,16 +330,18 @@ def process_comments_sequentially(
             "div.comments-container > div.list-container > div.parent-comment"
         )))
 
+        # 初始化变量
         scroll_times = rand_int_range(comment_scroll_minmax, 2, 5)
-        scroll_to_load_more_comments(driver, count=scroll_times)
-
-        # 获取所有评论项
+        processed_count = 0  # 已处理的评论数量
+        scroll_done = 0      # 已滚动次数
+        
+        # 获取初始评论项
         comment_items = driver.find_elements(
             By.CSS_SELECTOR,
             "div.comments-container > div.list-container > div.parent-comment"
         )
 
-        print(f"总共找到 {len(comment_items)} 条评论")
+        print(f"初始找到 {len(comment_items)} 条评论")
 
         like_target = rand_int_range([comment_like_count_min, comment_like_count_max], 0, 0) if enable_like else 0
         profile_target = rand_int_range([min_follows_per_video, max_follows_per_video], 0,
@@ -348,191 +350,226 @@ def process_comments_sequentially(
         visited_count = 0
         followed_count = 0
 
-        # 逐条处理所有评论
-        for i, comment_item in enumerate(comment_items):
-            if max_count is not None and i >= max_count:
-                break
-            if liked_count >= like_target and visited_count >= profile_target:
-                break
-            print(f"\n处理第 {i + 1} 条评论:")
+        # 循环处理评论，直到达到目标或滚动次数用完
+        while scroll_done < scroll_times:
+            # 重新获取评论项，因为滚动后可能会加载新评论
+            comment_items = driver.find_elements(
+                By.CSS_SELECTOR,
+                "div.comments-container > div.list-container > div.parent-comment"
+            )
 
-            try:
-                # 获取评论容器的第一个子元素
-                item = comment_item.find_element(
-                    By.CSS_SELECTOR,
-                    "div:first-child"
-                )
+            # 检查是否已达到目标或评论数量
+            if (liked_count >= like_target and visited_count >= profile_target) or \
+               (max_count is not None and processed_count >= max_count):
+                break
 
-                # 提取评论文本
+            # 遍历当前页面的评论
+            for i, comment_item in enumerate(comment_items):
+                # 检查是否已达到目标或评论数量
+                if (liked_count >= like_target and visited_count >= profile_target) or \
+                   (max_count is not None and processed_count >= max_count):
+                    break
+                    
+                print(f"\n处理第 {processed_count + 1} 条评论:")
+
                 try:
-                    comment_text = item.find_element(
+                    # 获取评论容器的第一个子元素
+                    item = comment_item.find_element(
                         By.CSS_SELECTOR,
-                        "div.content span span"
-                    ).text
-                    print(f"  评论内容: {comment_text[:50]}..." if len(
-                        comment_text) > 50 else f"  评论内容: {comment_text}")
-                except:
-                    print("  无法获取评论内容")
+                        "div:first-child"
+                    )
 
-                if enable_visit_avatar and visited_count < profile_target and random.randint(1, 100) <= int(
-                        visit_probability):
+                    # 提取评论文本
                     try:
-                        avatar_link = item.find_element(
+                        comment_text = item.find_element(
                             By.CSS_SELECTOR,
-                            "div.avatar > a"
-                        )
-                        try:
-                            ensure_element_centered(driver, avatar_link)
-                        except Exception:
-                            pass
-                        # 点击头像链接
-                        driver.execute_script("arguments[0].click();", avatar_link)
-                        print("  已点击头像")
-                        time.sleep(2)
-
-                        # 切换到新标签页
-                        all_handles = driver.window_handles
-                        if len(all_handles) > 1:
-                            driver.switch_to.window(all_handles[-1])
-                            visited_count += 1
-                            print("  已切换到用户主页")
-                            rand_sleep(profile_wait_min, profile_wait_max)
-                            if ENABLE_FOLLOW and random.randint(1, 100) <= int(
-                                    follow_probability) and followed_count < profile_target:
-                                followed = follow_user_if_needed(driver)
-                                if followed:
-                                    followed_count += 1
-                                    rand_sleep(follow_wait_min, follow_wait_max)
-                            # 关闭用户主页标签页，切回原页面
-                            driver.close()
-                            driver.switch_to.window(all_handles[0])
-                            print("  已关闭用户主页，切回原页面")
-                        else:
-                            print("  未打开新标签页")
-
-                        time.sleep(0.5)
+                            "div.content span span"
+                        ).text
+                        print(f"  评论内容: {comment_text[:50]}..." if len(
+                            comment_text) > 50 else f"  评论内容: {comment_text}")
                     except:
-                        print("  未找到头像链接或点击失败")
-                else:
-                    if not enable_visit_avatar:
-                        print("  访问头像功能已禁用")
-                    else:
-                        print("  访问头像已跳过")
+                        print("  无法获取评论内容")
 
-                # 点赞按钮
-                if enable_like and liked_count < like_target and random.randint(1, 100) <= int(like_probability):
-                    try:
-                        # 使用完整的CSS选择器路径在parent-comment元素下寻找点赞按钮
-                        like_btn = comment_item.find_element(
-                            By.CSS_SELECTOR,
-                            "div:first-child div.interactions span.like-wrapper"
-                        )
+                    if enable_visit_avatar and visited_count < profile_target and random.randint(1, 100) <= int(
+                            visit_probability):
                         try:
-                            ensure_element_centered(driver, like_btn)
-                        except Exception:
-                            pass
-                        # 使用JavaScript点击，避免被其他元素遮挡
-                        driver.execute_script("arguments[0].click();", like_btn)
-                        print("  已点击点赞按钮")
-                        liked_count += 1
-                        rand_sleep(like_wait_min, like_wait_max)
-                    except:
-                        print("  未找到点赞按钮或点击失败")
-                else:
-                    if not enable_like:
-                        print("  点赞功能已禁用")
-                    else:
-                        print("  点赞已跳过")
-
-                # 回复按钮
-                if enable_reply:
-                    try:
-                        # 使用完整的CSS选择器路径在parent-comment元素下寻找回复按钮
-                        reply_btn = comment_item.find_element(
-                            By.CSS_SELECTOR,
-                            "div:first-child div.interactions > div.reply"
-                        )
-                        try:
-                            ensure_element_centered(driver, reply_btn)
-                        except Exception:
-                            pass
-                        # 使用JavaScript点击，避免被其他元素遮挡
-                        driver.execute_script("arguments[0].click();", reply_btn)
-                        print("  已点击回复按钮")
-                        time.sleep(0.5)  # 您偏好的点击间隔时间
-                        try:
-                            reply_text = "牛"
-                            wait = WebDriverWait(driver, 5)
+                            avatar_link = item.find_element(
+                                By.CSS_SELECTOR,
+                                "div.avatar > a"
+                            )
                             try:
-                                editor = comment_item.find_element(By.CSS_SELECTOR,
-                                                                   "div.reply-box [contenteditable='true']")
+                                ensure_element_centered(driver, avatar_link)
                             except Exception:
-                                try:
-                                    editor = wait.until(EC.presence_of_element_located(
-                                        (By.XPATH,
-                                         ".//*[contains(@placeholder,'回复') or contains(@placeholder,'评论') or @contenteditable='true']")
-                                    ))
-                                except Exception:
-                                    editor = None
-                            if not editor:
-                                print("  未找到回复输入框")
+                                pass
+                            # 点击头像链接
+                            driver.execute_script("arguments[0].click();", avatar_link)
+                            print("  已点击头像")
+                            time.sleep(2)
+
+                            # 切换到新标签页
+                            all_handles = driver.window_handles
+                            if len(all_handles) > 1:
+                                driver.switch_to.window(all_handles[-1])
+                                visited_count += 1
+                                print("  已切换到用户主页")
+                                rand_sleep(profile_wait_min, profile_wait_max)
+                                if ENABLE_FOLLOW and random.randint(1, 100) <= int(
+                                        follow_probability) and followed_count < profile_target:
+                                    followed = follow_user_if_needed(driver)
+                                    if followed:
+                                        followed_count += 1
+                                        rand_sleep(follow_wait_min, follow_wait_max)
+                                # 关闭用户主页标签页，切回原页面
+                                driver.close()
+                                driver.switch_to.window(all_handles[0])
+                                print("  已关闭用户主页，切回原页面")
                             else:
-                                ensure_element_centered(driver, editor)
+                                print("  未打开新标签页")
+
+                            time.sleep(0.5)
+                        except:
+                            print("  未找到头像链接或点击失败")
+                    else:
+                        if not enable_visit_avatar:
+                            print("  访问头像功能已禁用")
+                        else:
+                            print("  访问头像已跳过")
+
+                    # 点赞按钮
+                    if enable_like and liked_count < like_target and random.randint(1, 100) <= int(like_probability):
+                        try:
+                            # 使用完整的CSS选择器路径在parent-comment元素下寻找点赞按钮
+                            like_btn = comment_item.find_element(
+                                By.CSS_SELECTOR,
+                                "div:first-child div.interactions span.like-wrapper"
+                            )
+                            try:
+                                ensure_element_centered(driver, like_btn)
+                            except Exception:
+                                pass
+                            # 使用JavaScript点击，避免被其他元素遮挡
+                            driver.execute_script("arguments[0].click();", like_btn)
+                            print("  已点击点赞按钮")
+                            liked_count += 1
+                            rand_sleep(like_wait_min, like_wait_max)
+                        except:
+                            print("  未找到点赞按钮或点击失败")
+                    else:
+                        if not enable_like:
+                            print("  点赞功能已禁用")
+                        else:
+                            print("  点赞已跳过")
+
+                    # 回复按钮
+                    if enable_reply:
+                        try:
+                            # 使用完整的CSS选择器路径在parent-comment元素下寻找回复按钮
+                            reply_btn = comment_item.find_element(
+                                By.CSS_SELECTOR,
+                                "div:first-child div.interactions > div.reply"
+                            )
+                            try:
+                                ensure_element_centered(driver, reply_btn)
+                            except Exception:
+                                pass
+                            # 使用JavaScript点击，避免被其他元素遮挡
+                            driver.execute_script("arguments[0].click();", reply_btn)
+                            print("  已点击回复按钮")
+                            time.sleep(0.5)  # 您偏好的点击间隔时间
+                            try:
+                                reply_text = "牛"
+                                wait = WebDriverWait(driver, 5)
                                 try:
-                                    editor.click()
-                                except Exception:
-                                    pass
-                                try:
-                                    clear_input(editor)
-                                except Exception:
-                                    pass
-                                try:
-                                    from selenium.webdriver.common.action_chains import ActionChains
-                                    ActionChains(driver).move_to_element(editor).click(editor).send_keys(
-                                        reply_text).perform()
-                                    print("  已输入回复内容")
+                                    editor = comment_item.find_element(By.CSS_SELECTOR,
+                                                                       "div.reply-box [contenteditable='true']")
                                 except Exception:
                                     try:
-                                        editor.send_keys(reply_text)
+                                        editor = wait.until(EC.presence_of_element_located(
+                                            (By.XPATH,
+                                             ".//*[contains(@placeholder,'回复') or contains(@placeholder,'评论') or @contenteditable='true']")
+                                        ))
+                                    except Exception:
+                                        editor = None
+                                if not editor:
+                                    print("  未找到回复输入框")
+                                else:
+                                    ensure_element_centered(driver, editor)
+                                    try:
+                                        editor.click()
+                                    except Exception:
+                                        pass
+                                    try:
+                                        clear_input(editor)
+                                    except Exception:
+                                        pass
+                                    try:
+                                        from selenium.webdriver.common.action_chains import ActionChains
+                                        ActionChains(driver).move_to_element(editor).click(editor).send_keys(
+                                            reply_text).perform()
                                         print("  已输入回复内容")
                                     except Exception:
-                                        print("  输入回复内容失败")
-                                try:
-                                    send_btn = comment_item.find_element(By.XPATH, ".//span[contains(., '发送')]")
-                                    ensure_element_centered(driver, send_btn)
-                                    driver.execute_script("arguments[0].click();", send_btn)
-                                    print("  已点击发送按钮")
-                                except Exception:
+                                        try:
+                                            editor.send_keys(reply_text)
+                                            print("  已输入回复内容")
+                                        except Exception:
+                                            print("  输入回复内容失败")
                                     try:
-                                        from selenium.webdriver.common.keys import Keys
-                                        editor.send_keys(Keys.RETURN)
-                                        print("  已按回车发送")
+                                        send_btn = comment_item.find_element(By.XPATH, ".//span[contains(., '发送')]")
+                                        ensure_element_centered(driver, send_btn)
+                                        driver.execute_script("arguments[0].click();", send_btn)
+                                        print("  已点击发送按钮")
                                     except Exception:
-                                        print("  按回车发送失败")
-                                time.sleep(0.5)
-                        except Exception as e:
-                            print(f"  回复输入或发送失败: {e}")
+                                        try:
+                                            from selenium.webdriver.common.keys import Keys
+                                            editor.send_keys(Keys.RETURN)
+                                            print("  已按回车发送")
+                                        except Exception:
+                                            print("  按回车发送失败")
+                                    time.sleep(0.5)
+                            except Exception as e:
+                                print(f"  回复输入或发送失败: {e}")
 
+                        except:
+                            print("  未找到回复按钮或点击失败")
+                    else:
+                        print("  回复功能已禁用")
+
+                    # 尝试获取点赞数
+                    try:
+                        like_count = item.find_element(
+                            By.CSS_SELECTOR,
+                            "div.interactions span.count"
+                        ).text
+                        print(f"  点赞数: {like_count}")
                     except:
-                        print("  未找到回复按钮或点击失败")
-                else:
-                    print("  回复功能已禁用")
+                        print("  无法获取点赞数")
 
-                # 尝试获取点赞数
-                try:
-                    like_count = item.find_element(
-                        By.CSS_SELECTOR,
-                        "div.interactions span.count"
-                    ).text
-                    print(f"  点赞数: {like_count}")
-                except:
-                    print("  无法获取点赞数")
+                except Exception as e:
+                    print(f"  处理第 {processed_count + 1} 条评论时出错: {e}")
+                
+                # 在处理每条评论之间添加随机间隔，模拟人工浏览
+                time.sleep(random.uniform(0.5, 1.5))
+                
+                processed_count += 1  # 增加已处理评论计数
 
-            except Exception as e:
-                print(f"  处理第 {i + 1} 条评论时出错: {e}")
-            
-            # 在处理每条评论之间添加随机间隔，模拟人工浏览
-            time.sleep(random.uniform(0.5, 1.5))
+                # 每处理3条评论就滚动一次，加载更多评论
+                if processed_count % 3 == 0:
+                    if scroll_done < scroll_times:
+                        print(f"已处理 {processed_count} 条评论，进行第 {scroll_done + 1} 次滚动...")
+                        scroll_to_load_more_comments(driver, count=1)
+                        scroll_done += 1
+                        
+                        # 滚动后添加等待时间
+                        time.sleep(2)
+                        
+                        # 重新获取评论列表，因为滚动后可能加载了新评论
+                        comment_items = driver.find_elements(
+                            By.CSS_SELECTOR,
+                            "div.comments-container > div.list-container > div.parent-comment"
+                        )
+                        print(f"滚动后找到 {len(comment_items)} 条评论")
+
+        print(f"评论处理完成，共处理 {processed_count} 条评论，进行了 {scroll_done} 次滚动")
 
     except Exception as e:
         print(f"遍历处理评论区时出错: {e}")
