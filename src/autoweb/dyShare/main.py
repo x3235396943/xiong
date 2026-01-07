@@ -26,4 +26,3 @@ class DouyinShareCrawler:
         except Exception as e:
             print(f"程序执行出错: {e}")
             sys.exit(1)
-

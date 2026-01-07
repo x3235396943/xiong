@@ -246,12 +246,16 @@ class DyShareUtils:
         self.debug_log("debug", "等待浏览器完全启动...", browser_number, browser_id)
         self.human_like_delay(3, browser_number=browser_number)
         if len(driver.window_handles) > 1:
-            self.debug_log("debug", "检测到多个窗口，关闭额外窗口...", browser_number, browser_id)
+            self.debug_log(
+                "debug", "检测到多个窗口，关闭额外窗口...", browser_number, browser_id
+            )
             for handle in driver.window_handles[1:]:
                 driver.switch_to.window(handle)
                 driver.close()
             driver.switch_to.window(driver.window_handles[0])
-            self.debug_log("debug", "已关闭额外窗口，保留主窗口", browser_number, browser_id)
+            self.debug_log(
+                "debug", "已关闭额外窗口，保留主窗口", browser_number, browser_id
+            )
 
         self.debug_log("info", "WebDriver创建成功", browser_number, browser_id)
         return driver
@@ -376,11 +380,15 @@ class DyShareUtils:
         try:
             self.check_stop_signal()
             visit_wait_time = random.uniform(visit_min, visit_max)
-            self.debug_log("info", f"进入主页，等待 {visit_wait_time:.2f} 秒", browser_number)
+            self.debug_log(
+                "info", f"进入主页，等待 {visit_wait_time:.2f} 秒", browser_number
+            )
             self.safe_sleep(visit_wait_time, browser_number=browser_number)
 
             if random.random() < profile_follow_probability:
-                follow_btn_css = '#user_detail_element [data-e2e="user-info-follow-btn"]'
+                follow_btn_css = (
+                    '#user_detail_element [data-e2e="user-info-follow-btn"]'
+                )
                 try:
                     follow_button = WebDriverWait(driver, 5).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, follow_btn_css))
@@ -390,7 +398,9 @@ class DyShareUtils:
                     try:
                         button_text = follow_button.text.strip()
                         if "已关注" in button_text:
-                            self.debug_log("info", "用户已被关注，跳过关注操作", browser_number)
+                            self.debug_log(
+                                "info", "用户已被关注，跳过关注操作", browser_number
+                            )
                         else:
                             self.human_like_delay(0.5, 1.0, browser_number)
                             follow_button.click()
@@ -443,7 +453,9 @@ class DyShareUtils:
             check_stop_func=self.check_stop_signal,
         )
 
-    def leave_video_comment(self, driver, comment_text, browser_number=None, browser_id=""):
+    def leave_video_comment(
+        self, driver, comment_text, browser_number=None, browser_id=""
+    ):
         return DouyinCommentActions.leave_video_comment_sync(
             driver,
             comment_text,
@@ -484,7 +496,9 @@ class DyShareUtils:
 
         try:
             comments_container = WebDriverWait(web_driver, 5).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, '[data-e2e="comment-list"]'))
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                )
             )
             comment_items = comments_container.find_elements(By.XPATH, "./div")
             if comment_index >= len(comment_items):
@@ -511,8 +525,10 @@ class DyShareUtils:
             except Exception:
                 pass
 
-        should_like = enable_like and (like_count < target_like_count) and (
-            keyword_matched or (random.random() < like_probability)
+        should_like = (
+            enable_like
+            and (like_count < target_like_count)
+            and (keyword_matched or (random.random() < like_probability))
         )
         if should_like:
             try:
@@ -531,8 +547,10 @@ class DyShareUtils:
             except Exception:
                 pass
 
-        should_visit = enable_follow and enable_profile_visit and (
-            keyword_matched or (random.random() < visit_profile_probability)
+        should_visit = (
+            enable_follow
+            and enable_profile_visit
+            and (keyword_matched or (random.random() < visit_profile_probability))
         )
         force_follow = keyword_matched
 
@@ -541,9 +559,9 @@ class DyShareUtils:
                 comments_container = web_driver.find_element(
                     By.CSS_SELECTOR, '[data-e2e="comment-list"]'
                 )
-                target_comment_now = comments_container.find_elements(By.XPATH, "./div")[
-                    comment_index
-                ]
+                target_comment_now = comments_container.find_elements(
+                    By.XPATH, "./div"
+                )[comment_index]
 
                 avatar = None
                 try:
@@ -591,24 +609,32 @@ class DyShareUtils:
 
         reply_count = 0
         COMMENT_REPLIES = self.parse_comment_replies()
-        should_reply = enable_comment_reply and COMMENT_REPLIES and (
-            keyword_matched or (random.random() < comment_reply_probability)
+        should_reply = (
+            enable_comment_reply
+            and COMMENT_REPLIES
+            and (keyword_matched or (random.random() < comment_reply_probability))
         )
         if should_reply:
             try:
-                wait_time_before_reply = random.uniform(comment_wait_min, comment_wait_max)
+                wait_time_before_reply = random.uniform(
+                    comment_wait_min, comment_wait_max
+                )
                 self.safe_sleep(wait_time_before_reply, browser_number=browser_number)
 
                 comments_container = web_driver.find_element(
                     By.CSS_SELECTOR, '[data-e2e="comment-list"]'
                 )
-                target_comment_now = comments_container.find_elements(By.XPATH, "./div")[
-                    comment_index
-                ]
+                target_comment_now = comments_container.find_elements(
+                    By.XPATH, "./div"
+                )[comment_index]
 
                 reply_content = random.choice(COMMENT_REPLIES)
                 reply_success = self.reply_to_comment(
-                    web_driver, target_comment_now, reply_content, browser_number, browser_id
+                    web_driver,
+                    target_comment_now,
+                    reply_content,
+                    browser_number,
+                    browser_id,
                 )
                 if reply_success:
                     if reporter:
@@ -616,7 +642,9 @@ class DyShareUtils:
                     if reporter:
                         reporter.increment_comment()
                     self.debug_log(
-                        "info", f"成功回复评论，内容: {reply_content[:30]}...", browser_number
+                        "info",
+                        f"成功回复评论，内容: {reply_content[:30]}...",
+                        browser_number,
                     )
                     reply_count = 1
             except Exception as e:
@@ -689,7 +717,9 @@ class DyShareUtils:
                 max_follows_per_video,
                 min_follows_per_video,
             )
-        target_follow_count = random.randint(min_follows_per_video, max_follows_per_video)
+        target_follow_count = random.randint(
+            min_follows_per_video, max_follows_per_video
+        )
 
         video_liked_count = 0
         if min_likes_per_video > max_likes_per_video:
@@ -740,7 +770,9 @@ class DyShareUtils:
 
             try:
                 if not self.open_comment_section(driver, wait_time, browser_number):
-                    self.debug_log("error", "无法打开评论区，链接可能失效", browser_number)
+                    self.debug_log(
+                        "error", "无法打开评论区，链接可能失效", browser_number
+                    )
                     return False
             except Exception as e:
                 log.error(f"{browser_info} 打开评论区时发生异常: {e}")
@@ -755,7 +787,9 @@ class DyShareUtils:
                     if VIDEO_COMMENTS:
                         comment_text = random.choice(VIDEO_COMMENTS)
                         self.debug_log(
-                            "info", f"开始发布视频留言: {comment_text[:30]}...", browser_number
+                            "info",
+                            f"开始发布视频留言: {comment_text[:30]}...",
+                            browser_number,
                         )
                         success = self.leave_video_comment(
                             driver, comment_text, browser_number, browser_id
@@ -767,13 +801,17 @@ class DyShareUtils:
                             if reporter:
                                 reporter.increment_video_comment()
                             self.debug_log(
-                                "info", f"视频留言成功: {comment_text[:30]}...", browser_number
+                                "info",
+                                f"视频留言成功: {comment_text[:30]}...",
+                                browser_number,
                             )
                         else:
                             self.debug_log("warning", "视频留言失败", browser_number)
                     else:
                         self.debug_log(
-                            "warning", "VIDEO_COMMENTS 列表为空，跳过视频留言", browser_number
+                            "warning",
+                            "VIDEO_COMMENTS 列表为空，跳过视频留言",
+                            browser_number,
                         )
                 else:
                     self.debug_log(
@@ -782,7 +820,11 @@ class DyShareUtils:
                         browser_number,
                     )
             else:
-                self.debug_log("info", "ENABLE_VIDEO_COMMENT 为 False，跳过视频留言", browser_number)
+                self.debug_log(
+                    "info",
+                    "ENABLE_VIDEO_COMMENT 为 False，跳过视频留言",
+                    browser_number,
+                )
 
             main_window = driver.current_window_handle
 
@@ -792,7 +834,9 @@ class DyShareUtils:
 
             try:
                 comments_container = WebDriverWait(driver, wait_time).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, '[data-e2e="comment-list"]'))
+                    EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                    )
                 )
             except Exception as e:
                 log.error(f"{browser_info} 无法定位评论容器: {e}")
@@ -804,7 +848,9 @@ class DyShareUtils:
                     self.safe_check_license()
 
                     try:
-                        current_items = comments_container.find_elements(By.XPATH, "./div")
+                        current_items = comments_container.find_elements(
+                            By.XPATH, "./div"
+                        )
                         if comment_index >= len(current_items) - 3:
                             self.debug_log(
                                 "info",
@@ -852,7 +898,9 @@ class DyShareUtils:
 
                     if result is False:
                         try:
-                            comment_items = comments_container.find_elements(By.XPATH, "./div")
+                            comment_items = comments_container.find_elements(
+                                By.XPATH, "./div"
+                            )
                             if comment_index >= len(comment_items):
                                 break
                         except Exception:
@@ -863,7 +911,8 @@ class DyShareUtils:
                     if processed_comment_count % 40 == 0:
                         try:
                             padding = driver.find_element(
-                                By.CSS_SELECTOR, '[data-e2e="comment-list"] > div:last-child'
+                                By.CSS_SELECTOR,
+                                '[data-e2e="comment-list"] > div:last-child',
                             ).text
                             if padding == "暂时没有更多评论":
                                 self.debug_log(
@@ -884,7 +933,10 @@ class DyShareUtils:
                             browser_number,
                         )
 
-                    if video_followed_count >= target_follow_count and video_liked_count >= target_like_count:
+                    if (
+                        video_followed_count >= target_follow_count
+                        and video_liked_count >= target_like_count
+                    ):
                         self.debug_log(
                             "info",
                             f"已达到目标关注数量 {target_follow_count} 和点赞数量 {target_like_count}，切换到下一个链接",
@@ -908,10 +960,14 @@ class DyShareUtils:
                         or "not connected to devtools" in msg
                         or "no such window" in msg
                     ):
-                        log.error(f"{self.get_browser_info(browser_number)} 致命错误: {e}")
+                        log.error(
+                            f"{self.get_browser_info(browser_number)} 致命错误: {e}"
+                        )
                         return False
 
-                    log.error(f"{self.get_browser_info(browser_number)} 处理评论异常: {e}")
+                    log.error(
+                        f"{self.get_browser_info(browser_number)} 处理评论异常: {e}"
+                    )
                     comment_index += 1
                     try:
                         driver.switch_to.window(main_window)
@@ -959,9 +1015,15 @@ class DyShareUtils:
         browser_info = self.get_browser_info(browser_number)
         try:
             body = driver.find_element(By.TAG_NAME, "body")
-            DouyinBrowserActions.scroll_element_sync(driver, body, delta_y=400, sleep_time=2)
+            DouyinBrowserActions.scroll_element_sync(
+                driver, body, delta_y=400, sleep_time=2
+            )
             if scroll_number is not None:
-                self.debug_log("info", f"使用ActionChains完成滑动 (第 {scroll_number} 次)", browser_number)
+                self.debug_log(
+                    "info",
+                    f"使用ActionChains完成滑动 (第 {scroll_number} 次)",
+                    browser_number,
+                )
         except Exception as e:
             log.error(f"{browser_info} 滚动失败: {e}")
         return False
@@ -1015,7 +1077,9 @@ class DyShareUtils:
                         browser_id = config.BIT_BROWSER_IDS[i]
                         self._browser_start_indices[browser_id] = start_index
                         if config.DEBUG:
-                            log.info(f"浏览器 {browser_id} 起始索引设置为: {start_index}")
+                            log.info(
+                                f"浏览器 {browser_id} 起始索引设置为: {start_index}"
+                            )
 
     def get_next_link_from_list(self, urls_list, browser_id=None):
         with self._url_list_lock:
@@ -1096,7 +1160,9 @@ class DyShareUtils:
                     self.debug_log("info", "正在创建新浏览器实例...", browser_number)
                     driver = self.get_driver(browser_id, browser_number)
                     if driver is None:
-                        log.error(f"{self.get_browser_info(browser_number)} 创建失败，程序即将退出")
+                        log.error(
+                            f"{self.get_browser_info(browser_number)} 创建失败，程序即将退出"
+                        )
                         raise Exception("浏览器创建失败，无法继续执行")
 
                 _, url, url_index = self.get_next_link(browser_id)
@@ -1129,7 +1195,9 @@ class DyShareUtils:
                         try:
                             _ = driver.window_handles
                         except Exception:
-                            raise Exception("disconnected: not connected to DevTools (Pre-check)")
+                            raise Exception(
+                                "disconnected: not connected to DevTools (Pre-check)"
+                            )
 
                         success = self.run_automation(
                             driver,
@@ -1164,14 +1232,20 @@ class DyShareUtils:
                                 reporter.increment_keywords_ok()
                                 reporter.update_url_index(url_index)
                                 reporter.increment_url_ok()
-                            self.debug_log("info", f"链接处理成功: {url}", browser_number)
+                            self.debug_log(
+                                "info", f"链接处理成功: {url}", browser_number
+                            )
                             break
 
                         if reporter:
                             reporter.increment_keywords_ok()
                             reporter.update_url_index(url_index)
                             reporter.increment_url_fail()
-                        self.debug_log("error", f"{browser_info} 链接处理失败（链接失效）: {url}", browser_number)
+                        self.debug_log(
+                            "error",
+                            f"{browser_info} 链接处理失败（链接失效）: {url}",
+                            browser_number,
+                        )
                         break
 
                     except KeyboardInterrupt:
@@ -1185,10 +1259,18 @@ class DyShareUtils:
                             raise KeyboardInterrupt("收到全局停止信号")
                         retry_count += 1
                         err_msg = str(e).lower()
-                        log.error(f"{self.get_browser_info(browser_number)} 任务异常: {e}")
+                        log.error(
+                            f"{self.get_browser_info(browser_number)} 任务异常: {e}"
+                        )
 
-                        if "disconnected" in err_msg or "session" in err_msg or "died" in err_msg:
-                            log.warning(f"{self.get_browser_info(browser_number)} 检测到浏览器崩溃，准备重启...")
+                        if (
+                            "disconnected" in err_msg
+                            or "session" in err_msg
+                            or "died" in err_msg
+                        ):
+                            log.warning(
+                                f"{self.get_browser_info(browser_number)} 检测到浏览器崩溃，准备重启..."
+                            )
                             try:
                                 driver.quit()
                             except Exception:
@@ -1201,7 +1283,11 @@ class DyShareUtils:
                                 reporter.increment_keywords_ok()
                                 reporter.update_url_index(url_index)
                                 reporter.increment_url_fail()
-                            self.debug_log("error", f"{browser_info} 链接处理彻底失败: {url}", browser_number)
+                            self.debug_log(
+                                "error",
+                                f"{browser_info} 链接处理彻底失败: {url}",
+                                browser_number,
+                            )
 
                         self.check_stop_signal()
                         self.safe_sleep(5, browser_number=browser_number)
@@ -1390,7 +1476,9 @@ class DyShareUtils:
 
             try:
                 if i > 0:
-                    self.switch_to_new_tab(driver, target_url, wait_time, browser_number)
+                    self.switch_to_new_tab(
+                        driver, target_url, wait_time, browser_number
+                    )
                 else:
                     driver.get(target_url)
 
@@ -1438,7 +1526,7 @@ class DyShareUtils:
 import concurrent.futures
 import asyncio
 
-from ..tools.license import LicenseManager, LicenseException
+from ..tools.license import LicenseManager
 from ..tools.core import DataReporter
 
 
@@ -1659,7 +1747,10 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
                 break
 
     def _start_websocket_client(self):
-        from ..tools.ws_client import create_websocket_client, start_websocket_client_in_thread
+        from ..tools.ws_client import (
+            create_websocket_client,
+            start_websocket_client_in_thread,
+        )
 
         self.ws_client = create_websocket_client(self.config)
         if self.ws_client:
@@ -1669,7 +1760,9 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
         self.ws_thread = start_websocket_client_in_thread(
             self.ws_client, self._on_stop_signal_received
         )
-        self.ws_client.register_command_handler("LoginRes", self._handle_login_res_command)
+        self.ws_client.register_command_handler(
+            "LoginRes", self._handle_login_res_command
+        )
         self.ws_client.register_command_handler(
             "HeartbeatRes", self._handle_heartbeat_response
         )
@@ -1749,7 +1842,9 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         try:
             asyncio.run_coroutine_threadsafe(
-                self.ws_client.send_queue.put(json.dumps(message_dict, ensure_ascii=False)),
+                self.ws_client.send_queue.put(
+                    json.dumps(message_dict, ensure_ascii=False)
+                ),
                 event_loop,
             )
             log.info("✓ 消息已放入发送队列")
@@ -1854,5 +1949,3 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
             }
         )
         time.sleep(0.2)
-
-

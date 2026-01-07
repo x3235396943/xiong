@@ -1,4 +1,8 @@
-import json, os, random, time, sys
+import json
+import os
+import random
+import time
+import sys
 import concurrent.futures
 import threading
 from collections import deque
@@ -74,6 +78,7 @@ pong_received = threading.Event()
 heartbeat_timeout_count = 0
 MAX_HEARTBEAT_TIMEOUTS = 3
 
+
 def _sleep_interruptible(seconds: float):
     end_time = time.time() + max(0.0, float(seconds))
     while time.time() < end_time:
@@ -81,15 +86,20 @@ def _sleep_interruptible(seconds: float):
             raise KeyboardInterrupt("收到停止信号")
         time.sleep(min(0.1, end_time - time.time()))
 
+
 def _ensure_not_stopped():
     if STOP_EVENT.is_set():
         raise KeyboardInterrupt("收到停止信号")
 
+
 def _send_ws_message(message_dict):
     try:
         import json as _json
+
         try:
-            log.info(f"发送到服务器的消息: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}")
+            log.info(
+                f"发送到服务器的消息: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}"
+            )
         except Exception:
             pass
         if not ws_client or ws_client.stop_requested:
@@ -98,11 +108,14 @@ def _send_ws_message(message_dict):
         if not loop or not loop.is_running():
             return
         import asyncio
+
         asyncio.run_coroutine_threadsafe(
-            ws_client.send_queue.put(_json.dumps(message_dict, ensure_ascii=False)), loop
+            ws_client.send_queue.put(_json.dumps(message_dict, ensure_ascii=False)),
+            loop,
         )
     except Exception:
         pass
+
 
 def _send_ws_message_for_reporter_search(message_dict):
     try:
@@ -115,12 +128,16 @@ def _send_ws_message_for_reporter_search(message_dict):
                 data.pop("urlFail", None)
             try:
                 import json as _json
-                log.info(f"PcDataReq 上报: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}")
+
+                log.info(
+                    f"PcDataReq 上报: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}"
+                )
             except Exception:
                 pass
     except Exception:
         pass
     _send_ws_message(message_dict)
+
 
 def _handle_heartbeat_response(data: dict):
     global heartbeat_timeout_count
@@ -130,6 +147,7 @@ def _handle_heartbeat_response(data: dict):
             heartbeat_timeout_count = 0
     except Exception:
         pass
+
 
 def _handle_login_res_command(data: dict):
     try:
@@ -150,10 +168,12 @@ def _handle_login_res_command(data: dict):
     except Exception:
         pass
 
+
 async def _heartbeat_task():
     global heartbeat_timeout_count
     import asyncio
     from datetime import datetime
+
     cfg = get_config()
     while not STOP_EVENT.is_set():
         try:
@@ -165,7 +185,10 @@ async def _heartbeat_task():
                 }
             )
             try:
-                await asyncio.wait_for(asyncio.get_event_loop().run_in_executor(None, pong_received.wait), timeout=5.0)
+                await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(None, pong_received.wait),
+                    timeout=5.0,
+                )
                 heartbeat_timeout_count = 0
                 pong_received.clear()
             except asyncio.TimeoutError:
@@ -179,6 +202,7 @@ async def _heartbeat_task():
         except Exception:
             break
 
+
 def _start_ws_client():
     global ws_client, ws_thread, ws_loop, heartbeat_task
     try:
@@ -186,21 +210,39 @@ def _start_ws_client():
         ws_client = create_websocket_client(cfg)
         if ws_client:
             ws_client.set_external_send_func(_send_ws_message)
-            ws_client.set_config_update_handler(lambda d: _handle_login_res_command({"data": d}))
-            ws_thread = start_websocket_client_in_thread(ws_client, lambda: STOP_EVENT.set())
-            ws_client.register_command_handler("HeartbeatRes", _handle_heartbeat_response)
+            ws_client.set_config_update_handler(
+                lambda d: _handle_login_res_command({"data": d})
+            )
+            ws_thread = start_websocket_client_in_thread(
+                ws_client, lambda: STOP_EVENT.set()
+            )
+            ws_client.register_command_handler(
+                "HeartbeatRes", _handle_heartbeat_response
+            )
             ws_client.register_command_handler("LoginRes", _handle_login_res_command)
             ws_loop = getattr(ws_client, "event_loop", None)
             if ws_loop and ws_loop.is_running():
                 import asyncio
-                heartbeat_task = asyncio.run_coroutine_threadsafe(_heartbeat_task(), ws_loop)
+
+                heartbeat_task = asyncio.run_coroutine_threadsafe(
+                    _heartbeat_task(), ws_loop
+                )
             # 发送登录请求
             from urllib.parse import parse_qs, urlparse
+
             parsed = urlparse(cfg.WS_URL)
             device_id = parse_qs(parsed.query).get("id", [cfg.DEVICE_CODE])[0]
-            _send_ws_message({"cmd": "LoginReq", "id": device_id, "mode": "pc", "version": getattr(cfg, "VERSION", None)})
+            _send_ws_message(
+                {
+                    "cmd": "LoginReq",
+                    "id": device_id,
+                    "mode": "pc",
+                    "version": getattr(cfg, "VERSION", None),
+                }
+            )
     except Exception:
         pass
+
 
 def _stop_ws_client():
     global ws_client, ws_thread, ws_loop, heartbeat_task
@@ -215,6 +257,7 @@ def _stop_ws_client():
             loop = getattr(ws_client, "event_loop", None) or ws_loop
             if loop and loop.is_running():
                 import asyncio
+
                 asyncio.run_coroutine_threadsafe(ws_client.close(), loop)
         if ws_thread and ws_thread.is_alive():
             try:
@@ -223,11 +266,14 @@ def _stop_ws_client():
                 pass
     except Exception:
         pass
+
+
 def get_browser_log_prefix(browser_id):
     """生成浏览器日志前缀，格式为'浏览器 #编号'"""
     # 提取浏览器ID的最后几位作为编号
     browser_num = browser_id.split("-")[-1] if "-" in browser_id else browser_id[:8]
     return f"[浏览器 #{browser_num}]"
+
 
 def _rng(name, d):
     s = (os.getenv(name) or "").strip()
@@ -288,6 +334,7 @@ def _open_bit(browser_id):
         timeout=30,
     ).json()
 
+
 def _as_int_range(value, fallback):
     try:
         if isinstance(value, (list, tuple)) and len(value) == 2:
@@ -297,34 +344,81 @@ def _as_int_range(value, fallback):
         pass
     return fallback
 
+
 def _current_settings_search():
     cfg = get_config()
     wait_time = getattr(cfg, "WAIT_TIME", DEFAULT_WAIT_TIME) or DEFAULT_WAIT_TIME
-    video_range = _as_int_range(getattr(cfg, "MAX_SCROLL_VIDEO", None), DEFAULT_MAX_SCROLL_VIDEO)
-    comment_range = _as_int_range(getattr(cfg, "MAX_COMMENT", None), DEFAULT_MAX_COMMENT)
+    video_range = _as_int_range(
+        getattr(cfg, "MAX_SCROLL_VIDEO", None), DEFAULT_MAX_SCROLL_VIDEO
+    )
+    comment_range = _as_int_range(
+        getattr(cfg, "MAX_COMMENT", None), DEFAULT_MAX_COMMENT
+    )
     return {
         "wait_time": int(wait_time),
         "video_range": video_range,
         "comment_range": comment_range,
         "like_probability": int(getattr(cfg, "LIKE_PROBABILITY", LIKE_PROBABILITY)),
         "visit_enable": int(getattr(cfg, "VISIT_ENABLE", VISIT_ENABLE)),
-        "profile_follow_probability": int(getattr(cfg, "PROFILE_FOLLOW_PROBABILITY", PROFILE_FOLLOW_PROBABILITY)),
-        "like_wait_range": _as_int_range([getattr(cfg, "LIKE_WAIT_MIN", DEFAULT_LIKE_WAIT_MIN), getattr(cfg, "LIKE_WAIT_MAX", DEFAULT_LIKE_WAIT_MAX)], (DEFAULT_LIKE_WAIT_MIN, DEFAULT_LIKE_WAIT_MAX)),
-        "visit_wait_range": _as_int_range([getattr(cfg, "VISIT_MIN", DEFAULT_VISIT_MIN), getattr(cfg, "VISIT_MAX", DEFAULT_VISIT_MAX)], (DEFAULT_VISIT_MIN, DEFAULT_VISIT_MAX)),
-        "profile_wait_range": _as_int_range([getattr(cfg, "COMMENT_WAIT_MIN", DEFAULT_PROFILE_WAIT_MIN), getattr(cfg, "COMMENT_WAIT_MAX", DEFAULT_PROFILE_WAIT_MAX)], (DEFAULT_PROFILE_WAIT_MIN, DEFAULT_PROFILE_WAIT_MAX)),
+        "profile_follow_probability": int(
+            getattr(cfg, "PROFILE_FOLLOW_PROBABILITY", PROFILE_FOLLOW_PROBABILITY)
+        ),
+        "like_wait_range": _as_int_range(
+            [
+                getattr(cfg, "LIKE_WAIT_MIN", DEFAULT_LIKE_WAIT_MIN),
+                getattr(cfg, "LIKE_WAIT_MAX", DEFAULT_LIKE_WAIT_MAX),
+            ],
+            (DEFAULT_LIKE_WAIT_MIN, DEFAULT_LIKE_WAIT_MAX),
+        ),
+        "visit_wait_range": _as_int_range(
+            [
+                getattr(cfg, "VISIT_MIN", DEFAULT_VISIT_MIN),
+                getattr(cfg, "VISIT_MAX", DEFAULT_VISIT_MAX),
+            ],
+            (DEFAULT_VISIT_MIN, DEFAULT_VISIT_MAX),
+        ),
+        "profile_wait_range": _as_int_range(
+            [
+                getattr(cfg, "COMMENT_WAIT_MIN", DEFAULT_PROFILE_WAIT_MIN),
+                getattr(cfg, "COMMENT_WAIT_MAX", DEFAULT_PROFILE_WAIT_MAX),
+            ],
+            (DEFAULT_PROFILE_WAIT_MIN, DEFAULT_PROFILE_WAIT_MAX),
+        ),
         "video_reply_rate": int(getattr(cfg, "VIDEO_REPLY_RATE", VIDEO_REPLY_RATE)),
-        "video_reply_wait_range": _as_int_range([getattr(cfg, "VIDEO_REPLY_WAIT_MIN", VIDEO_REPLY_WAIT_MIN), getattr(cfg, "VIDEO_REPLY_WAIT_MAX", VIDEO_REPLY_WAIT_MAX)], (VIDEO_REPLY_WAIT_MIN, VIDEO_REPLY_WAIT_MAX)),
-        "min_follows_per_video": int(getattr(cfg, "MIN_FOLLOWS_PER_VIDEO", MIN_FOLLOWS_PER_VIDEO)),
-        "max_follows_per_video": int(getattr(cfg, "MAX_FOLLOWS_PER_VIDEO", MAX_FOLLOWS_PER_VIDEO)),
-        "comment_like_count_min": int(getattr(cfg, "COMMENT_LIKE_COUNT_MIN", COMMENT_LIKE_COUNT_MIN)),
-        "comment_like_count_max": int(getattr(cfg, "COMMENT_LIKE_COUNT_MAX", COMMENT_LIKE_COUNT_MAX)),
+        "video_reply_wait_range": _as_int_range(
+            [
+                getattr(cfg, "VIDEO_REPLY_WAIT_MIN", VIDEO_REPLY_WAIT_MIN),
+                getattr(cfg, "VIDEO_REPLY_WAIT_MAX", VIDEO_REPLY_WAIT_MAX),
+            ],
+            (VIDEO_REPLY_WAIT_MIN, VIDEO_REPLY_WAIT_MAX),
+        ),
+        "min_follows_per_video": int(
+            getattr(cfg, "MIN_FOLLOWS_PER_VIDEO", MIN_FOLLOWS_PER_VIDEO)
+        ),
+        "max_follows_per_video": int(
+            getattr(cfg, "MAX_FOLLOWS_PER_VIDEO", MAX_FOLLOWS_PER_VIDEO)
+        ),
+        "comment_like_count_min": int(
+            getattr(cfg, "COMMENT_LIKE_COUNT_MIN", COMMENT_LIKE_COUNT_MIN)
+        ),
+        "comment_like_count_max": int(
+            getattr(cfg, "COMMENT_LIKE_COUNT_MAX", COMMENT_LIKE_COUNT_MAX)
+        ),
         "video_comments": getattr(cfg, "VIDEO_COMMENTS", VIDEO_COMMENTS),
-        "comment_filter_keywords": getattr(cfg, "COMMENT_FILTER_KEYWORDS", COMMENT_FILTER_KEYWORDS),
+        "comment_filter_keywords": getattr(
+            cfg, "COMMENT_FILTER_KEYWORDS", COMMENT_FILTER_KEYWORDS
+        ),
         "enable_like": bool(getattr(cfg, "ENABLE_LIKE", ENABLE_LIKE)),
         "enable_follow": bool(getattr(cfg, "ENABLE_FOLLOW", ENABLE_FOLLOW)),
-        "enable_profile_visit": bool(getattr(cfg, "ENABLE_PROFILE_VISIT", ENABLE_PROFILE_VISIT)),
-        "enable_video_comment": bool(getattr(cfg, "ENABLE_VIDEO_COMMENT", ENABLE_VIDEO_COMMENT)),
-        "enable_search_keywords": bool(getattr(cfg, "ENABLE_SEARCH_KEYWORDS", ENABLE_SEARCH_KEYWORDS)),
+        "enable_profile_visit": bool(
+            getattr(cfg, "ENABLE_PROFILE_VISIT", ENABLE_PROFILE_VISIT)
+        ),
+        "enable_video_comment": bool(
+            getattr(cfg, "ENABLE_VIDEO_COMMENT", ENABLE_VIDEO_COMMENT)
+        ),
+        "enable_search_keywords": bool(
+            getattr(cfg, "ENABLE_SEARCH_KEYWORDS", ENABLE_SEARCH_KEYWORDS)
+        ),
     }
 
 
@@ -356,7 +450,6 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
     video_comments = settings["video_comments"]
     like_count = 0
     follow_count = 0
-    
 
     log.info(f"{log_prefix} 开始执行快手自动化任务")
     log.info(f"{log_prefix} 浏览器ID: {browser_id}")
@@ -368,9 +461,13 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
     log.info(f"{log_prefix} 主页关注概率: {profile_follow_prob}%")
     log.info(f"{log_prefix} 点赞后等待时间范围: {like_wait_min}-{like_wait_max}s")
     log.info(f"{log_prefix} 关注后等待时间范围: {visit_min}-{visit_max}s")
-    log.info(f"{log_prefix} 进入主页等待时间范围: {profile_wait_min}-{profile_wait_max}s")
+    log.info(
+        f"{log_prefix} 进入主页等待时间范围: {profile_wait_min}-{profile_wait_max}s"
+    )
     log.info(f"{log_prefix} 视频留言概率: {video_comment_prob}%")
-    log.info(f"{log_prefix} 视频留言前等待时间范围: {video_comment_wait_min}-{video_comment_wait_max}s")
+    log.info(
+        f"{log_prefix} 视频留言前等待时间范围: {video_comment_wait_min}-{video_comment_wait_max}s"
+    )
     log.info(f"{log_prefix} 每条视频最少关注数量: {min_follows_per_video}")
     log.info(f"{log_prefix} 每条视频最多关注数量: {max_follows_per_video}")
     log.info(f"{log_prefix} 每条视频最少点赞数量: {comment_like_count_min}")
@@ -382,13 +479,24 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
         raise RuntimeError(f"{log_prefix} 打开比特浏览器失败: {res}")
 
     log.info(f"{log_prefix} 比特浏览器打开成功")
-    
+
     opt = webdriver.ChromeOptions()
     opt.add_experimental_option("debuggerAddress", data["http"])
     driver = webdriver.Chrome(service=Service(data["driver"]), options=opt)
     cfg = get_config()
-    reporter = DataReporter(device_code=cfg.DEVICE_CODE, browser_id=browser_id, send_ws_message_func=_send_ws_message_for_reporter_search)
-    _send_ws_message({"browserId": browser_id, "cmd": "RunStateReq", "id": cfg.DEVICE_CODE, "state": "running" if len(browser_id) == 32 else "error"})
+    reporter = DataReporter(
+        device_code=cfg.DEVICE_CODE,
+        browser_id=browser_id,
+        send_ws_message_func=_send_ws_message_for_reporter_search,
+    )
+    _send_ws_message(
+        {
+            "browserId": browser_id,
+            "cmd": "RunStateReq",
+            "id": cfg.DEVICE_CODE,
+            "state": "running" if len(browser_id) == 32 else "error",
+        }
+    )
 
     def w(t=None):
         timeout = t or max(8, wait_time)
@@ -420,8 +528,10 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                 driver.close()
             driver.switch_to.window(driver.window_handles[0])
             log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
-        
-        driver.get("https://www.kuaishou.com/search/video"); w(); _sleep_interruptible(0.8)
+
+        driver.get("https://www.kuaishou.com/search/video")
+        w()
+        _sleep_interruptible(0.8)
         empty_retries = 0
         while True:
             _ensure_not_stopped()
@@ -450,7 +560,9 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
             visit_min, visit_max = settings["visit_wait_range"]
             profile_wait_min, profile_wait_max = settings["profile_wait_range"]
             video_comment_prob = settings["video_reply_rate"]
-            video_comment_wait_min, video_comment_wait_max = settings["video_reply_wait_range"]
+            video_comment_wait_min, video_comment_wait_max = settings[
+                "video_reply_wait_range"
+            ]
             min_follows_per_video = settings["min_follows_per_video"]
             max_follows_per_video = settings["max_follows_per_video"]
             comment_like_count_min = settings["comment_like_count_min"]
@@ -476,32 +588,47 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                         driver.close()
                     driver.switch_to.window(driver.window_handles[0])
                     print(f"{log_prefix} 已关闭额外窗口，保留主窗口")
-                
-                driver.get("https://www.kuaishou.com/search/video"); w(); _sleep_interruptible(0.5)
-            inp = KuaishouUtils.el(driver, "input.search-input") or KuaishouUtils.el(driver, ".search-input")
+
+                driver.get("https://www.kuaishou.com/search/video")
+                w()
+                _sleep_interruptible(0.5)
+            inp = KuaishouUtils.el(driver, "input.search-input") or KuaishouUtils.el(
+                driver, ".search-input"
+            )
             if not inp:
                 log.warning(f"{log_prefix} 未找到搜索输入框，跳过关键词: {kw}")
                 continue
             try:
-                inp.click(); inp.send_keys(Keys.CONTROL, "a"); inp.send_keys(Keys.BACKSPACE)
+                inp.click()
+                inp.send_keys(Keys.CONTROL, "a")
+                inp.send_keys(Keys.BACKSPACE)
             except Exception:
                 pass
-            ActionChains(driver).send_keys(kw).perform(); _sleep_interruptible(0.2)
-            if not KuaishouUtils.click(driver, KuaishouUtils.el(driver, ".search-icon")):
+            ActionChains(driver).send_keys(kw).perform()
+            _sleep_interruptible(0.2)
+            if not KuaishouUtils.click(
+                driver, KuaishouUtils.el(driver, ".search-icon")
+            ):
                 ActionChains(driver).send_keys(Keys.RETURN).perform()
             _sleep_interruptible(1.0)
 
-            cont = KuaishouUtils.el(driver, "div.video-container"); cards = KuaishouUtils.els(driver, ".video-card .card-link", cont) or KuaishouUtils.els(driver, ".card-link", cont)
+            cont = KuaishouUtils.el(driver, "div.video-container")
+            cards = KuaishouUtils.els(
+                driver, ".video-card .card-link", cont
+            ) or KuaishouUtils.els(driver, ".card-link", cont)
             if not cards:
                 log.warning(f"{log_prefix} 未找到视频卡片，跳过关键词: {kw}")
                 continue
-            main_h = driver.current_window_handle; hs0 = set(driver.window_handles)
-            KuaishouUtils.click(driver, cards[0]); _sleep_interruptible(0.8)
+            main_h = driver.current_window_handle
+            hs0 = set(driver.window_handles)
+            KuaishouUtils.click(driver, cards[0])
+            _sleep_interruptible(0.8)
             new_h = next(iter(set(driver.window_handles) - hs0), None)
             if new_h:
                 driver.switch_to.window(new_h)
-            w(); _sleep_interruptible(0.5)
-            
+            w()
+            _sleep_interruptible(0.5)
+
             def leave_video_comment():
                 """在当前视频页面留下评论"""
                 return KuaishouUtils.leave_video_comment(
@@ -511,26 +638,32 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                     log_prefix,
                     video_comments,
                 )
-                
+
             vids = random.randint(video_min, video_max)
             print(f"{log_prefix} 开始浏览 {vids} 个视频")
-            
+
             for i in range(vids):
                 _ensure_not_stopped()
-                print(f"{log_prefix} 正在处理第 {i+1}/{vids} 个视频")
-                
+                print(f"{log_prefix} 正在处理第 {i + 1}/{vids} 个视频")
+
                 # 检查评论项元素是否存在，不存在则切换视频
                 comment_items_exist = False
                 for attempt in range(5):  # 最多重试5次切换视频
                     try:
                         # 检查评论项元素是否存在
-                        comment_items = driver.find_elements(By.CSS_SELECTOR, ".comment-item.comment-list-item.dark-mode") or driver.find_elements(By.CSS_SELECTOR, ".comment-item")
+                        comment_items = driver.find_elements(
+                            By.CSS_SELECTOR, ".comment-item.comment-list-item.dark-mode"
+                        ) or driver.find_elements(By.CSS_SELECTOR, ".comment-item")
                         if comment_items:
                             comment_items_exist = True
                             break
                         else:
-                            log.warning(f"{log_prefix} 第 {i+1} 个视频未找到评论项，尝试切换到下一个视频")
-                            switch_next_btn = KuaishouUtils.el(driver, ".switch-item.video-switch-next")
+                            log.warning(
+                                f"{log_prefix} 第 {i + 1} 个视频未找到评论项，尝试切换到下一个视频"
+                            )
+                            switch_next_btn = KuaishouUtils.el(
+                                driver, ".switch-item.video-switch-next"
+                            )
                             if switch_next_btn:
                                 if KuaishouUtils.click(driver, switch_next_btn):
                                     log.info(f"{log_prefix} 成功点击下一个视频按钮")
@@ -546,20 +679,24 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                     except Exception as e:
                         log.error(f"{log_prefix} 检查评论项时出错: {e}")
                         break
-                
+
                 if not comment_items_exist:
-                    log.warning(f"{log_prefix} 第 {i+1} 个视频没有评论项，跳过该视频")
+                    log.warning(f"{log_prefix} 第 {i + 1} 个视频没有评论项，跳过该视频")
                     continue  # 跳过当前视频，处理下一个视频
-                
+
                 try:
                     WebDriverWait(driver, max(8, wait_time)).until(
-                        lambda d: d.find_elements(By.CSS_SELECTOR, ".comment-item.comment-list-item.dark-mode")
+                        lambda d: d.find_elements(
+                            By.CSS_SELECTOR, ".comment-item.comment-list-item.dark-mode"
+                        )
                         or d.find_elements(By.CSS_SELECTOR, ".comment-item")
                     )
                 except Exception:
                     _sleep_interruptible(1.0)
-                
-                if ENABLE_VIDEO_COMMENT and (random.random() * 100 <= video_comment_prob):
+
+                if ENABLE_VIDEO_COMMENT and (
+                    random.random() * 100 <= video_comment_prob
+                ):
                     log.info(f"{log_prefix} 根据概率决定进行视频留言")
                     if leave_video_comment():
                         try:
@@ -567,20 +704,26 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                             reporter.increment_video_comment(1)
                         except Exception:
                             pass
-                
+
                 # 为每个视频设置随机的点赞和关注上限
-                max_follow_per_video = random.randint(min_follows_per_video, max_follows_per_video)
-                max_like_per_video = random.randint(comment_like_count_min, comment_like_count_max)
+                max_follow_per_video = random.randint(
+                    min_follows_per_video, max_follows_per_video
+                )
+                max_like_per_video = random.randint(
+                    comment_like_count_min, comment_like_count_max
+                )
                 current_follow_count = 0  # 当前视频关注计数器
-                current_like_count = 0    # 当前视频点赞计数器
-                
+                current_like_count = 0  # 当前视频点赞计数器
+
                 scroll_times = random.randint(scroll_min, scroll_max)
                 processed = 0
                 scroll_done = 0
                 since_scroll = 0
                 while scroll_done < scroll_times:
                     _ensure_not_stopped()
-                    items = KuaishouUtils.els(driver, ".comment-item.comment-list-item.dark-mode") or KuaishouUtils.els(driver, ".comment-item")
+                    items = KuaishouUtils.els(
+                        driver, ".comment-item.comment-list-item.dark-mode"
+                    ) or KuaishouUtils.els(driver, ".comment-item")
                     if not items:
                         _sleep_interruptible(0.8)
                         continue
@@ -589,7 +732,9 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                             KuaishouUtils.scroll_ks_comment_container(driver, times=1)
                             scroll_done += 1
                             since_scroll = 0
-                            print(f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})")
+                            print(
+                                f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})"
+                            )
                             # 滚动后添加随机等待，模拟人工操作
                             _sleep_interruptible(random.uniform(2, 4))
                         except Exception as e:
@@ -600,27 +745,39 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                     it = items[processed]
                     processed += 1
                     since_scroll += 1
-                    
+
                     # 处理每个评论项之间添加随机等待，模拟人工浏览
                     _sleep_interruptible(random.uniform(0.5, 1.5))
 
                     # 检查评论是否包含关键词
                     comment_ok = False
                     try:
-                        content_el = it.find_element(By.CSS_SELECTOR, "div.comment-item-content > span")
+                        content_el = it.find_element(
+                            By.CSS_SELECTOR, "div.comment-item-content > span"
+                        )
                         spans = content_el.find_elements(By.CSS_SELECTOR, "span")
                         comment_text = "".join(span.text for span in spans).strip()
                         log.info(f"{log_prefix} 评论内容: {comment_text}")
-                        
+
                         # 检查评论是否包含关键词
-                        if KuaishouUtils.check_comment_contains_keywords(comment_text, comment_filter_keywords):
+                        if KuaishouUtils.check_comment_contains_keywords(
+                            comment_text, comment_filter_keywords
+                        ):
                             comment_ok = True
                     except Exception:
                         pass
-                    effective_comment_ok = comment_ok if enable_search_keywords else False
+                    effective_comment_ok = (
+                        comment_ok if enable_search_keywords else False
+                    )
 
                     # 点赞逻辑 - 如果包含关键词则强制点赞，否则按概率点赞，但不超过当前视频的点赞上限
-                    if enable_like and (effective_comment_ok or (current_like_count < max_like_per_video and random.random() * 100 <= like_prob)):
+                    if enable_like and (
+                        effective_comment_ok
+                        or (
+                            current_like_count < max_like_per_video
+                            and random.random() * 100 <= like_prob
+                        )
+                    ):
                         like_el = KuaishouUtils.el(driver, ".comment-item-likeicon", it)
                         if like_el:
                             cls0 = ""
@@ -637,8 +794,12 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                                 if cls1 != cls0:
                                     like_count += 1
                                     current_like_count += 1  # 增加当前视频点赞计数
-                                    log.info(f"{log_prefix} 已点赞评论 (当前视频点赞数: {current_like_count}/{max_like_per_video}, 累计点赞次数: {like_count})")
-                                    _sleep_interruptible(random.uniform(like_wait_min, like_wait_max))
+                                    log.info(
+                                        f"{log_prefix} 已点赞评论 (当前视频点赞数: {current_like_count}/{max_like_per_video}, 累计点赞次数: {like_count})"
+                                    )
+                                    _sleep_interruptible(
+                                        random.uniform(like_wait_min, like_wait_max)
+                                    )
                                     try:
                                         reporter.set_action("like")
                                         reporter.increment_like(1)
@@ -646,29 +807,55 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                                         pass
 
                     # 访问主页逻辑 - 如果评论包含关键词则强制访问，否则按概率访问
-                    should_visit = enable_profile_visit and (effective_comment_ok or (random.random() * 100 <= visit_profile_prob))
+                    should_visit = enable_profile_visit and (
+                        effective_comment_ok
+                        or (random.random() * 100 <= visit_profile_prob)
+                    )
                     if should_visit:
                         a = KuaishouUtils.el(driver, ".author-name", it)
                         if a:
                             hs_a = set(driver.window_handles)
                             if KuaishouUtils.click(driver, a):
                                 _sleep_interruptible(random.uniform(1.0, 2.0))
-                                prof = next(iter(set(driver.window_handles) - hs_a), None)
+                                prof = next(
+                                    iter(set(driver.window_handles) - hs_a), None
+                                )
                                 if prof:
                                     driver.switch_to.window(prof)
                                 try:
-                                    _sleep_interruptible(random.uniform(profile_wait_min, profile_wait_max))
-                                    
+                                    _sleep_interruptible(
+                                        random.uniform(
+                                            profile_wait_min, profile_wait_max
+                                        )
+                                    )
+
                                     # 如果评论包含关键词，则强制关注，否则按概率关注，但不超过当前视频的关注上限
-                                    if enable_follow and current_follow_count < max_follow_per_video:
-                                        follow_prob = 100 if effective_comment_ok else profile_follow_prob
+                                    if (
+                                        enable_follow
+                                        and current_follow_count < max_follow_per_video
+                                    ):
+                                        follow_prob = (
+                                            100
+                                            if effective_comment_ok
+                                            else profile_follow_prob
+                                        )
                                         if random.random() * 100 <= follow_prob:
-                                            follow_button = KuaishouUtils.el(driver, ".btn-words")
-                                            if follow_button and KuaishouUtils.click(driver, follow_button):
+                                            follow_button = KuaishouUtils.el(
+                                                driver, ".btn-words"
+                                            )
+                                            if follow_button and KuaishouUtils.click(
+                                                driver, follow_button
+                                            ):
                                                 follow_count += 1
-                                                current_follow_count += 1  # 增加当前视频关注计数
-                                                log.info(f"{log_prefix} 已关注用户 (当前视频关注数: {current_follow_count}/{max_follow_per_video}, 累计关注次数: {follow_count})")
-                                                _sleep_interruptible(random.uniform(visit_min, visit_max))
+                                                current_follow_count += (
+                                                    1  # 增加当前视频关注计数
+                                                )
+                                                log.info(
+                                                    f"{log_prefix} 已关注用户 (当前视频关注数: {current_follow_count}/{max_follow_per_video}, 累计关注次数: {follow_count})"
+                                                )
+                                                _sleep_interruptible(
+                                                    random.uniform(visit_min, visit_max)
+                                                )
                                                 try:
                                                     reporter.set_action("follow")
                                                     reporter.increment_follow(1)
@@ -689,7 +876,9 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                             KuaishouUtils.scroll_ks_comment_container(driver, times=1)
                             scroll_done += 1
                             since_scroll = 0
-                            log.info(f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})")
+                            log.info(
+                                f"{log_prefix} 已滚动评论区 ({scroll_done}/{scroll_times})"
+                            )
                             # 滚动后添加随机等待，模拟人工操作
                             _sleep_interruptible(random.uniform(2, 4))
                         except Exception as e:
@@ -697,12 +886,16 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                             scroll_done += 1
                             since_scroll = 0
 
-                log.info(f"{log_prefix} 第 {i+1} 个视频处理完成，点赞数: {current_like_count}/{max_like_per_video}，关注数: {current_follow_count}/{max_follow_per_video}")
+                log.info(
+                    f"{log_prefix} 第 {i + 1} 个视频处理完成，点赞数: {current_like_count}/{max_like_per_video}，关注数: {current_follow_count}/{max_follow_per_video}"
+                )
 
                 # 如果不是最后一个视频，尝试切换到下一个视频
                 if i < vids - 1:
                     log.info(f"{log_prefix} 尝试切换到下一个视频")
-                    switch_next_btn = KuaishouUtils.el(driver, ".switch-item.video-switch-next")
+                    switch_next_btn = KuaishouUtils.el(
+                        driver, ".switch-item.video-switch-next"
+                    )
                     if switch_next_btn:
                         if KuaishouUtils.click(driver, switch_next_btn):
                             log.info(f"{log_prefix} 成功点击下一个视频按钮")
@@ -722,15 +915,26 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                             pass
                         driver.switch_to.window(main_h)
                     else:
-                        root = KuaishouUtils.el(driver, ".short-video-info-container") or KuaishouUtils.el(driver, "div.comment-container.vertical-comment")
-                        if not KuaishouUtils.click(driver, KuaishouUtils.el(driver, ".close-page", root) if root else None):
-                            KuaishouUtils.click(driver, KuaishouUtils.el(driver, ".close-page"))
+                        root = KuaishouUtils.el(
+                            driver, ".short-video-info-container"
+                        ) or KuaishouUtils.el(
+                            driver, "div.comment-container.vertical-comment"
+                        )
+                        if not KuaishouUtils.click(
+                            driver,
+                            KuaishouUtils.el(driver, ".close-page", root)
+                            if root
+                            else None,
+                        ):
+                            KuaishouUtils.click(
+                                driver, KuaishouUtils.el(driver, ".close-page")
+                            )
                             try:
                                 ActionChains(driver).send_keys(Keys.ESCAPE).perform()
                             except Exception:
                                 pass
                         _sleep_interruptible(0.7)
-            
+
             # 确保只保留主窗口，清理可能残留的窗口
             if len(driver.window_handles) > 1:
                 log.info(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
@@ -739,7 +943,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
                     driver.close()
                 driver.switch_to.window(driver.window_handles[0])
                 log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
-            
+
             _sleep_interruptible(random.uniform(1.0, 2.0))
         if not STOP_EVENT.is_set():
             finished_normally = True

@@ -27,61 +27,123 @@ from ..tools.license import LicenseManager, LicenseException
 ks_config = KsConfig()
 
 # URL列表配置
-URLS = ks_config.KS_SHARE_URLS if hasattr(ks_config, 'KS_SHARE_URLS') else [
-    "https://www.kuaishou.com/f/X-2dKHX1NhEkj1oh",
-    "https://www.kuaishou.com/f/X-8KhLhFzsM9CW34",
-    "https://www.kuaishou.com/f/X-1XE4j64AuGQDfX",
-    "https://www.kuaishou.com/f/X-8HoRGuDNGxP1C3",
-    "https://www.kuaishou.com/f/X-6SBqfXzOVHjcHM",
-    "https://www.kuaishou.com/f/X3qsaFh6BNsoDDo",
-]
+URLS = (
+    ks_config.KS_SHARE_URLS
+    if hasattr(ks_config, "KS_SHARE_URLS")
+    else [
+        "https://www.kuaishou.com/f/X-2dKHX1NhEkj1oh",
+        "https://www.kuaishou.com/f/X-8KhLhFzsM9CW34",
+        "https://www.kuaishou.com/f/X-1XE4j64AuGQDfX",
+        "https://www.kuaishou.com/f/X-8HoRGuDNGxP1C3",
+        "https://www.kuaishou.com/f/X-6SBqfXzOVHjcHM",
+        "https://www.kuaishou.com/f/X3qsaFh6BNsoDDo",
+    ]
+)
 
 # 视频浏览相关参数
-DEFAULT_MAX_VISIT_URLS = ks_config.MAX_VISIT_URLS if hasattr(ks_config, 'MAX_VISIT_URLS') else (5, 10)
-DEFAULT_MAX_COMMENT = ks_config.MAX_COMMENT if hasattr(ks_config, 'MAX_COMMENT') else (3, 5)
+DEFAULT_MAX_VISIT_URLS = (
+    ks_config.MAX_VISIT_URLS if hasattr(ks_config, "MAX_VISIT_URLS") else (5, 10)
+)
+DEFAULT_MAX_COMMENT = (
+    ks_config.MAX_COMMENT if hasattr(ks_config, "MAX_COMMENT") else (3, 5)
+)
 
 # 互动操作相关参数
-LIKE_PROBABILITY = ks_config.LIKE_PROBABILITY if hasattr(ks_config, 'LIKE_PROBABILITY') else 30
-VISIT_ENABLE = ks_config.VISIT_ENABLE if hasattr(ks_config, 'VISIT_ENABLE') else True
-PROFILE_FOLLOW_PROBABILITY = ks_config.PROFILE_FOLLOW_PROBABILITY if hasattr(ks_config, 'PROFILE_FOLLOW_PROBABILITY') else 10
-DEFAULT_LIKE_WAIT_MIN = ks_config.LIKE_WAIT_MIN if hasattr(ks_config, 'LIKE_WAIT_MIN') else 1
-DEFAULT_LIKE_WAIT_MAX = ks_config.LIKE_WAIT_MAX if hasattr(ks_config, 'LIKE_WAIT_MAX') else 3
-DEFAULT_VISIT_MIN = ks_config.VISIT_MIN if hasattr(ks_config, 'VISIT_MIN') else 2
-DEFAULT_VISIT_MAX = ks_config.VISIT_MAX if hasattr(ks_config, 'VISIT_MAX') else 5
-DEFAULT_PROFILE_WAIT_MIN = ks_config.COMMENT_WAIT_MIN if hasattr(ks_config, 'COMMENT_WAIT_MIN') else 1
-DEFAULT_PROFILE_WAIT_MAX = ks_config.COMMENT_WAIT_MAX if hasattr(ks_config, 'COMMENT_WAIT_MAX') else 3
-VIDEO_REPLY_RATE = ks_config.VIDEO_REPLY_RATE if hasattr(ks_config, 'VIDEO_REPLY_RATE') else 15
-VIDEO_REPLY_WAIT_MIN = ks_config.VIDEO_REPLY_WAIT_MIN if hasattr(ks_config, 'VIDEO_REPLY_WAIT_MIN') else 2
-VIDEO_REPLY_WAIT_MAX = ks_config.VIDEO_REPLY_WAIT_MAX if hasattr(ks_config, 'VIDEO_REPLY_WAIT_MAX') else 4
+LIKE_PROBABILITY = (
+    ks_config.LIKE_PROBABILITY if hasattr(ks_config, "LIKE_PROBABILITY") else 30
+)
+VISIT_ENABLE = ks_config.VISIT_ENABLE if hasattr(ks_config, "VISIT_ENABLE") else True
+PROFILE_FOLLOW_PROBABILITY = (
+    ks_config.PROFILE_FOLLOW_PROBABILITY
+    if hasattr(ks_config, "PROFILE_FOLLOW_PROBABILITY")
+    else 10
+)
+DEFAULT_LIKE_WAIT_MIN = (
+    ks_config.LIKE_WAIT_MIN if hasattr(ks_config, "LIKE_WAIT_MIN") else 1
+)
+DEFAULT_LIKE_WAIT_MAX = (
+    ks_config.LIKE_WAIT_MAX if hasattr(ks_config, "LIKE_WAIT_MAX") else 3
+)
+DEFAULT_VISIT_MIN = ks_config.VISIT_MIN if hasattr(ks_config, "VISIT_MIN") else 2
+DEFAULT_VISIT_MAX = ks_config.VISIT_MAX if hasattr(ks_config, "VISIT_MAX") else 5
+DEFAULT_PROFILE_WAIT_MIN = (
+    ks_config.COMMENT_WAIT_MIN if hasattr(ks_config, "COMMENT_WAIT_MIN") else 1
+)
+DEFAULT_PROFILE_WAIT_MAX = (
+    ks_config.COMMENT_WAIT_MAX if hasattr(ks_config, "COMMENT_WAIT_MAX") else 3
+)
+VIDEO_REPLY_RATE = (
+    ks_config.VIDEO_REPLY_RATE if hasattr(ks_config, "VIDEO_REPLY_RATE") else 15
+)
+VIDEO_REPLY_WAIT_MIN = (
+    ks_config.VIDEO_REPLY_WAIT_MIN if hasattr(ks_config, "VIDEO_REPLY_WAIT_MIN") else 2
+)
+VIDEO_REPLY_WAIT_MAX = (
+    ks_config.VIDEO_REPLY_WAIT_MAX if hasattr(ks_config, "VIDEO_REPLY_WAIT_MAX") else 4
+)
 
 # 新增：每条视频点赞和关注上限参数
-MIN_FOLLOWS_PER_VIDEO = ks_config.MIN_FOLLOWS_PER_VIDEO if hasattr(ks_config, 'MIN_FOLLOWS_PER_VIDEO') else 0
-MAX_FOLLOWS_PER_VIDEO = ks_config.MAX_FOLLOWS_PER_VIDEO if hasattr(ks_config, 'MAX_FOLLOWS_PER_VIDEO') else 2
-COMMENT_LIKE_COUNT_MIN = ks_config.COMMENT_LIKE_COUNT_MIN if hasattr(ks_config, 'COMMENT_LIKE_COUNT_MIN') else 0
-COMMENT_LIKE_COUNT_MAX = ks_config.COMMENT_LIKE_COUNT_MAX if hasattr(ks_config, 'COMMENT_LIKE_COUNT_MAX') else 3
+MIN_FOLLOWS_PER_VIDEO = (
+    ks_config.MIN_FOLLOWS_PER_VIDEO
+    if hasattr(ks_config, "MIN_FOLLOWS_PER_VIDEO")
+    else 0
+)
+MAX_FOLLOWS_PER_VIDEO = (
+    ks_config.MAX_FOLLOWS_PER_VIDEO
+    if hasattr(ks_config, "MAX_FOLLOWS_PER_VIDEO")
+    else 2
+)
+COMMENT_LIKE_COUNT_MIN = (
+    ks_config.COMMENT_LIKE_COUNT_MIN
+    if hasattr(ks_config, "COMMENT_LIKE_COUNT_MIN")
+    else 0
+)
+COMMENT_LIKE_COUNT_MAX = (
+    ks_config.COMMENT_LIKE_COUNT_MAX
+    if hasattr(ks_config, "COMMENT_LIKE_COUNT_MAX")
+    else 3
+)
 
 # 视频评论内容列表
-VIDEO_COMMENTS = ks_config.VIDEO_COMMENTS if hasattr(ks_config, 'VIDEO_COMMENTS') else [
-    "这个视频不错！", 
-    "内容很棒！", 
-    "支持一下！", 
-    "666", 
-    "好看！"
-]
+VIDEO_COMMENTS = (
+    ks_config.VIDEO_COMMENTS
+    if hasattr(ks_config, "VIDEO_COMMENTS")
+    else ["这个视频不错！", "内容很棒！", "支持一下！", "666", "好看！"]
+)
 
-DEFAULT_BIT_BROWSER_IDS = ks_config.BIT_BROWSER_IDS if hasattr(ks_config, 'BIT_BROWSER_IDS') else []
+DEFAULT_BIT_BROWSER_IDS = (
+    ks_config.BIT_BROWSER_IDS if hasattr(ks_config, "BIT_BROWSER_IDS") else []
+)
 
 # 评论关键词过滤
-COMMENT_FILTER_KEYWORDS = ks_config.COMMENT_FILTER_KEYWORDS if hasattr(ks_config, 'COMMENT_FILTER_KEYWORDS') else ""
+COMMENT_FILTER_KEYWORDS = (
+    ks_config.COMMENT_FILTER_KEYWORDS
+    if hasattr(ks_config, "COMMENT_FILTER_KEYWORDS")
+    else ""
+)
 
 # 是否启用功能
-ENABLE_LIKE = ks_config.ENABLE_LIKE if hasattr(ks_config, 'ENABLE_LIKE') else True
-ENABLE_FOLLOW = ks_config.ENABLE_FOLLOW if hasattr(ks_config, 'ENABLE_FOLLOW') else True
-ENABLE_PROFILE_VISIT = ks_config.ENABLE_PROFILE_VISIT if hasattr(ks_config, 'ENABLE_PROFILE_VISIT') else True
-ENABLE_VIDEO_COMMENT = ks_config.ENABLE_VIDEO_COMMENT if hasattr(ks_config, 'ENABLE_VIDEO_COMMENT') else True
-ENABLE_SEARCH_KEYWORDS = ks_config.ENABLE_SEARCH_KEYWORDS if hasattr(ks_config, 'ENABLE_SEARCH_KEYWORDS') else False
+ENABLE_LIKE = ks_config.ENABLE_LIKE if hasattr(ks_config, "ENABLE_LIKE") else True
+ENABLE_FOLLOW = ks_config.ENABLE_FOLLOW if hasattr(ks_config, "ENABLE_FOLLOW") else True
+ENABLE_PROFILE_VISIT = (
+    ks_config.ENABLE_PROFILE_VISIT
+    if hasattr(ks_config, "ENABLE_PROFILE_VISIT")
+    else True
+)
+ENABLE_VIDEO_COMMENT = (
+    ks_config.ENABLE_VIDEO_COMMENT
+    if hasattr(ks_config, "ENABLE_VIDEO_COMMENT")
+    else True
+)
+ENABLE_SEARCH_KEYWORDS = (
+    ks_config.ENABLE_SEARCH_KEYWORDS
+    if hasattr(ks_config, "ENABLE_SEARCH_KEYWORDS")
+    else False
+)
 
-DEFAULT_WAIT_TIME = ks_config.KS_DEFAULT_WAIT_TIME if hasattr(ks_config, 'KS_DEFAULT_WAIT_TIME') else 8
+DEFAULT_WAIT_TIME = (
+    ks_config.KS_DEFAULT_WAIT_TIME if hasattr(ks_config, "KS_DEFAULT_WAIT_TIME") else 8
+)
 license_manager = LicenseManager()
 STOP_EVENT = threading.Event()
 
@@ -93,6 +155,7 @@ pong_received = threading.Event()
 heartbeat_timeout_count = 0
 MAX_HEARTBEAT_TIMEOUTS = 3
 
+
 def _sleep_interruptible(seconds: float):
     end_time = time.time() + max(0.0, float(seconds))
     while time.time() < end_time:
@@ -101,15 +164,20 @@ def _sleep_interruptible(seconds: float):
         time.sleep(min(0.1, end_time - time.time()))
     return True
 
+
 def _ensure_not_stopped():
     if STOP_EVENT.is_set():
         raise KeyboardInterrupt("收到停止信号")
 
+
 def _send_ws_message(message_dict):
     try:
         import json as _json
+
         try:
-            log.info(f"发送到服务器的消息: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}")
+            log.info(
+                f"发送到服务器的消息: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}"
+            )
         except Exception:
             pass
         if not ws_client or ws_client.stop_requested:
@@ -118,11 +186,14 @@ def _send_ws_message(message_dict):
         if not loop or not loop.is_running():
             return
         import asyncio
+
         asyncio.run_coroutine_threadsafe(
-            ws_client.send_queue.put(_json.dumps(message_dict, ensure_ascii=False)), loop
+            ws_client.send_queue.put(_json.dumps(message_dict, ensure_ascii=False)),
+            loop,
         )
     except Exception:
         pass
+
 
 def _send_ws_message_for_reporter_share(message_dict):
     try:
@@ -132,12 +203,16 @@ def _send_ws_message_for_reporter_share(message_dict):
                 data.pop("comment", None)
             try:
                 import json as _json
-                log.info(f"PcDataReq 上报: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}")
+
+                log.info(
+                    f"PcDataReq 上报: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}"
+                )
             except Exception:
                 pass
     except Exception:
         pass
     _send_ws_message(message_dict)
+
 
 def _handle_heartbeat_response(data: dict):
     global heartbeat_timeout_count
@@ -147,6 +222,7 @@ def _handle_heartbeat_response(data: dict):
             heartbeat_timeout_count = 0
     except Exception:
         pass
+
 
 def _handle_login_res_command(data: dict):
     try:
@@ -167,10 +243,12 @@ def _handle_login_res_command(data: dict):
     except Exception:
         pass
 
+
 async def _heartbeat_task():
     global heartbeat_timeout_count
     import asyncio
     from datetime import datetime
+
     cfg = get_config()
     while not STOP_EVENT.is_set():
         try:
@@ -182,7 +260,10 @@ async def _heartbeat_task():
                 }
             )
             try:
-                await asyncio.wait_for(asyncio.get_event_loop().run_in_executor(None, pong_received.wait), timeout=5.0)
+                await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(None, pong_received.wait),
+                    timeout=5.0,
+                )
                 heartbeat_timeout_count = 0
                 pong_received.clear()
             except asyncio.TimeoutError:
@@ -196,6 +277,7 @@ async def _heartbeat_task():
         except Exception:
             break
 
+
 def _start_ws_client():
     global ws_client, ws_thread, ws_loop, heartbeat_task
     try:
@@ -203,23 +285,39 @@ def _start_ws_client():
         ws_client = create_websocket_client(cfg)
         if ws_client:
             ws_client.set_external_send_func(_send_ws_message)
-            ws_client.set_config_update_handler(lambda d: _handle_login_res_command({"data": d}))
+            ws_client.set_config_update_handler(
+                lambda d: _handle_login_res_command({"data": d})
+            )
             ws_thread = start_websocket_client_in_thread(
                 ws_client, lambda: (STOP_EVENT.set(), cfg.request_stop())
             )
-            ws_client.register_command_handler("HeartbeatRes", _handle_heartbeat_response)
+            ws_client.register_command_handler(
+                "HeartbeatRes", _handle_heartbeat_response
+            )
             ws_client.register_command_handler("LoginRes", _handle_login_res_command)
             ws_loop = getattr(ws_client, "event_loop", None)
             if ws_loop and ws_loop.is_running():
                 import asyncio
-                heartbeat_task = asyncio.run_coroutine_threadsafe(_heartbeat_task(), ws_loop)
+
+                heartbeat_task = asyncio.run_coroutine_threadsafe(
+                    _heartbeat_task(), ws_loop
+                )
             # 发送登录请求
             from urllib.parse import parse_qs, urlparse
+
             parsed = urlparse(cfg.WS_URL)
             device_id = parse_qs(parsed.query).get("id", [cfg.DEVICE_CODE])[0]
-            _send_ws_message({"cmd": "LoginReq", "id": device_id, "mode": "pc", "version": getattr(cfg, "VERSION", None)})
+            _send_ws_message(
+                {
+                    "cmd": "LoginReq",
+                    "id": device_id,
+                    "mode": "pc",
+                    "version": getattr(cfg, "VERSION", None),
+                }
+            )
     except Exception:
         pass
+
 
 def _stop_ws_client():
     global ws_client, ws_thread, ws_loop, heartbeat_task
@@ -234,6 +332,7 @@ def _stop_ws_client():
             loop = getattr(ws_client, "event_loop", None) or ws_loop
             if loop and loop.is_running():
                 import asyncio
+
                 asyncio.run_coroutine_threadsafe(ws_client.close(), loop)
         if ws_thread and ws_thread.is_alive():
             try:
@@ -243,11 +342,13 @@ def _stop_ws_client():
     except Exception:
         pass
 
+
 def get_browser_log_prefix(browser_id):
     """生成浏览器日志前缀，格式为'浏览器 #编号'"""
     # 提取浏览器ID的最后几位作为编号
     browser_num = browser_id.split("-")[-1] if "-" in browser_id else browser_id[:8]
     return f"[浏览器 #{browser_num}]"
+
 
 def _rng(name, d):
     s = (os.getenv(name) or "").strip()
@@ -261,6 +362,7 @@ def _rng(name, d):
     except Exception:
         pass
     return d
+
 
 def _urls(d):
     s = (os.getenv("KS_SHARE_URLS") or "").strip()
@@ -278,6 +380,7 @@ def _urls(d):
     r = [x.strip() for x in s.split(",") if x.strip()]
     return r or d[:]
 
+
 def parse_browser_ids():
     s = (os.getenv("BIT_BROWSER_IDS") or "").strip()
     if not s:
@@ -294,6 +397,7 @@ def parse_browser_ids():
     r = [x.strip() for x in s.split(",") if x.strip()]
     return r or DEFAULT_BIT_BROWSER_IDS[:]
 
+
 def _open_bit(browser_id):
     payload = {"id": str(browser_id), "queue": True, "ignoreDefaultUrls": True}
     if (os.getenv("HEADLESS") or "").strip().lower() in {"1", "true", "yes", "y"}:
@@ -305,6 +409,7 @@ def _open_bit(browser_id):
         timeout=30,
     ).json()
 
+
 def _as_int_range(value, fallback):
     try:
         if isinstance(value, (list, tuple)) and len(value) == 2:
@@ -314,36 +419,85 @@ def _as_int_range(value, fallback):
         pass
     return fallback
 
+
 def _current_settings_share():
     cfg = get_config()
     wait_time = getattr(cfg, "WAIT_TIME", DEFAULT_WAIT_TIME) or DEFAULT_WAIT_TIME
     url_range = getattr(cfg, "MAX_VISIT_URLS", None)
-    url_range = _as_int_range(url_range, _as_int_range(getattr(cfg, "MAX_SCROLL_VIDEO", None), DEFAULT_MAX_VISIT_URLS))
-    comment_range = _as_int_range(getattr(cfg, "MAX_COMMENT", None), DEFAULT_MAX_COMMENT)
+    url_range = _as_int_range(
+        url_range,
+        _as_int_range(getattr(cfg, "MAX_SCROLL_VIDEO", None), DEFAULT_MAX_VISIT_URLS),
+    )
+    comment_range = _as_int_range(
+        getattr(cfg, "MAX_COMMENT", None), DEFAULT_MAX_COMMENT
+    )
     return {
         "wait_time": int(wait_time),
         "url_range": url_range,
         "comment_range": comment_range,
         "like_probability": int(getattr(cfg, "LIKE_PROBABILITY", LIKE_PROBABILITY)),
         "visit_enable": int(getattr(cfg, "VISIT_ENABLE", VISIT_ENABLE)),
-        "profile_follow_probability": int(getattr(cfg, "PROFILE_FOLLOW_PROBABILITY", PROFILE_FOLLOW_PROBABILITY)),
-        "like_wait_range": _as_int_range([getattr(cfg, "LIKE_WAIT_MIN", DEFAULT_LIKE_WAIT_MIN), getattr(cfg, "LIKE_WAIT_MAX", DEFAULT_LIKE_WAIT_MAX)], (DEFAULT_LIKE_WAIT_MIN, DEFAULT_LIKE_WAIT_MAX)),
-        "visit_wait_range": _as_int_range([getattr(cfg, "VISIT_MIN", DEFAULT_VISIT_MIN), getattr(cfg, "VISIT_MAX", DEFAULT_VISIT_MAX)], (DEFAULT_VISIT_MIN, DEFAULT_VISIT_MAX)),
-        "profile_wait_range": _as_int_range([getattr(cfg, "COMMENT_WAIT_MIN", DEFAULT_PROFILE_WAIT_MIN), getattr(cfg, "COMMENT_WAIT_MAX", DEFAULT_PROFILE_WAIT_MAX)], (DEFAULT_PROFILE_WAIT_MIN, DEFAULT_PROFILE_WAIT_MAX)),
+        "profile_follow_probability": int(
+            getattr(cfg, "PROFILE_FOLLOW_PROBABILITY", PROFILE_FOLLOW_PROBABILITY)
+        ),
+        "like_wait_range": _as_int_range(
+            [
+                getattr(cfg, "LIKE_WAIT_MIN", DEFAULT_LIKE_WAIT_MIN),
+                getattr(cfg, "LIKE_WAIT_MAX", DEFAULT_LIKE_WAIT_MAX),
+            ],
+            (DEFAULT_LIKE_WAIT_MIN, DEFAULT_LIKE_WAIT_MAX),
+        ),
+        "visit_wait_range": _as_int_range(
+            [
+                getattr(cfg, "VISIT_MIN", DEFAULT_VISIT_MIN),
+                getattr(cfg, "VISIT_MAX", DEFAULT_VISIT_MAX),
+            ],
+            (DEFAULT_VISIT_MIN, DEFAULT_VISIT_MAX),
+        ),
+        "profile_wait_range": _as_int_range(
+            [
+                getattr(cfg, "COMMENT_WAIT_MIN", DEFAULT_PROFILE_WAIT_MIN),
+                getattr(cfg, "COMMENT_WAIT_MAX", DEFAULT_PROFILE_WAIT_MAX),
+            ],
+            (DEFAULT_PROFILE_WAIT_MIN, DEFAULT_PROFILE_WAIT_MAX),
+        ),
         "video_reply_rate": int(getattr(cfg, "VIDEO_REPLY_RATE", VIDEO_REPLY_RATE)),
-        "video_reply_wait_range": _as_int_range([getattr(cfg, "VIDEO_REPLY_WAIT_MIN", VIDEO_REPLY_WAIT_MIN), getattr(cfg, "VIDEO_REPLY_WAIT_MAX", VIDEO_REPLY_WAIT_MAX)], (VIDEO_REPLY_WAIT_MIN, VIDEO_REPLY_WAIT_MAX)),
-        "min_follows_per_video": int(getattr(cfg, "MIN_FOLLOWS_PER_VIDEO", MIN_FOLLOWS_PER_VIDEO)),
-        "max_follows_per_video": int(getattr(cfg, "MAX_FOLLOWS_PER_VIDEO", MAX_FOLLOWS_PER_VIDEO)),
-        "comment_like_count_min": int(getattr(cfg, "COMMENT_LIKE_COUNT_MIN", COMMENT_LIKE_COUNT_MIN)),
-        "comment_like_count_max": int(getattr(cfg, "COMMENT_LIKE_COUNT_MAX", COMMENT_LIKE_COUNT_MAX)),
+        "video_reply_wait_range": _as_int_range(
+            [
+                getattr(cfg, "VIDEO_REPLY_WAIT_MIN", VIDEO_REPLY_WAIT_MIN),
+                getattr(cfg, "VIDEO_REPLY_WAIT_MAX", VIDEO_REPLY_WAIT_MAX),
+            ],
+            (VIDEO_REPLY_WAIT_MIN, VIDEO_REPLY_WAIT_MAX),
+        ),
+        "min_follows_per_video": int(
+            getattr(cfg, "MIN_FOLLOWS_PER_VIDEO", MIN_FOLLOWS_PER_VIDEO)
+        ),
+        "max_follows_per_video": int(
+            getattr(cfg, "MAX_FOLLOWS_PER_VIDEO", MAX_FOLLOWS_PER_VIDEO)
+        ),
+        "comment_like_count_min": int(
+            getattr(cfg, "COMMENT_LIKE_COUNT_MIN", COMMENT_LIKE_COUNT_MIN)
+        ),
+        "comment_like_count_max": int(
+            getattr(cfg, "COMMENT_LIKE_COUNT_MAX", COMMENT_LIKE_COUNT_MAX)
+        ),
         "video_comments": getattr(cfg, "VIDEO_COMMENTS", VIDEO_COMMENTS),
-        "comment_filter_keywords": getattr(cfg, "COMMENT_FILTER_KEYWORDS", COMMENT_FILTER_KEYWORDS),
+        "comment_filter_keywords": getattr(
+            cfg, "COMMENT_FILTER_KEYWORDS", COMMENT_FILTER_KEYWORDS
+        ),
         "enable_like": bool(getattr(cfg, "ENABLE_LIKE", ENABLE_LIKE)),
         "enable_follow": bool(getattr(cfg, "ENABLE_FOLLOW", ENABLE_FOLLOW)),
-        "enable_profile_visit": bool(getattr(cfg, "ENABLE_PROFILE_VISIT", ENABLE_PROFILE_VISIT)),
-        "enable_video_comment": bool(getattr(cfg, "ENABLE_VIDEO_COMMENT", ENABLE_VIDEO_COMMENT)),
-        "enable_search_keywords": bool(getattr(cfg, "ENABLE_SEARCH_KEYWORDS", ENABLE_SEARCH_KEYWORDS)),
+        "enable_profile_visit": bool(
+            getattr(cfg, "ENABLE_PROFILE_VISIT", ENABLE_PROFILE_VISIT)
+        ),
+        "enable_video_comment": bool(
+            getattr(cfg, "ENABLE_VIDEO_COMMENT", ENABLE_VIDEO_COMMENT)
+        ),
+        "enable_search_keywords": bool(
+            getattr(cfg, "ENABLE_SEARCH_KEYWORDS", ENABLE_SEARCH_KEYWORDS)
+        ),
     }
+
 
 def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
     log_prefix = get_browser_log_prefix(browser_id)
@@ -384,9 +538,13 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
     log.info(f"{log_prefix} 主页关注概率: {profile_follow_prob}%")
     log.info(f"{log_prefix} 点赞后等待时间范围: {like_wait_min}-{like_wait_max}s")
     log.info(f"{log_prefix} 关注后等待时间范围: {visit_min}-{visit_max}s")
-    log.info(f"{log_prefix} 进入主页等待时间范围: {profile_wait_min}-{profile_wait_max}s")
+    log.info(
+        f"{log_prefix} 进入主页等待时间范围: {profile_wait_min}-{profile_wait_max}s"
+    )
     log.info(f"{log_prefix} 视频留言概率: {video_comment_prob}%")
-    log.info(f"{log_prefix} 视频留言前等待时间范围: {video_comment_wait_min}-{video_comment_wait_max}s")
+    log.info(
+        f"{log_prefix} 视频留言前等待时间范围: {video_comment_wait_min}-{video_comment_wait_max}s"
+    )
     log.info(f"{log_prefix} 每条视频最少关注数量: {min_follows_per_video}")
     log.info(f"{log_prefix} 每条视频最多关注数量: {max_follows_per_video}")
     log.info(f"{log_prefix} 每条视频最少点赞数量: {comment_like_count_min}")
@@ -399,18 +557,29 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
         raise RuntimeError(f"{log_prefix} 打开比特浏览器失败: {res}")
 
     log.info(f"{log_prefix} 比特浏览器打开成功")
-    
+
     opt = webdriver.ChromeOptions()
     opt.add_experimental_option("debuggerAddress", data["http"])
     driver = webdriver.Chrome(service=Service(data["driver"]), options=opt)
     cfg = get_config()
-    reporter = DataReporter(device_code=cfg.DEVICE_CODE, browser_id=browser_id, send_ws_message_func=_send_ws_message_for_reporter_share)
+    reporter = DataReporter(
+        device_code=cfg.DEVICE_CODE,
+        browser_id=browser_id,
+        send_ws_message_func=_send_ws_message_for_reporter_share,
+    )
     if total_count:
         try:
             reporter.set_total_links(total_count)
         except Exception:
             pass
-    _send_ws_message({"browserId": browser_id, "cmd": "RunStateReq", "id": cfg.DEVICE_CODE, "state": "running" if len(browser_id) == 32 else "error"})
+    _send_ws_message(
+        {
+            "browserId": browser_id,
+            "cmd": "RunStateReq",
+            "id": cfg.DEVICE_CODE,
+            "state": "running" if len(browser_id) == 32 else "error",
+        }
+    )
 
     def w(t=None):
         timeout = t or max(8, wait_time)
@@ -441,9 +610,9 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                 driver.close()
             driver.switch_to.window(driver.window_handles[0])
             log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
-        
+
         log.info(f"{log_prefix} 开始处理所有可用链接")
-        
+
         visited_count = 0
         while True:  # 持续处理直到队列为空
             if STOP_EVENT.is_set():
@@ -458,13 +627,15 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                 url = url_queue.popleft() if url_queue else None
             if not url:
                 # 队列为空，表示所有URL都已处理完毕
-                log.info(f"{log_prefix} 所有URL已处理完毕，共处理 {visited_count} 个链接")
+                log.info(
+                    f"{log_prefix} 所有URL已处理完毕，共处理 {visited_count} 个链接"
+                )
                 try:
                     reporter.set_completed(True)
                 except Exception:
                     pass
                 break
-            
+
             log.info(f"{log_prefix} 访问链接: {url}")
             try:
                 _ensure_not_stopped()
@@ -479,7 +650,9 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                 visit_min, visit_max = settings["visit_wait_range"]
                 profile_wait_min, profile_wait_max = settings["profile_wait_range"]
                 video_comment_prob = settings["video_reply_rate"]
-                video_comment_wait_min, video_comment_wait_max = settings["video_reply_wait_range"]
+                video_comment_wait_min, video_comment_wait_max = settings[
+                    "video_reply_wait_range"
+                ]
                 min_follows_per_video = settings["min_follows_per_video"]
                 max_follows_per_video = settings["max_follows_per_video"]
                 comment_like_count_min = settings["comment_like_count_min"]
@@ -497,19 +670,23 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                 w()
                 w()
                 _sleep_interruptible(2.0)
-                
+
                 # 等待页面加载完成
                 try:
                     # 等待视频元素出现
                     WebDriverWait(driver, max(8, wait_time)).until(
-                        lambda d: d.find_elements(By.CSS_SELECTOR, ".comment-item.comment-list-item.dark-mode")
+                        lambda d: d.find_elements(
+                            By.CSS_SELECTOR, ".comment-item.comment-list-item.dark-mode"
+                        )
                         or d.find_elements(By.CSS_SELECTOR, ".comment-item")
                     )
                 except Exception:
                     _sleep_interruptible(1.0)
-                
+
                 # 根据概率决定是否进行视频留言
-                if enable_video_comment and (random.random() * 100 <= video_comment_prob):
+                if enable_video_comment and (
+                    random.random() * 100 <= video_comment_prob
+                ):
                     log.info(f"{log_prefix} 根据概率决定进行视频留言")
                     if KuaishouUtils.leave_video_comment(
                         driver,
@@ -523,22 +700,31 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                             reporter.increment_video_comment(1)
                         except Exception:
                             pass
-                
+
                 # 为每个视频设置随机的点赞和关注上限
-                max_follow_per_video = random.randint(min_follows_per_video, max_follows_per_video)
-                max_like_per_video = random.randint(comment_like_count_min, comment_like_count_max)
+                max_follow_per_video = random.randint(
+                    min_follows_per_video, max_follows_per_video
+                )
+                max_like_per_video = random.randint(
+                    comment_like_count_min, comment_like_count_max
+                )
                 current_follow_count = 0  # 当前视频关注计数器
-                current_like_count = 0    # 当前视频点赞计数器
-                
+                current_like_count = 0  # 当前视频点赞计数器
+
                 processed = 0
                 scroll_done = 0
                 since_scroll = 0
-                
+
                 # 滚动并处理评论，直到达到点赞和关注上限
-                while current_like_count < max_like_per_video or current_follow_count < max_follow_per_video:
+                while (
+                    current_like_count < max_like_per_video
+                    or current_follow_count < max_follow_per_video
+                ):
                     if STOP_EVENT.is_set():
                         break
-                    items = KuaishouUtils.els(driver, ".comment-item.comment-list-item.dark-mode") or KuaishouUtils.els(driver, ".comment-item")
+                    items = KuaishouUtils.els(
+                        driver, ".comment-item.comment-list-item.dark-mode"
+                    ) or KuaishouUtils.els(driver, ".comment-item")
                     if not items:
                         _sleep_interruptible(0.8)
                         continue
@@ -558,27 +744,39 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                     it = items[processed]
                     processed += 1
                     since_scroll += 1
-                    
+
                     # 处理每个评论项之间添加随机等待，模拟人工浏览
                     _sleep_interruptible(random.uniform(0.5, 1.5))
 
                     # 检查评论是否包含关键词
                     comment_ok = False
                     try:
-                        content_el = it.find_element(By.CSS_SELECTOR, "div.comment-item-content > span")
+                        content_el = it.find_element(
+                            By.CSS_SELECTOR, "div.comment-item-content > span"
+                        )
                         spans = content_el.find_elements(By.CSS_SELECTOR, "span")
                         comment_text = "".join(span.text for span in spans).strip()
                         log.info(f"{log_prefix} 评论内容: {comment_text}")
-                        
+
                         # 检查评论是否包含关键词
-                        if KuaishouUtils.check_comment_contains_keywords(comment_text, comment_filter_keywords):
+                        if KuaishouUtils.check_comment_contains_keywords(
+                            comment_text, comment_filter_keywords
+                        ):
                             comment_ok = True
                     except Exception:
                         pass
-                    effective_comment_ok = comment_ok if enable_search_keywords else False
+                    effective_comment_ok = (
+                        comment_ok if enable_search_keywords else False
+                    )
 
                     # 点赞逻辑 - 如果包含关键词则强制点赞，否则按概率点赞，但不超过当前视频的点赞上限
-                    if enable_like and (effective_comment_ok or (current_like_count < max_like_per_video and random.random() * 100 <= like_prob)):
+                    if enable_like and (
+                        effective_comment_ok
+                        or (
+                            current_like_count < max_like_per_video
+                            and random.random() * 100 <= like_prob
+                        )
+                    ):
                         like_el = KuaishouUtils.el(driver, ".comment-item-likeicon", it)
                         if like_el:
                             cls0 = ""
@@ -595,8 +793,12 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                                 if cls1 != cls0:
                                     like_count += 1
                                     current_like_count += 1  # 增加当前视频点赞计数
-                                    log.info(f"{log_prefix} 已点赞评论 (当前视频点赞数: {current_like_count}/{max_like_per_video}, 累计点赞次数: {like_count})")
-                                    _sleep_interruptible(random.uniform(like_wait_min, like_wait_max))
+                                    log.info(
+                                        f"{log_prefix} 已点赞评论 (当前视频点赞数: {current_like_count}/{max_like_per_video}, 累计点赞次数: {like_count})"
+                                    )
+                                    _sleep_interruptible(
+                                        random.uniform(like_wait_min, like_wait_max)
+                                    )
                                     try:
                                         reporter.set_action("like")
                                         reporter.increment_like(1)
@@ -604,29 +806,57 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                                         pass
 
                     # 访问主页逻辑 - 如果评论包含关键词则强制访问，否则按概率访问
-                    should_visit = enable_profile_visit and (effective_comment_ok or (random.random() * 100 <= visit_profile_prob))
+                    should_visit = enable_profile_visit and (
+                        effective_comment_ok
+                        or (random.random() * 100 <= visit_profile_prob)
+                    )
                     if should_visit:
                         a = KuaishouUtils.el(driver, ".author-name", it)
                         if a:
                             hs_a = set(driver.window_handles)
                             if KuaishouUtils.click(driver, a):
-                                _sleep_interruptible(random.uniform(1.0, 2.0))  # 点击头像后等待
-                                prof = next(iter(set(driver.window_handles) - hs_a), None)
+                                _sleep_interruptible(
+                                    random.uniform(1.0, 2.0)
+                                )  # 点击头像后等待
+                                prof = next(
+                                    iter(set(driver.window_handles) - hs_a), None
+                                )
                                 if prof:
                                     driver.switch_to.window(prof)
                                 try:
-                                    _sleep_interruptible(random.uniform(profile_wait_min, profile_wait_max))
-                                    
+                                    _sleep_interruptible(
+                                        random.uniform(
+                                            profile_wait_min, profile_wait_max
+                                        )
+                                    )
+
                                     # 如果评论包含关键词，则强制关注，否则按概率关注，但不超过当前视频的关注上限
-                                    if enable_follow and current_follow_count < max_follow_per_video:
-                                        follow_prob = 100 if effective_comment_ok else profile_follow_prob
+                                    if (
+                                        enable_follow
+                                        and current_follow_count < max_follow_per_video
+                                    ):
+                                        follow_prob = (
+                                            100
+                                            if effective_comment_ok
+                                            else profile_follow_prob
+                                        )
                                         if random.random() * 100 <= follow_prob:
-                                            follow_button = KuaishouUtils.el(driver, ".btn-words")
-                                            if follow_button and KuaishouUtils.click(driver, follow_button):
+                                            follow_button = KuaishouUtils.el(
+                                                driver, ".btn-words"
+                                            )
+                                            if follow_button and KuaishouUtils.click(
+                                                driver, follow_button
+                                            ):
                                                 follow_count += 1
-                                                current_follow_count += 1  # 增加当前视频关注计数
-                                                log.info(f"{log_prefix} 已关注用户 (当前视频关注数: {current_follow_count}/{max_follow_per_video}, 累计关注次数: {follow_count})")
-                                                _sleep_interruptible(random.uniform(visit_min, visit_max))
+                                                current_follow_count += (
+                                                    1  # 增加当前视频关注计数
+                                                )
+                                                log.info(
+                                                    f"{log_prefix} 已关注用户 (当前视频关注数: {current_follow_count}/{max_follow_per_video}, 累计关注次数: {follow_count})"
+                                                )
+                                                _sleep_interruptible(
+                                                    random.uniform(visit_min, visit_max)
+                                                )
                                                 try:
                                                     reporter.set_action("follow")
                                                     reporter.increment_follow(1)
@@ -638,7 +868,9 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                                             driver.close()
                                         except Exception:
                                             pass
-                                    driver.switch_to.window(driver.window_handles[0])  # 切换回主窗口
+                                    driver.switch_to.window(
+                                        driver.window_handles[0]
+                                    )  # 切换回主窗口
                                     # 关闭用户主页后等待
                                     _sleep_interruptible(random.uniform(1.0, 2.0))
 
@@ -655,18 +887,20 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                             scroll_done += 1
                             since_scroll = 0
 
-                log.info(f"{log_prefix} 链接 {url} 处理完成，已达到点赞/关注上限，点赞数: {current_like_count}/{max_like_per_video}，关注数: {current_follow_count}/{max_follow_per_video}")
-                
+                log.info(
+                    f"{log_prefix} 链接 {url} 处理完成，已达到点赞/关注上限，点赞数: {current_like_count}/{max_like_per_video}，关注数: {current_follow_count}/{max_follow_per_video}"
+                )
+
                 visited_count += 1
                 try:
                     reporter.update_url_index(visited_count)
                     reporter.increment_url_ok(1)
                 except Exception:
                     pass
-                
+
                 # 访问完一个链接后等待一段时间
                 _sleep_interruptible(random.uniform(3, 6))
-                
+
             except Exception as e:
                 log.error(f"{log_prefix} 访问链接 {url} 时出错: {e}")
                 try:
@@ -674,9 +908,9 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                 except Exception:
                     pass
                 continue
-        
+
         log.info(f"{log_prefix} 完成 {visited_count} 个链接的访问")
-            
+
         # 确保只保留主窗口，清理可能残留的窗口
         if len(driver.window_handles) > 1:
             log.info(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
@@ -685,7 +919,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                 driver.close()
             driver.switch_to.window(driver.window_handles[0])
             log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
-        
+
         _sleep_interruptible(random.uniform(1.0, 2.0))
     finally:
         try:
@@ -695,7 +929,9 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
         try:
             if not STOP_EVENT.is_set():
                 stats = reporter.get_stats()
-                if (stats.get("urlOk", 0) + stats.get("urlFail", 0)) >= int(total_count or 0):
+                if (stats.get("urlOk", 0) + stats.get("urlFail", 0)) >= int(
+                    total_count or 0
+                ):
                     reporter.set_completed(True)
         except Exception:
             pass
@@ -706,6 +942,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
         log.info(f"{log_prefix} 浏览器已关闭，任务完成")
         log.info(f"{log_prefix} 本次任务累计点赞次数: {like_count}")
         log.info(f"{log_prefix} 本次任务累计关注次数: {follow_count}")
+
 
 def main():
     cfg = get_config()
@@ -735,7 +972,9 @@ def main():
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(browser_ids)) as ex:
             futures = []
             for i, bid in enumerate(browser_ids):
-                futures.append(ex.submit(run_worker, bid, i + 1, url_queue, url_lock, len(urls)))
+                futures.append(
+                    ex.submit(run_worker, bid, i + 1, url_queue, url_lock, len(urls))
+                )
                 if i < len(browser_ids) - 1:
                     time.sleep(2.5)
             for f in concurrent.futures.as_completed(futures):
@@ -752,6 +991,7 @@ def main():
     finally:
         license_manager.stop_periodic_check()
         _stop_ws_client()
+
 
 if __name__ == "__main__":
     main()

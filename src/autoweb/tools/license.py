@@ -157,5 +157,3 @@ class LicenseManager:
 
     def set_stop_callback(self, callback):
         self._stop_callback = callback
-
-

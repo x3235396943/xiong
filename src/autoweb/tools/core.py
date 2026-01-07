@@ -222,7 +222,9 @@ class DataReporter:
                 device_code = self.device_code
                 browser_id = self.browser_id
                 keywords = self._keywords
-                action_val = self._action if self._action_pending and self._action else None
+                action_val = (
+                    self._action if self._action_pending and self._action else None
+                )
         except Exception:
             return
 
@@ -364,7 +366,7 @@ _BIT_HEADERS = {"Content-Type": "application/json"}
 def openBrowser(browser_id: str) -> dict:
     cfg = get_config()
     json_data: Dict[str, Any] = {"id": f"{browser_id}"}
-    
+
     # 根据配置决定是否使用无头模式
     if getattr(cfg, "HEADLESS", False):
         json_data["args"] = ["--headless"]

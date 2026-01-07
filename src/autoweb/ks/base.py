@@ -34,7 +34,9 @@ class KuaishouUtils:
         from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
 
         for _ in range(times):
-            ActionChains(driver).move_to_element(container).pause(0.05).scroll_from_origin(
+            ActionChains(driver).move_to_element(container).pause(
+                0.05
+            ).scroll_from_origin(
                 ScrollOrigin.from_element(container), 0, step
             ).perform()
             time.sleep(sleep)
@@ -62,7 +64,11 @@ class KuaishouUtils:
 
     @staticmethod
     def leave_video_comment(
-        driver, video_comment_wait_min, video_comment_wait_max, log_prefix, comments=None
+        driver,
+        video_comment_wait_min,
+        video_comment_wait_max,
+        log_prefix,
+        comments=None,
     ):
         """在当前视频页面留下评论"""
         try:
@@ -70,14 +76,14 @@ class KuaishouUtils:
             wait_time = random.uniform(video_comment_wait_min, video_comment_wait_max)
             print(f"{log_prefix} 等待 {wait_time:.2f} 秒后进行视频留言")
             time.sleep(wait_time)
-            
+
             # 查找评论输入框
             comment_input = KuaishouUtils.el(driver, ".pl-textarea")
             if comment_input:
                 # 点击输入框
                 KuaishouUtils.click(driver, comment_input)
                 time.sleep(0.5)
-                
+
                 # 输入评论内容
                 comment_candidates = KuaishouUtils._normalize_keywords(comments) or [
                     "这个视频不错！",
@@ -89,11 +95,13 @@ class KuaishouUtils:
                 comment_text = random.choice(comment_candidates)
                 comment_input.send_keys(comment_text)
                 time.sleep(0.5)
-                
+
                 # 尝试找到并点击发送按钮
-                send_button = (KuaishouUtils.el(driver, ".pl-send-btn") or 
-                              KuaishouUtils.el(driver, ".send-btn") or 
-                              KuaishouUtils.el(driver, ".comment-send-btn"))
+                send_button = (
+                    KuaishouUtils.el(driver, ".pl-send-btn")
+                    or KuaishouUtils.el(driver, ".send-btn")
+                    or KuaishouUtils.el(driver, ".comment-send-btn")
+                )
                 if send_button:
                     KuaishouUtils.click(driver, send_button)
                     print(f"{log_prefix} 已留言: {comment_text}")

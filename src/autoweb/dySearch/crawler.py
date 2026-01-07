@@ -16,7 +16,11 @@ from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
 from ..tools import log
 from ..tools.config import get_config
 from ..dyShare.crawler import ConcreteDyShareCrawler, DyShareUtils
-from ..tools.douyin_common import DouyinConfigParser, DouyinBrowserActions, DouyinCommentActions
+from ..tools.douyin_common import (
+    DouyinConfigParser,
+    DouyinBrowserActions,
+    DouyinCommentActions,
+)
 from ..tools.core import DataReporter
 
 
@@ -31,7 +35,10 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
 
     def _send_ws_message_for_reporter(self, message_dict):
         try:
-            if isinstance(message_dict, dict) and message_dict.get("cmd") == "PcDataReq":
+            if (
+                isinstance(message_dict, dict)
+                and message_dict.get("cmd") == "PcDataReq"
+            ):
                 data = message_dict.get("data")
                 if isinstance(data, dict):
                     data.pop("comment", None)
@@ -63,15 +70,22 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                 with self._kw_lock:
                     added = 0
                     for kw in updated:
-                        if kw not in self.keyword_processed and kw not in self.keyword_queue:
+                        if (
+                            kw not in self.keyword_processed
+                            and kw not in self.keyword_queue
+                        ):
                             self.keyword_queue.append(kw)
                             added += 1
-                log.info(f"KEYWORDS 已更新，新增 {added} 项，队列共 {len(self.keyword_queue)} 项")
+                log.info(
+                    f"KEYWORDS 已更新，新增 {added} 项，队列共 {len(self.keyword_queue)} 项"
+                )
         except Exception as e:
             log.error(f"刷新 KEYWORDS 失败: {e}")
+
     def cleanup_resources(self) -> None:
         super().cleanup_resources()
         import sys
+
         sys.exit(0)
 
     def process_urls_with_thread_pool(self) -> None:
@@ -88,10 +102,14 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
         import concurrent.futures
 
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS_USED) as executor:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=MAX_WORKERS_USED
+            ) as executor:
                 futures = []
                 for i in range(MAX_WORKERS_USED):
-                    browser_id = self.config.BIT_BROWSER_IDS[i % len(self.config.BIT_BROWSER_IDS)]
+                    browser_id = self.config.BIT_BROWSER_IDS[
+                        i % len(self.config.BIT_BROWSER_IDS)
+                    ]
                     reporter = DataReporter(
                         device_code=self.config.DEVICE_CODE,
                         browser_id=browser_id,
@@ -144,22 +162,33 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
             log.error(f"并发执行异常: {e}")
             raise
 
-    def _open_first_video_for_keyword(self, driver, word: str, wait_time: int, browser_number: int | None = None) -> bool:
+    def _open_first_video_for_keyword(
+        self, driver, word: str, wait_time: int, browser_number: int | None = None
+    ) -> bool:
         self.utils.check_stop_signal()
         wait = WebDriverWait(driver, wait_time)
-        search_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-e2e="searchbar-input"]')))
+        search_input = wait.until(
+            EC.presence_of_element_located(
+                (By.CSS_SELECTOR, '[data-e2e="searchbar-input"]')
+            )
+        )
         DouyinBrowserActions.clear_input(search_input)
         search_input.send_keys(word)
         driver.find_element(By.CSS_SELECTOR, '[data-e2e="searchbar-button"]').click()
         try:
-            wait.until(EC.presence_of_element_located((By.ID, "waterFallScrollContainer")))
+            wait.until(
+                EC.presence_of_element_located((By.ID, "waterFallScrollContainer"))
+            )
         except Exception:
             pass
         self.utils.safe_sleep(1, browser_number=browser_number)
         try:
             card = wait.until(
                 EC.element_to_be_clickable(
-                    (By.XPATH, "//div[@id='waterFallScrollContainer']//div[contains(@class, 'videoImage')]")
+                    (
+                        By.XPATH,
+                        "//div[@id='waterFallScrollContainer']//div[contains(@class, 'videoImage')]",
+                    )
                 )
             )
             driver.execute_script("arguments[0].click();", card)
@@ -168,13 +197,20 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
             try:
                 card2 = wait.until(
                     EC.element_to_be_clickable(
-                        (By.CSS_SELECTOR, '[data-e2e="scroll-list"] > li div[id="sliderVideo"]')
+                        (
+                            By.CSS_SELECTOR,
+                            '[data-e2e="scroll-list"] > li div[id="sliderVideo"]',
+                        )
                     )
                 )
                 driver.execute_script("arguments[0].click();", card2)
-                self.utils.debug_log("info", "已点击滚动列表首个视频卡片", browser_number)
+                self.utils.debug_log(
+                    "info", "已点击滚动列表首个视频卡片", browser_number
+                )
             except Exception:
-                self.utils.debug_log("warning", "未找到可点击的视频卡片", browser_number)
+                self.utils.debug_log(
+                    "warning", "未找到可点击的视频卡片", browser_number
+                )
                 return False
         self.utils.safe_sleep(4, browser_number=browser_number)
         try:
@@ -186,7 +222,12 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
             pass
         try:
             WebDriverWait(driver, 5).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, '.modal-video-container [data-e2e="feed-active-video"]'))
+                EC.presence_of_element_located(
+                    (
+                        By.CSS_SELECTOR,
+                        '.modal-video-container [data-e2e="feed-active-video"]',
+                    )
+                )
             )
             self.utils.debug_log("info", "检测到搜索弹层已打开", browser_number)
         except Exception:
@@ -227,12 +268,17 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                     rebuilt = DouyinConfigParser.parse_keywords(cfg.KEYWORDS or [])
                     added = 0
                     for kw in rebuilt:
-                        if kw not in self.keyword_processed and kw not in self.keyword_queue:
+                        if (
+                            kw not in self.keyword_processed
+                            and kw not in self.keyword_queue
+                        ):
                             self.keyword_queue.append(kw)
                             added += 1
                     if reporter:
                         reporter.set_total_links(len(self.keyword_queue))
-                    log.info(f"队列为空，重新构建并加入 {added} 项，当前队列 {len(self.keyword_queue)} 项")
+                    log.info(
+                        f"队列为空，重新构建并加入 {added} 项，当前队列 {len(self.keyword_queue)} 项"
+                    )
             idx = 0
             empty_retries = 0
             while not self.utils._stop_flag.is_set():
@@ -257,7 +303,9 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                     break
                 try:
                     empty_retries = 0
-                    ok = self._open_first_video_for_keyword(driver, word, wait_time, browser_number)
+                    ok = self._open_first_video_for_keyword(
+                        driver, word, wait_time, browser_number
+                    )
                     if not ok:
                         if reporter:
                             reporter.set_keywords(word)
@@ -266,56 +314,100 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                     like_probability_val = like_probability / 100.0
                     visit_profile_probability_val = visit_profile_probability / 100.0
                     profile_follow_probability_val = profile_follow_probability / 100.0
-                    comment_reply_probability_val = cfg.COMMENT_REPLY_PROBABILITY / 100.0
+                    comment_reply_probability_val = (
+                        cfg.COMMENT_REPLY_PROBABILITY / 100.0
+                    )
                     if reporter:
                         reporter.set_keywords(word)
                     target_videos = random.randint(*cfg.MAX_SCROLL_VIDEO)
                     processed_videos = 0
-                    while processed_videos < target_videos and not self.utils._stop_flag.is_set():
+                    while (
+                        processed_videos < target_videos
+                        and not self.utils._stop_flag.is_set()
+                    ):
                         try:
                             try:
-                                active = driver.find_element(By.CSS_SELECTOR, '.modal-video-container [data-e2e="feed-active-video"]')
+                                active = driver.find_element(
+                                    By.CSS_SELECTOR,
+                                    '.modal-video-container [data-e2e="feed-active-video"]',
+                                )
                             except Exception:
-                                active = driver.find_element(By.CSS_SELECTOR, ".modal-video-container .liveSearchPlayer")
-                                self.utils.safe_sleep(random.uniform(10, 30), browser_number=browser_number)
+                                active = driver.find_element(
+                                    By.CSS_SELECTOR,
+                                    ".modal-video-container .liveSearchPlayer",
+                                )
+                                self.utils.safe_sleep(
+                                    random.uniform(10, 30),
+                                    browser_number=browser_number,
+                                )
                                 try:
                                     body = driver.find_element(By.TAG_NAME, "body")
-                                    DouyinBrowserActions.scroll_element_sync(driver, body, delta_y=400, sleep_time=2)
+                                    DouyinBrowserActions.scroll_element_sync(
+                                        driver, body, delta_y=400, sleep_time=2
+                                    )
                                 except Exception:
                                     pass
                                 continue
                             try:
-                                active.find_element(By.CLASS_NAME, "playerContainer").click()
+                                active.find_element(
+                                    By.CLASS_NAME, "playerContainer"
+                                ).click()
                             except Exception:
                                 pass
                             try:
-                                active.find_element(By.CLASS_NAME, "comment-mainContent")
+                                active.find_element(
+                                    By.CLASS_NAME, "comment-mainContent"
+                                )
                             except Exception:
                                 try:
-                                    btn = active.find_element(By.CSS_SELECTOR, '[data-e2e="feed-comment-icon"]')
+                                    btn = active.find_element(
+                                        By.CSS_SELECTOR,
+                                        '[data-e2e="feed-comment-icon"]',
+                                    )
                                     btn.click()
-                                    self.utils.safe_sleep(3, browser_number=browser_number)
+                                    self.utils.safe_sleep(
+                                        3, browser_number=browser_number
+                                    )
                                 except Exception:
                                     pass
-                            if cfg.ENABLE_VIDEO_COMMENT and random.randint(1, 100) <= cfg.VIDEO_REPLY_RATE:
-                                video_comments = DouyinConfigParser.parse_video_comments(getattr(cfg, "VIDEO_COMMENTS", "") or "")
+                            if (
+                                cfg.ENABLE_VIDEO_COMMENT
+                                and random.randint(1, 100) <= cfg.VIDEO_REPLY_RATE
+                            ):
+                                video_comments = (
+                                    DouyinConfigParser.parse_video_comments(
+                                        getattr(cfg, "VIDEO_COMMENTS", "") or ""
+                                    )
+                                )
                                 if video_comments:
                                     comment_text = random.choice(video_comments)
                                     try:
-                                        DouyinCommentActions.leave_video_comment_async(driver, comment_text, active_element=active, ws_push_func=None, sleep=self.utils.safe_sleep)
+                                        DouyinCommentActions.leave_video_comment_async(
+                                            driver,
+                                            comment_text,
+                                            active_element=active,
+                                            ws_push_func=None,
+                                            sleep=self.utils.safe_sleep,
+                                        )
                                         if reporter:
                                             reporter.set_action("videoComment")
                                             reporter.increment_video_comment(1)
                                     except Exception:
                                         pass
-                            self._process_comments(active, driver, cfg, reporter, browser_number)
+                            self._process_comments(
+                                active, driver, cfg, reporter, browser_number
+                            )
                             processed_videos += 1
                             try:
                                 body = driver.find_element(By.TAG_NAME, "body")
-                                DouyinBrowserActions.scroll_element_sync(driver, body, delta_y=600, sleep_time=2)
+                                DouyinBrowserActions.scroll_element_sync(
+                                    driver, body, delta_y=600, sleep_time=2
+                                )
                             except Exception:
                                 pass
-                            self.utils.safe_sleep(random.uniform(1, 2), browser_number=browser_number)
+                            self.utils.safe_sleep(
+                                random.uniform(1, 2), browser_number=browser_number
+                            )
                         except Exception:
                             self.utils.safe_sleep(1, browser_number=browser_number)
                     with self._kw_lock:
@@ -326,7 +418,9 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                         driver.find_element(By.CLASS_NAME, "uRH5Oxnw").click()
                     except Exception:
                         pass
-                    self.utils.safe_sleep(random.uniform(5, 10), browser_number=browser_number)
+                    self.utils.safe_sleep(
+                        random.uniform(5, 10), browser_number=browser_number
+                    )
                     driver.get("https://www.douyin.com")
                     self.utils.safe_sleep(3, browser_number=browser_number)
                     idx += 1
@@ -360,12 +454,18 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
         start_index = 0
         follow_index = 0
         like_index = 0
-        max_follow = random.randint(cfg.MIN_FOLLOWS_PER_VIDEO, cfg.MAX_FOLLOWS_PER_VIDEO)
-        max_like = random.randint(cfg.COMMENT_LIKE_COUNT_MIN, cfg.COMMENT_LIKE_COUNT_MAX)
+        max_follow = random.randint(
+            cfg.MIN_FOLLOWS_PER_VIDEO, cfg.MAX_FOLLOWS_PER_VIDEO
+        )
+        max_like = random.randint(
+            cfg.COMMENT_LIKE_COUNT_MIN, cfg.COMMENT_LIKE_COUNT_MAX
+        )
         scroll_times = random.randint(*cfg.MAX_COMMENT)
         for _ in range(scroll_times):
             try:
-                comment_list = active.find_elements(By.CSS_SELECTOR, '[data-e2e="comment-list"] > div')
+                comment_list = active.find_elements(
+                    By.CSS_SELECTOR, '[data-e2e="comment-list"] > div'
+                )
             except Exception:
                 break
             if len(comment_list) <= 1:
@@ -375,8 +475,14 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
             for comment in new_list:
                 comment_ok = False
                 try:
-                    if cfg.ENABLE_COMMENT_TEMPLATES and cfg.ENABLE_SEARCH_KEYWORDS and comment.text:
-                        keywords = DouyinConfigParser.parse_keywords(cfg.COMMENT_FILTER_KEYWORDS or [])
+                    if (
+                        cfg.ENABLE_COMMENT_TEMPLATES
+                        and cfg.ENABLE_SEARCH_KEYWORDS
+                        and comment.text
+                    ):
+                        keywords = DouyinConfigParser.parse_keywords(
+                            cfg.COMMENT_FILTER_KEYWORDS or []
+                        )
                         norm_comment = DouyinConfigParser.normalize_text(comment.text)
                         for kw in keywords:
                             if DouyinConfigParser.normalize_text(kw) in norm_comment:
@@ -384,34 +490,64 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                                 break
                 except Exception:
                     pass
-                if cfg.ENABLE_LIKE and (comment_ok or (like_index < max_like and random.randint(1, 100) <= cfg.LIKE_PROBABILITY)):
+                if cfg.ENABLE_LIKE and (
+                    comment_ok
+                    or (
+                        like_index < max_like
+                        and random.randint(1, 100) <= cfg.LIKE_PROBABILITY
+                    )
+                ):
                     try:
-                        like_button = comment.find_element(By.XPATH, ".//div[contains(@class, 'comment-item-stats-container')]/div[1]/p[1]")
+                        like_button = comment.find_element(
+                            By.XPATH,
+                            ".//div[contains(@class, 'comment-item-stats-container')]/div[1]/p[1]",
+                        )
                         like_button.click()
                         like_index += 1
                         if reporter:
                             reporter.set_action("like")
                             reporter.increment_like(1)
-                        self.utils.safe_sleep(random.randint(cfg.LIKE_WAIT_MIN, cfg.LIKE_WAIT_MAX), browser_number=browser_number)
+                        self.utils.safe_sleep(
+                            random.randint(cfg.LIKE_WAIT_MIN, cfg.LIKE_WAIT_MAX),
+                            browser_number=browser_number,
+                        )
                     except Exception:
                         pass
-                should_visit = cfg.ENABLE_PROFILE_VISIT and (comment_ok or random.randint(1, 100) <= cfg.VISIT_ENABLE)
+                should_visit = cfg.ENABLE_PROFILE_VISIT and (
+                    comment_ok or random.randint(1, 100) <= cfg.VISIT_ENABLE
+                )
                 if should_visit:
                     try:
-                        avatar_link = comment.find_element(By.CSS_SELECTOR, ".comment-item-avatar a")
+                        avatar_link = comment.find_element(
+                            By.CSS_SELECTOR, ".comment-item-avatar a"
+                        )
                         try:
-                            DouyinBrowserActions.ensure_element_centered(driver, avatar_link, sleep=self.utils.safe_sleep)
+                            DouyinBrowserActions.ensure_element_centered(
+                                driver, avatar_link, sleep=self.utils.safe_sleep
+                            )
                         except Exception:
                             pass
                         avatar_link.click()
-                        self.utils.safe_sleep(random.randint(3, 5), browser_number=browser_number)
+                        self.utils.safe_sleep(
+                            random.randint(3, 5), browser_number=browser_number
+                        )
                         driver.switch_to.window(driver.window_handles[1])
-                        self.utils.safe_sleep(random.randint(7, 15), browser_number=browser_number)
+                        self.utils.safe_sleep(
+                            random.randint(7, 15), browser_number=browser_number
+                        )
                         force_follow = comment_ok
-                        follow_prob = 100 if force_follow else cfg.PROFILE_FOLLOW_PROBABILITY
-                        if cfg.ENABLE_FOLLOW and follow_index < max_follow and (force_follow or random.randint(1, 100) <= follow_prob):
+                        follow_prob = (
+                            100 if force_follow else cfg.PROFILE_FOLLOW_PROBABILITY
+                        )
+                        if (
+                            cfg.ENABLE_FOLLOW
+                            and follow_index < max_follow
+                            and (force_follow or random.randint(1, 100) <= follow_prob)
+                        ):
                             try:
-                                follow_button = driver.find_element(By.CSS_SELECTOR, '[data-e2e="user-info-follow-btn"]')
+                                follow_button = driver.find_element(
+                                    By.CSS_SELECTOR, '[data-e2e="user-info-follow-btn"]'
+                                )
                                 try:
                                     button_text = follow_button.text.strip()
                                     if "已关注" not in button_text:
@@ -424,10 +560,15 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                                     pass
                             except Exception:
                                 pass
-                        self.utils.safe_sleep(random.randint(cfg.VISIT_MIN, cfg.VISIT_MAX), browser_number=browser_number)
+                        self.utils.safe_sleep(
+                            random.randint(cfg.VISIT_MIN, cfg.VISIT_MAX),
+                            browser_number=browser_number,
+                        )
                         driver.close()
                         driver.switch_to.window(driver.window_handles[0])
-                        self.utils.safe_sleep(random.randint(3, 8), browser_number=browser_number)
+                        self.utils.safe_sleep(
+                            random.randint(3, 8), browser_number=browser_number
+                        )
                     except Exception:
                         try:
                             driver.switch_to.window(driver.window_handles[0])
@@ -435,14 +576,30 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                             pass
                 if cfg.ENABLE_COMMENT_REPLY:
                     try:
-                        comment_replies = DouyinConfigParser.parse_comment_replies(getattr(cfg, "COMMENT_REPLIES", "") or "")
-                        should_reply = comment_replies and (comment_ok or random.randint(1, 100) <= cfg.COMMENT_REPLY_PROBABILITY)
+                        comment_replies = DouyinConfigParser.parse_comment_replies(
+                            getattr(cfg, "COMMENT_REPLIES", "") or ""
+                        )
+                        should_reply = comment_replies and (
+                            comment_ok
+                            or random.randint(1, 100) <= cfg.COMMENT_REPLY_PROBABILITY
+                        )
                         if should_reply:
-                            wait_time = random.randint(cfg.COMMENT_WAIT_MIN, cfg.COMMENT_WAIT_MAX)
-                            self.utils.safe_sleep(wait_time, browser_number=browser_number)
+                            wait_time = random.randint(
+                                cfg.COMMENT_WAIT_MIN, cfg.COMMENT_WAIT_MAX
+                            )
+                            self.utils.safe_sleep(
+                                wait_time, browser_number=browser_number
+                            )
                             reply_content = random.choice(comment_replies)
                             try:
-                                DouyinCommentActions.reply_to_comment_async(driver, comment, reply_content, active_element=active, ws_push_func=None, sleep=self.utils.safe_sleep)
+                                DouyinCommentActions.reply_to_comment_async(
+                                    driver,
+                                    comment,
+                                    reply_content,
+                                    active_element=active,
+                                    ws_push_func=None,
+                                    sleep=self.utils.safe_sleep,
+                                )
                                 if reporter:
                                     reporter.set_action("comment")
                                     reporter.increment_comment(1)
@@ -451,13 +608,23 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                     except Exception:
                         pass
             try:
-                padding = active.find_element(By.CSS_SELECTOR, '[data-e2e="comment-list"] > div:last-child').text
+                padding = active.find_element(
+                    By.CSS_SELECTOR, '[data-e2e="comment-list"] > div:last-child'
+                ).text
                 if padding == "暂时没有更多评论":
                     break
             except Exception:
                 pass
             try:
-                ActionChains(driver).scroll_from_origin(ScrollOrigin.from_element(active.find_element(By.CLASS_NAME, "comment-mainContent")), 0, 600).perform()
-                self.utils.safe_sleep(random.randint(4, 8), browser_number=browser_number)
+                ActionChains(driver).scroll_from_origin(
+                    ScrollOrigin.from_element(
+                        active.find_element(By.CLASS_NAME, "comment-mainContent")
+                    ),
+                    0,
+                    600,
+                ).perform()
+                self.utils.safe_sleep(
+                    random.randint(4, 8), browser_number=browser_number
+                )
             except Exception:
                 break

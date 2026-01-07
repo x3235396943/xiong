@@ -52,4 +52,4 @@ include = ["src/**/*.py", "install/**/*.py"]
 
 [tool.ruff.lint]
 # https://beta.ruff.rs/docs/rules/
-ignore = ["F401", "F841"]
+ignore = ["F401", "F841","E402"]

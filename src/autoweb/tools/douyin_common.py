@@ -216,7 +216,7 @@ class DouyinCommentActions:
                 if ws_push_func:
                     ws_push_func(videoComment=1)
                 return True
-            except:
+            except Exception:
                 # 如果找不到发送按钮，尝试按回车键
                 ActionChains(driver).send_keys(Keys.RETURN).perform()
                 log.debug(f"通过回车键发送视频评论: {comment_text[:20]}...")
@@ -286,7 +286,7 @@ class DouyinCommentActions:
                     log.info(f"成功发布视频评论: {comment_text[:20]}...")
                 time.sleep(1)
                 return True
-            except:
+            except Exception:
                 # 如果找不到发送按钮，尝试按回车键
                 ActionChains(driver).send_keys(Keys.RETURN).perform()
                 if debug_log_func:
@@ -306,7 +306,12 @@ class DouyinCommentActions:
 
     @staticmethod
     def reply_to_comment_async(
-        driver, target_comment, reply_text, active_element=None, ws_push_func=None, sleep=sleep
+        driver,
+        target_comment,
+        reply_text,
+        active_element=None,
+        ws_push_func=None,
+        sleep=sleep,
     ):
         """
         回复指定评论（异步版本）
@@ -352,7 +357,7 @@ class DouyinCommentActions:
                 if ws_push_func:
                     ws_push_func(comment=1)
                 return True
-            except:
+            except Exception:
                 # 如果找不到发送按钮，尝试按回车键
                 ActionChains(driver).send_keys(Keys.RETURN).perform()
                 log.debug(f"通过回车键发送回复: {reply_text[:20]}...")
@@ -423,7 +428,7 @@ class DouyinCommentActions:
                     log.info(f"成功回复评论: {reply_text[:20]}...")
                 time.sleep(1)
                 return True
-            except:
+            except Exception:
                 # 如果找不到发送按钮，尝试按回车键
                 ActionChains(driver).send_keys(Keys.RETURN).perform()
                 if debug_log_func:

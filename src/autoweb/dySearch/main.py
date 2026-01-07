@@ -8,7 +8,9 @@ from ..dySearch.crawler import ConcreteDySearchCrawler
 class DouyinSearchCrawler:
     def start(self):
         if getattr(tools_config, "RUN_MODE", "") != "search":
-            log.warning(f"当前 RUN_MODE={getattr(tools_config, 'RUN_MODE', None)}，仅用于 search")
+            log.warning(
+                f"当前 RUN_MODE={getattr(tools_config, 'RUN_MODE', None)}，仅用于 search"
+            )
         crawler = ConcreteDySearchCrawler()
         try:
             crawler.execute_main_process()
