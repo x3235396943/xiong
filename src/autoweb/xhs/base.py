@@ -80,6 +80,34 @@ def _coerce_range_pair(v, default_pair: list):
     return list(default_pair)
 
 
+def _decide_like(enable_like: bool, keyword_hit: bool, liked_count: int, like_target: int, like_probability, rand_value: int):
+    if not enable_like:
+        return False
+    if keyword_hit:
+        return True
+    if liked_count >= like_target:
+        return False
+    return rand_value <= int(like_probability)
+
+
+def _decide_visit(enable_visit_avatar: bool, keyword_hit: bool, visited_count: int, profile_target: int, visit_probability, rand_value: int):
+    if not enable_visit_avatar:
+        return False
+    if keyword_hit:
+        return True
+    if visited_count >= profile_target:
+        return False
+    return rand_value <= int(visit_probability)
+
+
+def _decide_follow(enable_follow: bool, keyword_hit: bool, follow_probability, rand_value: int):
+    if not enable_follow:
+        return False
+    if keyword_hit:
+        return True
+    return rand_value <= int(follow_probability)
+
+
 def get_xhs_effective_settings(cfg=None) -> dict:
     cfg = cfg or get_config()
     d = _DEFAULT_XHS_CONFIG
@@ -249,6 +277,7 @@ def wait_content_textarea(driver, timeout=10):
 
 def input_and_send(driver, text):
     try:
+        from selenium.webdriver.common.keys import Keys
         textarea = wait_content_textarea(driver)
 
         # 强制 focus（核心）
@@ -265,9 +294,17 @@ def input_and_send(driver, text):
 
         time.sleep(0.3)
 
-        # 回车发送
-        textarea.send_keys(WebDriverWait.Keys.ENTER)
-        return True
+        # 先尝试点击发送按钮
+        try:
+            send_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit'].comment-send-btn, button.send-btn, .send-button, [class*='send'], button[type='submit'], .btn-send")
+            driver.execute_script("arguments[0].click();", send_button)
+            print("成功通过点击发送按钮发送评论")
+            return True
+        except:
+            # 如果找不到发送按钮，尝试按回车键
+            textarea.send_keys(Keys.ENTER)
+            print("通过回车键发送评论")
+            return True
     except Exception as e:
         print(f"输入并发送评论失败: {e}")
         return False
@@ -488,13 +525,18 @@ def process_comments_sequentially(
                                     break
                     except:
                         log.info("  无法获取评论内容用于关键字匹配")
+
+                    keyword_hit = bool(has_filter_keywords and comment_contains_keyword)
                     
                     # 正常按概率执行访问头像操作，关键字命中时强制执行
-                    should_visit = enable_visit_avatar and \
-                                   visited_count < profile_target and \
-                                   ((not has_filter_keywords and random.randint(1, 100) <= int(visit_probability)) or \
-                                    (has_filter_keywords and comment_contains_keyword) or \
-                                    (has_filter_keywords and not comment_contains_keyword and random.randint(1, 100) <= int(visit_probability)))
+                    should_visit = _decide_visit(
+                        enable_visit_avatar,
+                        keyword_hit,
+                        visited_count,
+                        profile_target,
+                        visit_probability,
+                        random.randint(1, 100),
+                    )
                     if should_visit:
                         try:
                             avatar_link = item.find_element(
@@ -515,19 +557,16 @@ def process_comments_sequentially(
                             if len(all_handles) > 1:
                                 driver.switch_to.window(all_handles[-1])
                                 # 如果是关键字匹配的评论，则不受上限限制
-                                if not (has_filter_keywords and comment_contains_keyword):
+                                if not keyword_hit:
                                     visited_count += 1
                                 log.info("  已切换到用户主页")
                                 rand_sleep(profile_wait_min, profile_wait_max)
-                                if enable_follow and (random.randint(1, 100) <= int(follow_probability) or 
-                                                      (has_filter_keywords and comment_contains_keyword)):
+                                if _decide_follow(enable_follow, keyword_hit, follow_probability, random.randint(1, 100)):
                                     followed = follow_user_if_needed(driver)
                                     if followed:
-                                        # 如果是关键字匹配的评论，则不受上限限制
-                                        if not (has_filter_keywords and comment_contains_keyword):
+                                        if not keyword_hit:
                                             followed_count += 1
                                         rand_sleep(follow_wait_min, follow_wait_max)
-                                        # 数据上报
                                         if reporter:
                                             try:
                                                 reporter.set_action("follow")
@@ -552,11 +591,14 @@ def process_comments_sequentially(
 
                     # 点赞按钮
                     # 正常按概率执行点赞操作，关键字命中时强制执行
-                    should_like = enable_like and \
-                                  liked_count < like_target and \
-                                  ((not has_filter_keywords and random.randint(1, 100) <= int(like_probability)) or \
-                                   (has_filter_keywords and comment_contains_keyword) or \
-                                   (has_filter_keywords and not comment_contains_keyword and random.randint(1, 100) <= int(like_probability)))
+                    should_like = _decide_like(
+                        enable_like,
+                        keyword_hit,
+                        liked_count,
+                        like_target,
+                        like_probability,
+                        random.randint(1, 100),
+                    )
                     if should_like:
                         try:
                             # 使用完整的CSS选择器路径在parent-comment元素下寻找点赞按钮
@@ -572,7 +614,7 @@ def process_comments_sequentially(
                             driver.execute_script("arguments[0].click();", like_btn)
                             log.info("  已点击点赞按钮")
                             # 如果是关键字匹配的评论，则不受上限限制
-                            if not (has_filter_keywords and comment_contains_keyword):
+                            if not keyword_hit:
                                 liked_count += 1
                             rand_sleep(like_wait_min, like_wait_max)
                             # 数据上报
@@ -593,13 +635,11 @@ def process_comments_sequentially(
                     # 回复按钮
                     # 正常按概率执行回复操作，关键字命中时强制执行
                     should_reply = enable_reply and \
-                                   ((not has_filter_keywords and random.randint(1, 100) <= int(comment_reply_probability)) or \
-                                    (has_filter_keywords and comment_contains_keyword) or \
-                                    (has_filter_keywords and not comment_contains_keyword and random.randint(1, 100) <= int(comment_reply_probability)))
+                                   (keyword_hit or random.randint(1, 100) <= int(comment_reply_probability))
                     if should_reply:
                         try:
                             # 添加评论回复前的等待时间
-                            if not (has_filter_keywords and comment_contains_keyword):
+                            if not keyword_hit:
                                 rand_sleep(comment_wait_min, comment_wait_max)
                             
                             # 使用完整的CSS选择器路径在parent-comment元素下寻找回复按钮
