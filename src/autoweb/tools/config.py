@@ -93,7 +93,7 @@ class KuSettings(ShareConfig):
     HEADLESS: bool = False # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str = "1.4.2"
+    VERSION: str = "1.4.3"
 
     # 抖音搜索模式配置（服务器下发）
     KEYWORDS: list = []
@@ -227,36 +227,6 @@ class KsConfig(ShareConfig):
     # 评论关键词过滤
     COMMENT_FILTER_KEYWORDS: list = ["美女", "帅哥", "喜欢"]
     
-    # 互动操作相关参数（快手特定的默认值）
-    LIKE_PROBABILITY: int = 20  # 快手默认点赞概率
-    VISIT_ENABLE: int = 10  # 快手默认访问主页概率
-    PROFILE_FOLLOW_PROBABILITY: int = 20  # 快手默认主页关注概率
-    
-    # 新增：每条视频点赞和关注上限参数
-    MIN_FOLLOWS_PER_VIDEO: int = 2  # 快手每条视频最少关注数量
-    MAX_FOLLOWS_PER_VIDEO: int = 3  # 快手每条视频最多关注数量
-    COMMENT_LIKE_COUNT_MIN: int = 4  # 快手每条视频最少点赞数量
-    COMMENT_LIKE_COUNT_MAX: int = 8  # 快手每条视频最多点赞数量
-    
-    # 等待时间参数
-    LIKE_WAIT_MIN: int = 4  # 快手点赞后最小等待时间
-    LIKE_WAIT_MAX: int = 10  # 快手点赞后最大等待时间
-    VISIT_MIN: int = 2  # 快手关注后最小等待时间
-    VISIT_MAX: int = 5  # 快手关注后最大等待时间
-    COMMENT_WAIT_MIN: int = 5  # 快手评论等待最小时间
-    COMMENT_WAIT_MAX: int = 15  # 快手评论等待最大时间
-    
-    # 留言/回复等待时间参数
-    VIDEO_REPLY_WAIT_MIN: int = 5  # 快手视频留言前最小等待时间
-    VIDEO_REPLY_WAIT_MAX: int = 10  # 快手视频留言前最大等待时间
-    
-    # 功能开关
-    ENABLE_LIKE: bool = True
-    ENABLE_FOLLOW: bool = True
-    ENABLE_PROFILE_VISIT: bool = True
-    ENABLE_VIDEO_COMMENT: bool = True
-    ENABLE_SEARCH_KEYWORDS: bool = True
-    
     # 快手特定参数
     KS_DEFAULT_WAIT_TIME: int = 5  # 快手默认等待元素加载时间
 
@@ -278,35 +248,7 @@ class XhsConfig(ShareConfig):
     # 评论关键词过滤
     COMMENT_FILTER_KEYWORDS: list = ["善"]
     
-    # 互动操作相关参数（小红书特定的默认值）
-    LIKE_PROBABILITY: int = 60  # 小红书默认点赞概率
-    VISIT_ENABLE: int = 10  # 小红书默认访问主页概率
-    PROFILE_FOLLOW_PROBABILITY: int = 10  # 小红书默认主页关注概率
-    
-    # 新增：每条视频点赞和关注上限参数
-    MIN_FOLLOWS_PER_VIDEO: int = 2  # 小红书每条视频最少关注数量
-    MAX_FOLLOWS_PER_VIDEO: int = 3  # 小红书每条视频最多关注数量
-    COMMENT_LIKE_COUNT_MIN: int = 4  # 小红书每条视频最少点赞数量
-    COMMENT_LIKE_COUNT_MAX: int = 8  # 小红书每条视频最多点赞数量
-    
-    # 等待时间参数
-    LIKE_WAIT_MIN: int = 10  # 小红书点赞后最小等待时间
-    LIKE_WAIT_MAX: int = 10  # 小红书点赞后最大等待时间
-    VISIT_MIN: int = 2  # 小红书关注后最小等待时间
-    VISIT_MAX: int = 5  # 小红书关注后最大等待时间
-    COMMENT_WAIT_MIN: int = 5  # 小红书评论等待最小时间
-    COMMENT_WAIT_MAX: int = 8  # 小红书评论等待最大时间
-    
-    # 留言/回复等待时间参数
-    VIDEO_REPLY_WAIT_MIN: int = 5  # 小红书视频留言前最小等待时间
-    VIDEO_REPLY_WAIT_MAX: int = 10  # 小红书视频留言前最大等待时间
-    
     # 功能开关
-    ENABLE_LIKE: bool = True
-    ENABLE_FOLLOW: bool = True
-    ENABLE_PROFILE_VISIT: bool = True
-    ENABLE_VIDEO_COMMENT: bool = True
-    ENABLE_SEARCH_KEYWORDS: bool = True
     ENABLE_COMMENT_REPLY: bool = True
     COMMENT_REPLIES: str = "牛-&-666"  # 小红书回复评论的内容
 
