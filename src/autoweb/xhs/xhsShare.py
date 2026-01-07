@@ -26,11 +26,7 @@ from .base import visit_video_and_operate, process_comments_sequentially
 xhs_config = XhsConfig()
 
 URLS = [
-    "黑暗时代来和我https://www.xiaohongshu.com/discovery/item/6718b2c8000000001b0105fa?source=webshare&xhsshare=pc_web&xsec_token=ABfPA5AZwCLuncyIMZ1MYbPNlLuh-ysjQ-KUI1oRKFe3U=&xsec_source=pc_share",
-    "40 【这个时节不穿衬衫简直可惜 - 僵僵鱼 | 小红书 - 你的生活兴趣社区】 😆 k5gxtaE4RYMtliE 😆 https://www.xiaohongshu.com/discovery/item/6720cff0000000001a037707?source=webshare&xhsshare=pc_web&xsec_token=ABQVwG6gSi2q-LHdyeaiMv27pO9bMu6RrwSWNEQ-5sNUU=&xsec_source=pc_share",
-    "95 【姐姐是种感觉 - 四点七七 | 小红书 - 你的生活兴趣社区】 😆 l5O54XSgt1yqrXr 😆 https://www.xiaohongshu.com/discovery/item/6943fb17000000001e0331e5?source=webshare&xhsshare=pc_web&xsec_token=ABZ3QQAPbVPfU1jwjeVFVhU5L1w8c3gku9eQkcYh5eh-k=&xsec_source=pc_share",
-    "29 【 宗蕊zr | 小红书 - 你的生活兴趣社区】 😆vj4YSdBXUdnyVu2 😆https://www.xiaohongshu.com/discovery/item/68a854f1000000001d0212f0?source=webshare&xhsshare=pc_web&xsec_token=ABvFJ2hHO8TxFUsGcBattDn7t9azj0dDIQpo2fC-9FJls=&xsec_source=pc_share",
-]
+    ]
 
 def extract_urls_from_text(text):
     """
@@ -523,7 +519,17 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                     log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
                 
                 # 访问分享链接
-                driver.get(url)
+                target_url = url
+                if not isinstance(target_url, str):
+                    target_url = str(target_url)
+                target_url = target_url.strip()
+                if not target_url.startswith("http"):
+                    extracted = extract_urls_from_text(target_url)
+                    target_url = extracted[0] if extracted else ""
+                if not target_url.startswith("http"):
+                    raise ValueError("未找到可用URL")
+
+                driver.get(target_url)
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.TAG_NAME, "body"))
                 )
@@ -599,6 +605,7 @@ def main():
         urls = cfg.URLS
     if hasattr(cfg, 'BIT_BROWSER_IDS') and cfg.BIT_BROWSER_IDS:
         browser_ids = cfg.BIT_BROWSER_IDS
+    urls = clean_urls(urls)
 
     log.info(f"使用浏览器ID列表: {browser_ids}")
     log.info(f"使用链接列表: {urls}")
