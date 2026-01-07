@@ -504,6 +504,16 @@ def process_single_keyword(driver, keyword, log_prefix="", reporter=None, browse
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
+    
+    # 清理浏览器句柄，确保只有小红书首页的界面
+    if len(driver.window_handles) > 1:
+        log.info(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
+        for handle in driver.window_handles[1:]:
+            driver.switch_to.window(handle)
+            driver.close()
+        driver.switch_to.window(driver.window_handles[0])
+        log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
+    
     driver.get("https://www.xiaohongshu.com")
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
@@ -579,6 +589,16 @@ def process_search_keywords(driver, keywords, log_prefix="", browser_id=None):
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
+    
+    # 清理浏览器句柄，确保只有小红书首页的界面
+    if len(driver.window_handles) > 1:
+        log.info(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
+        for handle in driver.window_handles[1:]:
+            driver.switch_to.window(handle)
+            driver.close()
+        driver.switch_to.window(driver.window_handles[0])
+        log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
+    
     driver.get("https://www.xiaohongshu.com")
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
@@ -688,6 +708,15 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
             return
         
         log.info(f"{log_prefix} 访问小红书搜索页面")
+        # 清理浏览器句柄，确保只有小红书首页的界面
+        if len(driver.window_handles) > 1:
+            log.info(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
+            for handle in driver.window_handles[1:]:
+                driver.switch_to.window(handle)
+                driver.close()
+            driver.switch_to.window(driver.window_handles[0])
+            log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
+        
         driver.get("https://www.xiaohongshu.com")
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.TAG_NAME, "body"))

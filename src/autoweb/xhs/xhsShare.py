@@ -366,6 +366,15 @@ def process_single_url(driver, url, log_prefix=""):
     """
     处理单个小红书分享链接
     """
+    # 清理浏览器句柄，确保只有小红书首页的界面
+    if len(driver.window_handles) > 1:
+        log.info(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
+        for handle in driver.window_handles[1:]:
+            driver.switch_to.window(handle)
+            driver.close()
+        driver.switch_to.window(driver.window_handles[0])
+        log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
+    
     # 清洗单个URL
     cleaned_urls = clean_urls([url])
     
@@ -410,6 +419,15 @@ def process_share_urls(driver, urls, log_prefix=""):
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
+    
+    # 清理浏览器句柄，确保只有小红书首页的界面
+    if len(driver.window_handles) > 1:
+        log.info(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
+        for handle in driver.window_handles[1:]:
+            driver.switch_to.window(handle)
+            driver.close()
+        driver.switch_to.window(driver.window_handles[0])
+        log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
     
     for url in cleaned_urls:
         log.info(f"{log_prefix} 访问链接: {url}")
@@ -494,6 +512,15 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
             # 处理单个链接
             try:
                 _ensure_not_stopped()
+                
+                # 清理浏览器句柄，确保只有小红书首页的界面
+                if len(driver.window_handles) > 1:
+                    log.info(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
+                    for handle in driver.window_handles[1:]:
+                        driver.switch_to.window(handle)
+                        driver.close()
+                    driver.switch_to.window(driver.window_handles[0])
+                    log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
                 
                 # 访问分享链接
                 driver.get(url)
