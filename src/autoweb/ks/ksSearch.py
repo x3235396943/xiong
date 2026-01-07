@@ -518,6 +518,39 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
             for i in range(vids):
                 _ensure_not_stopped()
                 print(f"{log_prefix} 正在处理第 {i+1}/{vids} 个视频")
+                
+                # 检查评论项元素是否存在，不存在则切换视频
+                comment_items_exist = False
+                for attempt in range(5):  # 最多重试5次切换视频
+                    try:
+                        # 检查评论项元素是否存在
+                        comment_items = driver.find_elements(By.CSS_SELECTOR, ".comment-item.comment-list-item.dark-mode") or driver.find_elements(By.CSS_SELECTOR, ".comment-item")
+                        if comment_items:
+                            comment_items_exist = True
+                            break
+                        else:
+                            log.warning(f"{log_prefix} 第 {i+1} 个视频未找到评论项，尝试切换到下一个视频")
+                            switch_next_btn = KuaishouUtils.el(driver, ".switch-item.video-switch-next")
+                            if switch_next_btn:
+                                if KuaishouUtils.click(driver, switch_next_btn):
+                                    log.info(f"{log_prefix} 成功点击下一个视频按钮")
+                                    # 等待新视频加载
+                                    _sleep_interruptible(3.0)
+                                    continue  # 继续检查新视频的评论项
+                                else:
+                                    log.error(f"{log_prefix} 点击下一个视频按钮失败")
+                                    break
+                            else:
+                                log.warning(f"{log_prefix} 未找到下一个视频按钮")
+                                break
+                    except Exception as e:
+                        log.error(f"{log_prefix} 检查评论项时出错: {e}")
+                        break
+                
+                if not comment_items_exist:
+                    log.warning(f"{log_prefix} 第 {i+1} 个视频没有评论项，跳过该视频")
+                    continue  # 跳过当前视频，处理下一个视频
+                
                 try:
                     WebDriverWait(driver, max(8, wait_time)).until(
                         lambda d: d.find_elements(By.CSS_SELECTOR, ".comment-item.comment-list-item.dark-mode")
