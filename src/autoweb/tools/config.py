@@ -1,7 +1,7 @@
 import re
 import os
 import sys
-from pydantic import field_validator
+from pydantic import field_validator, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Dict, Any
 import time
@@ -82,6 +82,7 @@ class KuSettings(ShareConfig):
     RUN_MODE: str
     UUID: str
     LOGS_PATH: str
+    CONNECT_KEY: str  # 连接密钥
     # 服务器消息ID，用于发送消息到服务器时的标识符
     SERVER_ID: str = "shebeiid"
 
@@ -94,7 +95,7 @@ class KuSettings(ShareConfig):
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str = "1.4.3"
+    VERSION: str | None = "1.4.3"
 
     # 抖音搜索模式配置（服务器下发）
     KEYWORDS: list = []
@@ -186,31 +187,6 @@ def get_config():
     return config
 
 
-class Base(BaseSettings):
-    PLATFORM: str
-    RUN_MODE: str
-    DEVICE_CODE: str
-    WS_URL: str
-    LOGS_PATH: str
-    CONNECT_KEY: str
-    VERSION: str | None
-    DEBUG: bool = False
-    HEADLESS: bool = False
-
-    model_config = SettingsConfigDict(extra="ignore", env_file=".env")
-
-
-class PcConfig(ShareConfig):
-    SIBERIAN_URL: str
-    SIBERIAN_KEY: str
-
-    KEYWORDS: list = []  # 关键词列表
-    MAX_SCROLL_VIDEO: list = [10, 20]  # 浏览视频数
-    MAX_COMMENT: list = [2, 15]  # 评论区滚动次数
-
-    model_config = SettingsConfigDict(extra="ignore")
-
-
 class KsConfig(ShareConfig):
     # 快手相关配置参数（使用父类参数的快手特定默认值）
 
@@ -282,4 +258,4 @@ def extract_version() -> str | None:
     return None
 
 
-env = Base(VERSION=extract_version())  # type: ignore
+env = KuSettings(VERSION=extract_version())  # type: ignore
