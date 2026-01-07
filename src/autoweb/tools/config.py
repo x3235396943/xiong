@@ -17,8 +17,9 @@ field_pairs = {
     "COMMENT_WAIT_MAX": "COMMENT_WAIT_MIN",
 }
 
+
 class ShareConfig(BaseSettings):
-    LIKE_PROBABILITY: int = 100  # 点赞概率 (0-100)
+    LIKE_PROBABILITY: int = 10  # 点赞概率 (0-100)
     VISIT_ENABLE: int = 10  # 进入主页的概率 (0-100)
     PROFILE_FOLLOW_PROBABILITY: int = 10  # 进入主页后关注的概率 (0-100)
     ENABLE_FOLLOW: bool = True  # 是否启用关注功能
@@ -28,8 +29,8 @@ class ShareConfig(BaseSettings):
     ENABLE_COMMENT_REPLY: bool = True  # 是否启用评论回复功能
     ENABLE_VIDEO_COMMENT: bool = True  # 是否启用视频留言功能
     ENABLE_COMMENT_TEMPLATES: bool = True  # 是否启用评论话术功能
-    COMMENT_REPLIES: str = "123"  # 回复评论的内容
-    VIDEO_COMMENTS: str = "123"  # 视频留言的内容
+    COMMENT_REPLIES: str = "牛-&-你好"  # 回复评论的内容
+    VIDEO_COMMENTS: str = "好看-&-厉害"  # 视频留言的内容
     COMMENT_FILTER_KEYWORDS: list = []  # 筛选评论区关键字
 
     # 新增的概率参数
@@ -90,15 +91,15 @@ class KuSettings(ShareConfig):
     URL_INDEX: list = []
     # 其他设置
     WAIT_TIME: int = 10  # 等待元素出现的时间（秒）
-    HEADLESS: bool = False # 是否以无头模式运行浏览器(T or F)
+    HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
     VERSION: str = "1.4.3"
 
     # 抖音搜索模式配置（服务器下发）
     KEYWORDS: list = []
-    MAX_SCROLL_VIDEO: list = [10,20]
-    MAX_COMMENT: list = [2,15]
+    MAX_SCROLL_VIDEO: list = [10, 20]
+    MAX_COMMENT: list = [2, 15]
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
 
@@ -212,45 +213,54 @@ class PcConfig(ShareConfig):
 
 class KsConfig(ShareConfig):
     # 快手相关配置参数（使用父类参数的快手特定默认值）
-    
+
     # 搜索关键词
     KEYWORDS: list = ["美女", "美食", "穿搭", "旅行"]
-    
+
     # 视频浏览相关参数
     MAX_SCROLL_VIDEO: list = [2, 3]  # 默认视频数量范围
     MAX_COMMENT: list = [2, 5]  # 默认评论滚动范围
-    
+
     # 视频评论内容列表
     VIDEO_COMMENTS: str = "这个视频不错！-&-内容很棒！-&-支持一下！-&-666-&-好看！-&-不错哦-&-赞一个"  # 视频评论列表，使用-&-分隔
-    BIT_BROWSER_IDS: list = ["57bd9953b5364d3db5c4ac7cfbb9a1b3","4bbbe30c084a495796aaaff8a7082fda"]  # 默认浏览器ID列表
-    
+    BIT_BROWSER_IDS: list = [
+        "57bd9953b5364d3db5c4ac7cfbb9a1b3",
+        "4bbbe30c084a495796aaaff8a7082fda",
+    ]  # 默认浏览器ID列表
+
     # 评论关键词过滤
     COMMENT_FILTER_KEYWORDS: list = ["美女", "帅哥", "喜欢"]
-    
+
     # 快手特定参数
     KS_DEFAULT_WAIT_TIME: int = 5  # 快手默认等待元素加载时间
 
 
 class XhsConfig(ShareConfig):
     # 小红书相关配置参数（使用父类参数的快手特定默认值）
-    
+
     # 搜索关键词
-    KEYWORDS: list = ["御姐", "美食", "jk","美女", "巴黎世家"]
-    
+    KEYWORDS: list = ["御姐", "美食", "jk", "美女", "巴黎世家"]
+
     # 视频浏览相关参数
     MAX_SCROLL_VIDEO: list = [2, 3]  # 默认视频数量范围
     MAX_COMMENT: list = [2, 5]  # 默认评论滚动范围
-    
+
     # 视频评论内容列表
-    VIDEO_COMMENTS: str = "美女！-&-漂亮！-&-好美！-&-666-&-好看！-&-不错哦"  # 视频评论列表，使用-&-分隔
-    BIT_BROWSER_IDS: list = ["57bd9953b5364d3db5c4ac7cfbb9a1b3","4bbbe30c084a495796aaaff8a7082fda"]  # 默认浏览器ID列表
-    
+    VIDEO_COMMENTS: str = (
+        "美女！-&-漂亮！-&-好美！-&-666-&-好看！-&-不错哦"  # 视频评论列表，使用-&-分隔
+    )
+    BIT_BROWSER_IDS: list = [
+        "57bd9953b5364d3db5c4ac7cfbb9a1b3",
+        "4bbbe30c084a495796aaaff8a7082fda",
+    ]  # 默认浏览器ID列表
+
     # 评论关键词过滤
     COMMENT_FILTER_KEYWORDS: list = ["善"]
-    
+
     # 功能开关
     ENABLE_COMMENT_REPLY: bool = True
     COMMENT_REPLIES: str = "牛-&-666"  # 小红书回复评论的内容
+
 
 def extract_version() -> str | None:
     """

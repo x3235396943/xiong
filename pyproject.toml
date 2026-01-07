@@ -28,6 +28,8 @@ ipykernel = ">=7.1.0,<8"
 websockets = ">=15.0.1,<16"
 pixi-pycharm = ">=0.0.10,<0.0.11"
 playwright-python = ">=1.57.0,<2"
+ruff = ">=0.14.10,<0.15"
+pre-commit = ">=4.5.1,<5"
 
 [tool.pixi.tasks]
 web = "python -m autoweb.main"
@@ -46,5 +48,8 @@ venv = "default"
 pythonVersion = "3.12"
 
 [tool.ruff]
+include = ["src/**/*.py", "install/**/*.py"]
+
+[tool.ruff.lint]
 # https://beta.ruff.rs/docs/rules/
 ignore = ["F401", "F841"]
