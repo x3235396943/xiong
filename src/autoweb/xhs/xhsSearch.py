@@ -499,7 +499,7 @@ def scroll_to_load_more_comments(driver, count: int = 5, delta_y: int = 400, sle
         log.info(f"第 {i + 1} 次滚动完成")
 
 
-def process_single_keyword(driver, keyword, log_prefix=""):
+def process_single_keyword(driver, keyword, log_prefix="", reporter=None):
     wait_seconds = 10
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
@@ -567,7 +567,7 @@ def process_single_keyword(driver, keyword, log_prefix=""):
     log.info(f"{log_prefix} [xhs] 搜索完成: {keyword}")
     try:
         items_to_visit = rand_int_range(DEFAULT_MAX_SCROLL_VIDEO, 2, 3)
-        browse_search_results_and_operate(driver, items_to_visit=items_to_visit)
+        browse_search_results_and_operate(driver, items_to_visit=items_to_visit, reporter=reporter)
     except Exception as e:
         log.error(f"{log_prefix} [xhs] 浏览并操作失败: {e}")
 
@@ -715,7 +715,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
             except Exception:
                 pass
             # 处理单个关键词
-            process_single_keyword(driver, kw, log_prefix)
+            process_single_keyword(driver, kw, log_prefix, reporter)
 
         log.info(f"{log_prefix} 所有关键词处理完成，浏览器任务完成...")
         finished_normally = True

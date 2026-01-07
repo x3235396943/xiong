@@ -266,6 +266,7 @@ def process_comments_sequentially(
         comment_replies=COMMENT_REPLIES,  # 新增评论回复内容
         enable_search_keywords=ENABLE_SEARCH_KEYWORDS,  # 新增是否启用搜索关键字功能
         comment_filter_keywords=COMMENT_FILTER_KEYWORDS,  # 新增筛选评论区关键字
+        reporter=None,  # 新增数据上报对象
 ):
     """
     逐条遍历处理评论区的点赞和回复操作
@@ -275,6 +276,7 @@ def process_comments_sequentially(
         enable_like: 是否启用点赞功能
         enable_reply: 是否启用回复功能
         enable_visit_avatar: 是否启用访问头像功能
+        reporter: 数据上报对象
     """
     try:
         from ..tools.core import log
@@ -405,6 +407,13 @@ def process_comments_sequentially(
                                         if not (has_filter_keywords and comment_contains_keyword):
                                             followed_count += 1
                                         rand_sleep(follow_wait_min, follow_wait_max)
+                                        # 数据上报
+                                        if reporter:
+                                            try:
+                                                reporter.set_action("follow")
+                                                reporter.increment_follow(1)
+                                            except Exception:
+                                                pass
                                 # 关闭用户主页标签页，切回原页面
                                 driver.close()
                                 driver.switch_to.window(all_handles[0])
@@ -446,6 +455,13 @@ def process_comments_sequentially(
                             if not (has_filter_keywords and comment_contains_keyword):
                                 liked_count += 1
                             rand_sleep(like_wait_min, like_wait_max)
+                            # 数据上报
+                            if reporter:
+                                try:
+                                    reporter.set_action("like")
+                                    reporter.increment_like(1)
+                                except Exception:
+                                    pass
                         except:
                             log.info("  未找到点赞按钮或点击失败")
                     else:
@@ -526,6 +542,13 @@ def process_comments_sequentially(
                                         except Exception:
                                             log.info("  按回车发送失败")
                                     time.sleep(0.5)
+                                    # 数据上报
+                                    if reporter:
+                                        try:
+                                            reporter.set_action("comment")
+                                            reporter.increment_comment(1)
+                                        except Exception:
+                                            pass
                             except Exception as e:
                                 log.info(f"  回复输入或发送失败: {e}")
 
@@ -578,17 +601,24 @@ def process_comments_sequentially(
         log.info(f"遍历处理评论区时出错: {e}")
 
 
-def visit_video_and_operate(driver):
+def visit_video_and_operate(driver, reporter=None):
     from ..tools.core import log
     if ENABLE_VIDEO_COMMENT and random.randint(1, 100) <= int(VIDEO_REPLY_RATE):
         rand_sleep(VIDEO_REPLY_WAIT_MIN, VIDEO_REPLY_WAIT_MAX)
         comment_texts = parse_video_comments(VIDEO_COMMENTS)
         if comment_texts:
             selected_comment = random.choice(comment_texts)
-            send_video_comment(driver, selected_comment)
+            if send_video_comment(driver, selected_comment):
+                # 视频评论数据上报
+                if reporter:
+                    try:
+                        reporter.set_action("videoComment")
+                        reporter.increment_video_comment(1)
+                    except Exception:
+                        pass
             time.sleep(0.5)
 
-    process_comments_sequentially(driver)
+    process_comments_sequentially(driver, reporter=reporter)
 
 
 def get_search_result_covers(driver):
@@ -598,7 +628,7 @@ def get_search_result_covers(driver):
     return els
 
 
-def browse_search_results_and_operate(driver, items_to_visit=2):
+def browse_search_results_and_operate(driver, items_to_visit=2, reporter=None):
     covers = get_search_result_covers(driver)
     n = min(items_to_visit, len(covers))
     for i in range(n):
@@ -611,7 +641,7 @@ def browse_search_results_and_operate(driver, items_to_visit=2):
         if len(handles) > 1:
             driver.switch_to.window(handles[-1])
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        visit_video_and_operate(driver)
+        visit_video_and_operate(driver, reporter=reporter)
         if len(driver.window_handles) > 1:
             driver.close()
             driver.switch_to.window(driver.window_handles[0])
