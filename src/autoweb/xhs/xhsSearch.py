@@ -499,7 +499,7 @@ def scroll_to_load_more_comments(driver, count: int = 5, delta_y: int = 400, sle
         log.info(f"第 {i + 1} 次滚动完成")
 
 
-def process_single_keyword(driver, keyword, log_prefix="", reporter=None):
+def process_single_keyword(driver, keyword, log_prefix="", reporter=None, browser_id=None):
     wait_seconds = 10
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
@@ -719,7 +719,7 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
             except Exception:
                 pass
             # 处理单个关键词
-            process_single_keyword(driver, kw, log_prefix, reporter)
+            process_single_keyword(driver, kw, log_prefix, reporter, browser_id=browser_id)
 
         log.info(f"{log_prefix} 所有关键词处理完成，浏览器任务完成...")
         finished_normally = True
