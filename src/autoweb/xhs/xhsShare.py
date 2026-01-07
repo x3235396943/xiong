@@ -23,18 +23,25 @@ from ..tools.config import XhsConfig, get_config
 from ..tools.core import log, DataReporter
 from .base import visit_video_and_operate, process_comments_sequentially
 
+import sys
+from ..tools.license import LicenseManager, LicenseException
+from ..tools.ws_client import create_websocket_client, start_websocket_client_in_thread
+
 xhs_config = XhsConfig()
 
-URLS = [
-    ]
+URLS = []
+
 
 def extract_urls_from_text(text):
     """
     从文本中提取小红书URL
     """
     import re
+
     # 匹配小红书URL的正则表达式
-    url_pattern = r'https://www\.xiaohongshu\.com/(?:explore|discovery/item)/[a-zA-Z0-9\-_&=%?.]+'
+    url_pattern = (
+        r"https://www\.xiaohongshu\.com/(?:explore|discovery/item)/[a-zA-Z0-9\-_&=%?.]+"
+    )
     urls = re.findall(url_pattern, text)
     return urls
 
@@ -45,7 +52,7 @@ def clean_urls(urls):
     """
     cleaned_urls = []
     for item in urls:
-        if item.startswith('http'):  # 如果已经是完整URL
+        if item.startswith("http"):  # 如果已经是完整URL
             cleaned_urls.append(item)
         else:
             # 如果是包含URL的文本，尝试从中提取URL
@@ -95,9 +102,6 @@ COMMENT_WAIT_MAX = xhs_config.COMMENT_WAIT_MAX
 COMMENT_REPLIES = xhs_config.COMMENT_REPLIES
 
 # 导入日志系统相关模块
-import sys
-from ..tools.license import LicenseManager, LicenseException
-from ..tools.ws_client import create_websocket_client, start_websocket_client_in_thread
 
 # 初始化许可证管理器
 license_manager = LicenseManager()
@@ -111,6 +115,7 @@ heartbeat_task = None
 pong_received = threading.Event()
 heartbeat_timeout_count = 0
 MAX_HEARTBEAT_TIMEOUTS = 3
+
 
 def _sleep_interruptible(seconds: float):
     end_time = time.time() + max(0.0, float(seconds))
@@ -129,8 +134,11 @@ def _ensure_not_stopped():
 def _send_ws_message(message_dict):
     try:
         import json as _json
+
         try:
-            log.info(f"发送到服务器的消息: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}")
+            log.info(
+                f"发送到服务器的消息: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}"
+            )
         except Exception:
             pass
         if not ws_client or ws_client.stop_requested:
@@ -139,8 +147,10 @@ def _send_ws_message(message_dict):
         if not loop or not loop.is_running():
             return
         import asyncio
+
         asyncio.run_coroutine_threadsafe(
-            ws_client.send_queue.put(_json.dumps(message_dict, ensure_ascii=False)), loop
+            ws_client.send_queue.put(_json.dumps(message_dict, ensure_ascii=False)),
+            loop,
         )
     except Exception:
         pass
@@ -154,7 +164,10 @@ def _send_ws_message_for_reporter_share(message_dict):
                 data.pop("comment", None)
             try:
                 import json as _json
-                log.info(f"PcDataReq 上报: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}")
+
+                log.info(
+                    f"PcDataReq 上报: {_json.dumps(message_dict, ensure_ascii=False, indent=2)}"
+                )
             except Exception:
                 pass
     except Exception:
@@ -196,6 +209,7 @@ async def _heartbeat_task():
     global heartbeat_timeout_count
     import asyncio
     from datetime import datetime
+
     cfg = get_config()
     while not STOP_EVENT.is_set():
         try:
@@ -207,7 +221,10 @@ async def _heartbeat_task():
                 }
             )
             try:
-                await asyncio.wait_for(asyncio.get_event_loop().run_in_executor(None, pong_received.wait), timeout=5.0)
+                await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(None, pong_received.wait),
+                    timeout=5.0,
+                )
                 heartbeat_timeout_count = 0
                 pong_received.clear()
             except asyncio.TimeoutError:
@@ -229,21 +246,36 @@ def _start_ws_client():
         ws_client = create_websocket_client(cfg)
         if ws_client:
             ws_client.set_external_send_func(_send_ws_message)
-            ws_client.set_config_update_handler(lambda d: _handle_login_res_command({"data": d}))
+            ws_client.set_config_update_handler(
+                lambda d: _handle_login_res_command({"data": d})
+            )
             ws_thread = start_websocket_client_in_thread(
                 ws_client, lambda: (STOP_EVENT.set(), cfg.request_stop())
             )
-            ws_client.register_command_handler("HeartbeatRes", _handle_heartbeat_response)
+            ws_client.register_command_handler(
+                "HeartbeatRes", _handle_heartbeat_response
+            )
             ws_client.register_command_handler("LoginRes", _handle_login_res_command)
             ws_loop = getattr(ws_client, "event_loop", None)
             if ws_loop and ws_loop.is_running():
                 import asyncio
-                heartbeat_task = asyncio.run_coroutine_threadsafe(_heartbeat_task(), ws_loop)
+
+                heartbeat_task = asyncio.run_coroutine_threadsafe(
+                    _heartbeat_task(), ws_loop
+                )
             # 发送登录请求
             from urllib.parse import parse_qs, urlparse
+
             parsed = urlparse(cfg.WS_URL)
             device_id = parse_qs(parsed.query).get("id", [cfg.DEVICE_CODE])[0]
-            _send_ws_message({"cmd": "LoginReq", "id": device_id, "mode": "pc", "version": getattr(cfg, "VERSION", None)})
+            _send_ws_message(
+                {
+                    "cmd": "LoginReq",
+                    "id": device_id,
+                    "mode": "pc",
+                    "version": getattr(cfg, "VERSION", None),
+                }
+            )
     except Exception:
         pass
 
@@ -261,6 +293,7 @@ def _stop_ws_client():
             loop = getattr(ws_client, "event_loop", None) or ws_loop
             if loop and loop.is_running():
                 import asyncio
+
                 asyncio.run_coroutine_threadsafe(ws_client.close(), loop)
         if ws_thread and ws_thread.is_alive():
             try:
@@ -327,6 +360,7 @@ def parse_keywords(raw):
 
 def ensure_element_centered(driver, element):
     import time
+
     try:
         driver.execute_script(
             "arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'nearest'});",
@@ -349,7 +383,7 @@ def open_bit_browser(browser_id: str) -> dict:
         response = requests.post(
             f"{_BIT_API_URL}/browser/open",
             data=json.dumps(json_data),
-            headers=_BIT_HEADERS
+            headers=_BIT_HEADERS,
         )
         result = response.json()
         return result
@@ -370,21 +404,21 @@ def process_single_url(driver, url, log_prefix=""):
             driver.close()
         driver.switch_to.window(driver.window_handles[0])
         log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
-    
+
     # 清洗单个URL
     cleaned_urls = clean_urls([url])
-    
+
     if not cleaned_urls:
         log.warning(f"{log_prefix} URL清洗失败: {url}")
         return
-    
+
     url = cleaned_urls[0]  # 获取清洗后的URL
-    
+
     wait_seconds = 10
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
-    
+
     log.info(f"{log_prefix} 访问链接: {url}")
     try:
         driver.get(url)
@@ -392,14 +426,14 @@ def process_single_url(driver, url, log_prefix=""):
             EC.presence_of_element_located((By.TAG_NAME, "body"))
         )
         time.sleep(2)
-        
+
         # 使用base模块中的方法对视频进行操作处理
         visit_video_and_operate(driver)
-        
+
         log.info(f"{log_prefix} 链接 {url} 处理完成")
     except Exception as e:
         log.error(f"{log_prefix} 处理链接 {url} 时出现错误: {e}")
-    
+
     # 在处理不同链接之间添加间隔
     _sleep_interruptible(2.0)
 
@@ -410,12 +444,12 @@ def process_share_urls(driver, urls, log_prefix=""):
     """
     # 清洗URL列表
     cleaned_urls = clean_urls(urls)
-    
+
     wait_seconds = 10
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
-    
+
     # 清理浏览器句柄，确保只有小红书首页的界面
     if len(driver.window_handles) > 1:
         log.info(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
@@ -424,7 +458,7 @@ def process_share_urls(driver, urls, log_prefix=""):
             driver.close()
         driver.switch_to.window(driver.window_handles[0])
         log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
-    
+
     for url in cleaned_urls:
         log.info(f"{log_prefix} 访问链接: {url}")
         try:
@@ -433,21 +467,21 @@ def process_share_urls(driver, urls, log_prefix=""):
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
             time.sleep(2)
-            
+
             # 使用base模块中的方法对视频进行操作处理
             visit_video_and_operate(driver)
-            
+
             log.info(f"{log_prefix} 链接 {url} 处理完成")
         except Exception as e:
             log.error(f"{log_prefix} 处理链接 {url} 时出现错误: {e}")
-        
+
         # 在处理不同链接之间添加间隔
         _sleep_interruptible(2.0)
 
 
 def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
     log_prefix = get_browser_log_prefix(browser_id)
-    
+
     log.info(f"{log_prefix} 开始执行小红书分享链接自动化任务")
     log.info(f"{log_prefix} 浏览器ID: {browser_id}")
 
@@ -466,6 +500,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
 
     try:
         from selenium.webdriver.chrome.options import Options
+
         chrome_options = Options()
         chrome_options.add_experimental_option("debuggerAddress", debugger_address)
         chrome_service = Service(driver_path)
@@ -473,13 +508,24 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
         log.info(f"{log_prefix} WebDriver连接成功")
 
         cfg = get_config()
-        reporter = DataReporter(device_code=cfg.DEVICE_CODE, browser_id=browser_id, send_ws_message_func=_send_ws_message_for_reporter_share)
+        reporter = DataReporter(
+            device_code=cfg.DEVICE_CODE,
+            browser_id=browser_id,
+            send_ws_message_func=_send_ws_message_for_reporter_share,
+        )
         if total_count:
             try:
                 reporter.set_total_links(total_count)
             except Exception:
                 pass
-        _send_ws_message({"browserId": browser_id, "cmd": "RunStateReq", "id": cfg.DEVICE_CODE, "state": "running" if len(browser_id) == 32 else "error"})
+        _send_ws_message(
+            {
+                "browserId": browser_id,
+                "cmd": "RunStateReq",
+                "id": cfg.DEVICE_CODE,
+                "state": "running" if len(browser_id) == 32 else "error",
+            }
+        )
 
         # 从队列中获取链接并处理，直到队列为空
         visited_count = 0
@@ -492,23 +538,25 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
             except LicenseException:
                 log.error(f"{log_prefix} 卡密无效，停止任务")
                 break
-            
+
             with url_lock:
                 url = url_queue.popleft() if url_queue else None
             if not url:
                 # 队列为空，表示所有URL都已处理完毕
-                log.info(f"{log_prefix} 所有URL已处理完毕，共处理 {visited_count} 个链接")
+                log.info(
+                    f"{log_prefix} 所有URL已处理完毕，共处理 {visited_count} 个链接"
+                )
                 try:
                     reporter.set_completed(True)
                 except Exception:
                     pass
                 break
-            
+
             log.info(f"{log_prefix} 处理链接: {url}")
             # 处理单个链接
             try:
                 _ensure_not_stopped()
-                
+
                 # 清理浏览器句柄，确保只有小红书首页的界面
                 if len(driver.window_handles) > 1:
                     log.info(f"{log_prefix} 检测到多个窗口，关闭额外窗口...")
@@ -517,7 +565,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                         driver.close()
                     driver.switch_to.window(driver.window_handles[0])
                     log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
-                
+
                 # 访问分享链接
                 target_url = url
                 if not isinstance(target_url, str):
@@ -534,10 +582,10 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                     EC.presence_of_element_located((By.TAG_NAME, "body"))
                 )
                 time.sleep(2)
-                
+
                 # 使用base模块中的方法对视频进行操作处理
                 visit_video_and_operate(driver)
-                
+
                 log.info(f"{log_prefix} 链接 {url} 处理完成")
                 visited_count += 1
                 try:
@@ -552,7 +600,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                 except Exception:
                     pass
                 continue
-            
+
             # 在处理不同链接之间添加间隔
             _sleep_interruptible(2.0)
 
@@ -563,12 +611,14 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
     finally:
         try:
             driver.quit()
-        except:
+        except Exception:
             pass  # 如果driver没有成功初始化，忽略错误
         try:
             if not STOP_EVENT.is_set():
                 stats = reporter.get_stats()
-                if (stats.get("urlOk", 0) + stats.get("urlFail", 0)) >= int(total_count or 0):
+                if (stats.get("urlOk", 0) + stats.get("urlFail", 0)) >= int(
+                    total_count or 0
+                ):
                     reporter.set_completed(True)
         except Exception:
             pass
@@ -589,7 +639,7 @@ def main():
         log.error(f"等待服务器配置初始化超时: {e}")
         _stop_ws_client()
         sys.exit(1)
-    
+
     # 获取配置
     raw_env = os.getenv("BIT_BROWSER_IDS")
     if raw_env:
@@ -599,11 +649,11 @@ def main():
 
     raw_env = os.getenv("URLS")
     urls = parse_keywords(raw_env)
-    
+
     # 如果配置中心有URLS值，优先使用配置中心的值
-    if hasattr(cfg, 'URLS') and cfg.URLS:
+    if hasattr(cfg, "URLS") and cfg.URLS:
         urls = cfg.URLS
-    if hasattr(cfg, 'BIT_BROWSER_IDS') and cfg.BIT_BROWSER_IDS:
+    if hasattr(cfg, "BIT_BROWSER_IDS") and cfg.BIT_BROWSER_IDS:
         browser_ids = cfg.BIT_BROWSER_IDS
     urls = clean_urls(urls)
 
@@ -634,15 +684,19 @@ def main():
         log.error("卡密验证失败")
         _stop_ws_client()
         return
-    
+
     license_manager.start_periodic_check()
-    
+
     # 多线程执行
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(browser_ids)) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=len(browser_ids)
+    ) as executor:
         futures = []
         for i, bid in enumerate(browser_ids):
             # 提交任务到线程池
-            future = executor.submit(run_worker, bid, i + 1, url_queue, url_lock, len(urls))
+            future = executor.submit(
+                run_worker, bid, i + 1, url_queue, url_lock, len(urls)
+            )
             futures.append(future)
             # 间隔启动浏览器，避免同时启动造成资源竞争
             if i < len(browser_ids) - 1:
@@ -660,7 +714,7 @@ def main():
                 break
             except Exception as e:
                 log.error(f"[并发] 线程执行出错: {e}")
-    
+
     license_manager.stop_periodic_check()
     _stop_ws_client()
     log.info("\n所有浏览器任务完成，程序退出...")
