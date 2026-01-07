@@ -566,13 +566,15 @@ def process_single_keyword(driver, keyword, log_prefix="", reporter=None):
         pass
     log.info(f"{log_prefix} [xhs] 搜索完成: {keyword}")
     try:
-        items_to_visit = rand_int_range(DEFAULT_MAX_SCROLL_VIDEO, 2, 3)
-        browse_search_results_and_operate(driver, items_to_visit=items_to_visit, reporter=reporter)
+        cfg = get_config()
+        max_scroll_video = getattr(cfg, "MAX_SCROLL_VIDEO", None) or xhs_config.MAX_SCROLL_VIDEO
+        items_to_visit = rand_int_range(max_scroll_video, 2, 3)
+        browse_search_results_and_operate(driver, items_to_visit=items_to_visit, reporter=reporter, browser_id=browser_id)
     except Exception as e:
         log.error(f"{log_prefix} [xhs] 浏览并操作失败: {e}")
 
 
-def process_search_keywords(driver, keywords, log_prefix=""):
+def process_search_keywords(driver, keywords, log_prefix="", browser_id=None):
     wait_seconds = 10
     WebDriverWait(driver, max(10, wait_seconds)).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
@@ -639,8 +641,10 @@ def process_search_keywords(driver, keywords, log_prefix=""):
             pass
         log.info(f"{log_prefix} [xhs] 搜索完成: {kw}")
         try:
-            items_to_visit = rand_int_range(DEFAULT_MAX_SCROLL_VIDEO, 2, 3)
-            browse_search_results_and_operate(driver, items_to_visit=items_to_visit)
+            cfg = get_config()
+            max_scroll_video = getattr(cfg, "MAX_SCROLL_VIDEO", None) or xhs_config.MAX_SCROLL_VIDEO
+            items_to_visit = rand_int_range(max_scroll_video, 2, 3)
+            browse_search_results_and_operate(driver, items_to_visit=items_to_visit, browser_id=browser_id)
         except Exception as e:
             log.error(f"{log_prefix} [xhs] 浏览并操作失败: {e}")
 

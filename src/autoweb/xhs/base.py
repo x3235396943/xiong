@@ -5,57 +5,130 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import random
 
-from ..tools.config import XhsConfig
+from ..tools.config import XhsConfig, get_config
 
-# 初始化小红书配置
-xhs_config = XhsConfig()
+_DEFAULT_XHS_CONFIG = XhsConfig()
 
-# 搜索关键词
-KEYWORDS = xhs_config.KEYWORDS
 
-# 视频浏览相关参数
-DEFAULT_MAX_SCROLL_VIDEO = xhs_config.MAX_SCROLL_VIDEO
-DEFAULT_MAX_COMMENT = xhs_config.MAX_COMMENT
+def _is_empty_value(v):
+    if v is None:
+        return True
+    if isinstance(v, (str, list, tuple, dict, set)) and len(v) == 0:
+        return True
+    return False
 
-# 互动操作相关参数
-LIKE_PROBABILITY = xhs_config.LIKE_PROBABILITY
-VISIT_ENABLE = xhs_config.VISIT_ENABLE
-PROFILE_FOLLOW_PROBABILITY = xhs_config.PROFILE_FOLLOW_PROBABILITY
-DEFAULT_LIKE_WAIT_MIN = xhs_config.LIKE_WAIT_MIN
-DEFAULT_LIKE_WAIT_MAX = xhs_config.LIKE_WAIT_MAX
-DEFAULT_VISIT_MIN = xhs_config.VISIT_MIN
-DEFAULT_VISIT_MAX = xhs_config.VISIT_MAX
-DEFAULT_PROFILE_WAIT_MIN = xhs_config.COMMENT_WAIT_MIN
-DEFAULT_PROFILE_WAIT_MAX = xhs_config.COMMENT_WAIT_MAX
-VIDEO_REPLY_RATE = xhs_config.VIDEO_REPLY_RATE
-VIDEO_REPLY_WAIT_MIN = xhs_config.VIDEO_REPLY_WAIT_MIN
-VIDEO_REPLY_WAIT_MAX = xhs_config.VIDEO_REPLY_WAIT_MAX
 
-# 新增：每条视频点赞和关注上限参数
-MIN_FOLLOWS_PER_VIDEO = xhs_config.MIN_FOLLOWS_PER_VIDEO
-MAX_FOLLOWS_PER_VIDEO = xhs_config.MAX_FOLLOWS_PER_VIDEO
-COMMENT_LIKE_COUNT_MIN = xhs_config.COMMENT_LIKE_COUNT_MIN
-COMMENT_LIKE_COUNT_MAX = xhs_config.COMMENT_LIKE_COUNT_MAX
+def _coerce_bool(v, default: bool) -> bool:
+    if v is None:
+        return default
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return bool(int(v))
+    if isinstance(v, str):
+        t = v.strip().lower()
+        if t in ("1", "true", "t", "yes", "y", "on"):
+            return True
+        if t in ("0", "false", "f", "no", "n", "off"):
+            return False
+    return default
 
-# 视频评论内容列表
-VIDEO_COMMENTS = xhs_config.VIDEO_COMMENTS
 
-# 评论关键词过滤
-COMMENT_FILTER_KEYWORDS = xhs_config.COMMENT_FILTER_KEYWORDS
+def _coerce_int(v, default: int) -> int:
+    if v is None:
+        return default
+    if isinstance(v, bool):
+        return int(v)
+    try:
+        return int(v)
+    except Exception:
+        return default
 
-# 是否启用功能
-ENABLE_LIKE = xhs_config.ENABLE_LIKE
-ENABLE_FOLLOW = xhs_config.ENABLE_FOLLOW
-ENABLE_PROFILE_VISIT = xhs_config.ENABLE_PROFILE_VISIT
-ENABLE_VIDEO_COMMENT = xhs_config.ENABLE_VIDEO_COMMENT
-ENABLE_SEARCH_KEYWORDS = xhs_config.ENABLE_SEARCH_KEYWORDS
-ENABLE_COMMENT_REPLY = xhs_config.ENABLE_COMMENT_REPLY
 
-# 评论相关参数
-COMMENT_REPLY_PROBABILITY = xhs_config.COMMENT_REPLY_PROBABILITY
-COMMENT_WAIT_MIN = xhs_config.COMMENT_WAIT_MIN
-COMMENT_WAIT_MAX = xhs_config.COMMENT_WAIT_MAX
-COMMENT_REPLIES = xhs_config.COMMENT_REPLIES
+def _coerce_list(v, default: list):
+    if _is_empty_value(v):
+        return list(default)
+    if isinstance(v, list):
+        return v
+    if isinstance(v, tuple):
+        return list(v)
+    if isinstance(v, set):
+        return list(v)
+    if isinstance(v, str):
+        t = v.strip()
+        if not t:
+            return list(default)
+        try:
+            import json
+
+            data = json.loads(t)
+            if isinstance(data, list):
+                return data
+        except Exception:
+            pass
+        for sep in [",", "，", ";", "；", " "]:
+            t = t.replace(sep, ",")
+        parts = [x.strip() for x in t.split(",") if x.strip()]
+        return parts if parts else list(default)
+    return list(default)
+
+
+def _coerce_range_pair(v, default_pair: list):
+    arr = _coerce_list(v, default_pair)
+    if len(arr) >= 2:
+        return [arr[0], arr[1]]
+    return list(default_pair)
+
+
+def get_xhs_effective_settings(cfg=None) -> dict:
+    cfg = cfg or get_config()
+    d = _DEFAULT_XHS_CONFIG
+
+    return {
+        "KEYWORDS": _coerce_list(getattr(cfg, "KEYWORDS", None), d.KEYWORDS),
+        "MAX_SCROLL_VIDEO": _coerce_range_pair(getattr(cfg, "MAX_SCROLL_VIDEO", None), d.MAX_SCROLL_VIDEO),
+        "MAX_COMMENT": _coerce_range_pair(getattr(cfg, "MAX_COMMENT", None), d.MAX_COMMENT),
+        "LIKE_PROBABILITY": _coerce_int(getattr(cfg, "LIKE_PROBABILITY", None), d.LIKE_PROBABILITY),
+        "VISIT_ENABLE": _coerce_int(getattr(cfg, "VISIT_ENABLE", None), d.VISIT_ENABLE),
+        "PROFILE_FOLLOW_PROBABILITY": _coerce_int(
+            getattr(cfg, "PROFILE_FOLLOW_PROBABILITY", None), d.PROFILE_FOLLOW_PROBABILITY
+        ),
+        "LIKE_WAIT_MIN": _coerce_int(getattr(cfg, "LIKE_WAIT_MIN", None), d.LIKE_WAIT_MIN),
+        "LIKE_WAIT_MAX": _coerce_int(getattr(cfg, "LIKE_WAIT_MAX", None), d.LIKE_WAIT_MAX),
+        "VISIT_MIN": _coerce_int(getattr(cfg, "VISIT_MIN", None), d.VISIT_MIN),
+        "VISIT_MAX": _coerce_int(getattr(cfg, "VISIT_MAX", None), d.VISIT_MAX),
+        "VIDEO_REPLY_RATE": _coerce_int(getattr(cfg, "VIDEO_REPLY_RATE", None), d.VIDEO_REPLY_RATE),
+        "VIDEO_REPLY_WAIT_MIN": _coerce_int(getattr(cfg, "VIDEO_REPLY_WAIT_MIN", None), d.VIDEO_REPLY_WAIT_MIN),
+        "VIDEO_REPLY_WAIT_MAX": _coerce_int(getattr(cfg, "VIDEO_REPLY_WAIT_MAX", None), d.VIDEO_REPLY_WAIT_MAX),
+        "MIN_FOLLOWS_PER_VIDEO": _coerce_int(getattr(cfg, "MIN_FOLLOWS_PER_VIDEO", None), d.MIN_FOLLOWS_PER_VIDEO),
+        "MAX_FOLLOWS_PER_VIDEO": _coerce_int(getattr(cfg, "MAX_FOLLOWS_PER_VIDEO", None), d.MAX_FOLLOWS_PER_VIDEO),
+        "COMMENT_LIKE_COUNT_MIN": _coerce_int(
+            getattr(cfg, "COMMENT_LIKE_COUNT_MIN", None), d.COMMENT_LIKE_COUNT_MIN
+        ),
+        "COMMENT_LIKE_COUNT_MAX": _coerce_int(
+            getattr(cfg, "COMMENT_LIKE_COUNT_MAX", None), d.COMMENT_LIKE_COUNT_MAX
+        ),
+        "VIDEO_COMMENTS": getattr(cfg, "VIDEO_COMMENTS", None)
+        if not _is_empty_value(getattr(cfg, "VIDEO_COMMENTS", None))
+        else d.VIDEO_COMMENTS,
+        "COMMENT_FILTER_KEYWORDS": _coerce_list(getattr(cfg, "COMMENT_FILTER_KEYWORDS", None), d.COMMENT_FILTER_KEYWORDS),
+        "ENABLE_LIKE": _coerce_bool(getattr(cfg, "ENABLE_LIKE", None), d.ENABLE_LIKE),
+        "ENABLE_FOLLOW": _coerce_bool(getattr(cfg, "ENABLE_FOLLOW", None), d.ENABLE_FOLLOW),
+        "ENABLE_PROFILE_VISIT": _coerce_bool(getattr(cfg, "ENABLE_PROFILE_VISIT", None), d.ENABLE_PROFILE_VISIT),
+        "ENABLE_VIDEO_COMMENT": _coerce_bool(getattr(cfg, "ENABLE_VIDEO_COMMENT", None), d.ENABLE_VIDEO_COMMENT),
+        "ENABLE_SEARCH_KEYWORDS": _coerce_bool(getattr(cfg, "ENABLE_SEARCH_KEYWORDS", None), d.ENABLE_SEARCH_KEYWORDS),
+        "ENABLE_COMMENT_REPLY": _coerce_bool(getattr(cfg, "ENABLE_COMMENT_REPLY", None), d.ENABLE_COMMENT_REPLY),
+        "COMMENT_REPLY_PROBABILITY": _coerce_int(
+            getattr(cfg, "COMMENT_REPLY_PROBABILITY", None), d.COMMENT_REPLY_PROBABILITY
+        ),
+        "COMMENT_WAIT_MIN": _coerce_int(getattr(cfg, "COMMENT_WAIT_MIN", None), d.COMMENT_WAIT_MIN),
+        "COMMENT_WAIT_MAX": _coerce_int(getattr(cfg, "COMMENT_WAIT_MAX", None), d.COMMENT_WAIT_MAX),
+        "COMMENT_REPLIES": getattr(cfg, "COMMENT_REPLIES", None)
+        if not _is_empty_value(getattr(cfg, "COMMENT_REPLIES", None))
+        else d.COMMENT_REPLIES,
+        "BIT_BROWSER_IDS": _coerce_list(getattr(cfg, "BIT_BROWSER_IDS", None), d.BIT_BROWSER_IDS),
+        "URLS": _coerce_list(getattr(cfg, "URLS", None), []),
+    }
 
 
 def rand_int_range(v, fallback_min=0, fallback_max=0):
@@ -218,7 +291,7 @@ def scroll_element_sync(driver, element, delta_y=400, sleep_time=2):
         print(f"滚动失败: {e}")
 
 
-def scroll_to_load_more_comments(driver, count: int = 5, delta_y: int = 400, sleep_time: float = 2.0):
+def scroll_to_load_more_comments(driver, count: int = 5, delta_y: int = 500, sleep_time: float = 2.0):
     print("尝试滚动以加载更多评论...")
     container = None
     try:
@@ -242,31 +315,34 @@ def scroll_to_load_more_comments(driver, count: int = 5, delta_y: int = 400, sle
 
 def process_comments_sequentially(
         driver,
-        enable_like=ENABLE_LIKE,
-        enable_reply=ENABLE_COMMENT_REPLY,  # 使用新添加的常量作为默认值
-        enable_visit_avatar=ENABLE_PROFILE_VISIT,
+        enable_like=None,
+        enable_reply=None,
+        enable_visit_avatar=None,
+        enable_follow=None,
         max_count=None,
-        like_probability=LIKE_PROBABILITY,
-        visit_probability=VISIT_ENABLE,
-        follow_probability=PROFILE_FOLLOW_PROBABILITY,
-        like_wait_min=DEFAULT_LIKE_WAIT_MIN,
-        like_wait_max=DEFAULT_LIKE_WAIT_MAX,
-        profile_wait_min=DEFAULT_PROFILE_WAIT_MIN,
-        profile_wait_max=DEFAULT_PROFILE_WAIT_MAX,
-        follow_wait_min=DEFAULT_VISIT_MIN,
-        follow_wait_max=DEFAULT_VISIT_MAX,
-        min_follows_per_video=MIN_FOLLOWS_PER_VIDEO,
-        max_follows_per_video=MAX_FOLLOWS_PER_VIDEO,
-        comment_like_count_min=COMMENT_LIKE_COUNT_MIN,
-        comment_like_count_max=COMMENT_LIKE_COUNT_MAX,
-        comment_scroll_minmax=DEFAULT_MAX_COMMENT,
-        comment_reply_probability=COMMENT_REPLY_PROBABILITY,  # 新增评论回复概率参数
-        comment_wait_min=COMMENT_WAIT_MIN,  # 新增评论回复前最小等待时间
-        comment_wait_max=COMMENT_WAIT_MAX,  # 新增评论回复前最大等待时间
-        comment_replies=COMMENT_REPLIES,  # 新增评论回复内容
-        enable_search_keywords=ENABLE_SEARCH_KEYWORDS,  # 新增是否启用搜索关键字功能
-        comment_filter_keywords=COMMENT_FILTER_KEYWORDS,  # 新增筛选评论区关键字
+        like_probability=None,
+        visit_probability=None,
+        follow_probability=None,
+        like_wait_min=None,
+        like_wait_max=None,
+        profile_wait_min=None,
+        profile_wait_max=None,
+        follow_wait_min=None,
+        follow_wait_max=None,
+        min_follows_per_video=None,
+        max_follows_per_video=None,
+        comment_like_count_min=None,
+        comment_like_count_max=None,
+        comment_scroll_minmax=None,
+        comment_reply_probability=None,
+        comment_wait_min=None,
+        comment_wait_max=None,
+        comment_replies=None,
+        enable_search_keywords=None,
+        comment_filter_keywords=None,
         reporter=None,  # 新增数据上报对象
+        cfg=None,
+        browser_id=None,  # 浏览器ID参数
 ):
     """
     逐条遍历处理评论区的点赞和回复操作
@@ -280,6 +356,45 @@ def process_comments_sequentially(
     """
     try:
         from ..tools.core import log
+        settings = get_xhs_effective_settings(cfg)
+        enable_like = settings["ENABLE_LIKE"] if enable_like is None else enable_like
+        enable_reply = settings["ENABLE_COMMENT_REPLY"] if enable_reply is None else enable_reply
+        enable_visit_avatar = settings["ENABLE_PROFILE_VISIT"] if enable_visit_avatar is None else enable_visit_avatar
+        enable_follow = settings["ENABLE_FOLLOW"] if enable_follow is None else enable_follow
+        like_probability = settings["LIKE_PROBABILITY"] if like_probability is None else like_probability
+        visit_probability = settings["VISIT_ENABLE"] if visit_probability is None else visit_probability
+        follow_probability = settings["PROFILE_FOLLOW_PROBABILITY"] if follow_probability is None else follow_probability
+        like_wait_min = settings["LIKE_WAIT_MIN"] if like_wait_min is None else like_wait_min
+        like_wait_max = settings["LIKE_WAIT_MAX"] if like_wait_max is None else like_wait_max
+        profile_wait_min = settings["COMMENT_WAIT_MIN"] if profile_wait_min is None else profile_wait_min
+        profile_wait_max = settings["COMMENT_WAIT_MAX"] if profile_wait_max is None else profile_wait_max
+        follow_wait_min = settings["VISIT_MIN"] if follow_wait_min is None else follow_wait_min
+        follow_wait_max = settings["VISIT_MAX"] if follow_wait_max is None else follow_wait_max
+        min_follows_per_video = (
+            settings["MIN_FOLLOWS_PER_VIDEO"] if min_follows_per_video is None else min_follows_per_video
+        )
+        max_follows_per_video = (
+            settings["MAX_FOLLOWS_PER_VIDEO"] if max_follows_per_video is None else max_follows_per_video
+        )
+        comment_like_count_min = (
+            settings["COMMENT_LIKE_COUNT_MIN"] if comment_like_count_min is None else comment_like_count_min
+        )
+        comment_like_count_max = (
+            settings["COMMENT_LIKE_COUNT_MAX"] if comment_like_count_max is None else comment_like_count_max
+        )
+        comment_scroll_minmax = settings["MAX_COMMENT"] if comment_scroll_minmax is None else comment_scroll_minmax
+        comment_reply_probability = (
+            settings["COMMENT_REPLY_PROBABILITY"] if comment_reply_probability is None else comment_reply_probability
+        )
+        comment_wait_min = settings["COMMENT_WAIT_MIN"] if comment_wait_min is None else comment_wait_min
+        comment_wait_max = settings["COMMENT_WAIT_MAX"] if comment_wait_max is None else comment_wait_max
+        comment_replies = settings["COMMENT_REPLIES"] if comment_replies is None else comment_replies
+        enable_search_keywords = (
+            settings["ENABLE_SEARCH_KEYWORDS"] if enable_search_keywords is None else enable_search_keywords
+        )
+        comment_filter_keywords = (
+            settings["COMMENT_FILTER_KEYWORDS"] if comment_filter_keywords is None else comment_filter_keywords
+        )
         log.info("开始逐条遍历处理评论...")
 
         # 等待评论区加载
@@ -332,7 +447,12 @@ def process_comments_sequentially(
                    (max_count is not None and processed_count >= max_count):
                     break
                     
-                log.info(f"\n处理第 {processed_count + 1} 条评论:")
+                # 生成浏览器日志前缀
+                log_prefix = ""
+                if browser_id:
+                    browser_num = browser_id.split("-")[-1] if "-" in browser_id else browser_id[:8]
+                    log_prefix = f"[浏览器 #{browser_num}] "
+                log.info(f"\n{log_prefix}处理第 {processed_count + 1} 条评论:")
 
                 try:
                     # 获取评论容器的第一个子元素
@@ -399,7 +519,7 @@ def process_comments_sequentially(
                                     visited_count += 1
                                 log.info("  已切换到用户主页")
                                 rand_sleep(profile_wait_min, profile_wait_max)
-                                if ENABLE_FOLLOW and (random.randint(1, 100) <= int(follow_probability) or 
+                                if enable_follow and (random.randint(1, 100) <= int(follow_probability) or 
                                                       (has_filter_keywords and comment_contains_keyword)):
                                     followed = follow_user_if_needed(driver)
                                     if followed:
@@ -537,7 +657,8 @@ def process_comments_sequentially(
                                         log.info("  已点击发送按钮")
                                     except Exception:
                                         try:
-                                            editor.send_keys(WebDriverWait.Keys.ENTER)
+                                            from selenium.webdriver.common.keys import Keys
+                                            editor.send_keys(Keys.ENTER)
                                             log.info("  已按回车发送")
                                         except Exception:
                                             log.info("  按回车发送失败")
@@ -574,7 +695,7 @@ def process_comments_sequentially(
                     log.info(f"  处理第 {processed_count + 1} 条评论时出错: {e}")
                 
                 # 在处理每条评论之间添加随机间隔，模拟人工浏览
-                time.sleep(random.uniform(0.5, 1.5))
+                time.sleep(random.uniform(1.5, 2))
                 
                 processed_count += 1  # 增加已处理评论计数
 
@@ -601,11 +722,12 @@ def process_comments_sequentially(
         log.info(f"遍历处理评论区时出错: {e}")
 
 
-def visit_video_and_operate(driver, reporter=None):
+def visit_video_and_operate(driver, reporter=None, browser_id=None):
     from ..tools.core import log
-    if ENABLE_VIDEO_COMMENT and random.randint(1, 100) <= int(VIDEO_REPLY_RATE):
-        rand_sleep(VIDEO_REPLY_WAIT_MIN, VIDEO_REPLY_WAIT_MAX)
-        comment_texts = parse_video_comments(VIDEO_COMMENTS)
+    settings = get_xhs_effective_settings()
+    if settings["ENABLE_VIDEO_COMMENT"] and random.randint(1, 100) <= int(settings["VIDEO_REPLY_RATE"]):
+        rand_sleep(settings["VIDEO_REPLY_WAIT_MIN"], settings["VIDEO_REPLY_WAIT_MAX"])
+        comment_texts = parse_video_comments(settings["VIDEO_COMMENTS"])
         if comment_texts:
             selected_comment = random.choice(comment_texts)
             if send_video_comment(driver, selected_comment):
@@ -618,7 +740,7 @@ def visit_video_and_operate(driver, reporter=None):
                         pass
             time.sleep(0.5)
 
-    process_comments_sequentially(driver, reporter=reporter)
+    process_comments_sequentially(driver, reporter=reporter, browser_id=browser_id)
 
 
 def get_search_result_covers(driver):
@@ -628,7 +750,7 @@ def get_search_result_covers(driver):
     return els
 
 
-def browse_search_results_and_operate(driver, items_to_visit=2, reporter=None):
+def browse_search_results_and_operate(driver, items_to_visit=2, reporter=None, browser_id=None):
     covers = get_search_result_covers(driver)
     n = min(items_to_visit, len(covers))
     for i in range(n):
@@ -641,7 +763,7 @@ def browse_search_results_and_operate(driver, items_to_visit=2, reporter=None):
         if len(handles) > 1:
             driver.switch_to.window(handles[-1])
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        visit_video_and_operate(driver, reporter=reporter)
+        visit_video_and_operate(driver, reporter=reporter, browser_id=browser_id)
         if len(driver.window_handles) > 1:
             driver.close()
             driver.switch_to.window(driver.window_handles[0])

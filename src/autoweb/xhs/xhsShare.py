@@ -23,17 +23,14 @@ from ..tools.config import XhsConfig, get_config
 from ..tools.core import log, DataReporter
 from .base import visit_video_and_operate, process_comments_sequentially
 
-# 初始化小红书配置
 xhs_config = XhsConfig()
 
-# 小红书链接列表
 URLS = [
     "黑暗时代来和我https://www.xiaohongshu.com/discovery/item/6718b2c8000000001b0105fa?source=webshare&xhsshare=pc_web&xsec_token=ABfPA5AZwCLuncyIMZ1MYbPNlLuh-ysjQ-KUI1oRKFe3U=&xsec_source=pc_share",
     "40 【这个时节不穿衬衫简直可惜 - 僵僵鱼 | 小红书 - 你的生活兴趣社区】 😆 k5gxtaE4RYMtliE 😆 https://www.xiaohongshu.com/discovery/item/6720cff0000000001a037707?source=webshare&xhsshare=pc_web&xsec_token=ABQVwG6gSi2q-LHdyeaiMv27pO9bMu6RrwSWNEQ-5sNUU=&xsec_source=pc_share",
     "95 【姐姐是种感觉 - 四点七七 | 小红书 - 你的生活兴趣社区】 😆 l5O54XSgt1yqrXr 😆 https://www.xiaohongshu.com/discovery/item/6943fb17000000001e0331e5?source=webshare&xhsshare=pc_web&xsec_token=ABZ3QQAPbVPfU1jwjeVFVhU5L1w8c3gku9eQkcYh5eh-k=&xsec_source=pc_share",
-    "29 【 宗蕊zr | 小红书 - 你的生活兴趣社区】 😆vj4YSdBXUdnyVu2 😆https://www.xiaohongshu.com/discovery/item/68a854f1000000001d0212f0?source=webshare&xhsshare=pc_web&xsec_token=ABvFJ2hHO8TxFUsGcBattDn7t9azj0dDIQpo2fC-9FJls=&xsec_source=pc_share"
-
-    ]
+    "29 【 宗蕊zr | 小红书 - 你的生活兴趣社区】 😆vj4YSdBXUdnyVu2 😆https://www.xiaohongshu.com/discovery/item/68a854f1000000001d0212f0?source=webshare&xhsshare=pc_web&xsec_token=ABvFJ2hHO8TxFUsGcBattDn7t9azj0dDIQpo2fC-9FJls=&xsec_source=pc_share",
+]
 
 def extract_urls_from_text(text):
     """
@@ -573,6 +570,8 @@ def main():
     # 如果配置中心有URLS值，优先使用配置中心的值
     if hasattr(cfg, 'URLS') and cfg.URLS:
         urls = cfg.URLS
+    if hasattr(cfg, 'BIT_BROWSER_IDS') and cfg.BIT_BROWSER_IDS:
+        browser_ids = cfg.BIT_BROWSER_IDS
 
     log.info(f"使用浏览器ID列表: {browser_ids}")
     log.info(f"使用链接列表: {urls}")
