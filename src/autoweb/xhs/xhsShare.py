@@ -160,8 +160,6 @@ def _send_ws_message_for_reporter_share(message_dict):
     try:
         if isinstance(message_dict, dict) and message_dict.get("cmd") == "PcDataReq":
             data = message_dict.get("data")
-            if isinstance(data, dict):
-                data.pop("comment", None)
             try:
                 import json as _json
 
@@ -408,7 +406,7 @@ def open_bit_browser(browser_id: str) -> dict:
         return {}
 
 
-def process_single_url(driver, url, log_prefix=""):
+def process_single_url(driver, url, log_prefix="", reporter=None, browser_id=None):
     """
     处理单个小红书分享链接
     """
@@ -444,7 +442,9 @@ def process_single_url(driver, url, log_prefix=""):
         time.sleep(2 * 1.5)
 
         # 使用base模块中的方法对视频进行操作处理
-        visit_video_and_operate(driver)
+        visit_video_and_operate(
+            driver, reporter=reporter, browser_id=browser_id, stop_event=STOP_EVENT
+        )
 
         log.info(f"{log_prefix} 链接 {url} 处理完成")
     except Exception as e:
@@ -454,7 +454,7 @@ def process_single_url(driver, url, log_prefix=""):
     _sleep_interruptible(2.0)
 
 
-def process_share_urls(driver, urls, log_prefix=""):
+def process_share_urls(driver, urls, log_prefix="", reporter=None, browser_id=None):
     """
     处理小红书分享链接列表
     """
@@ -485,7 +485,9 @@ def process_share_urls(driver, urls, log_prefix=""):
             time.sleep(2 * 1.5)
 
             # 使用base模块中的方法对视频进行操作处理
-            visit_video_and_operate(driver)
+            visit_video_and_operate(
+                driver, reporter=reporter, browser_id=browser_id, stop_event=STOP_EVENT
+            )
 
             log.info(f"{log_prefix} 链接 {url} 处理完成")
         except Exception as e:
@@ -600,7 +602,12 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                 time.sleep(2 * 1.5)
 
                 # 使用base模块中的方法对视频进行操作处理
-                visit_video_and_operate(driver)
+                visit_video_and_operate(
+                    driver,
+                    reporter=reporter,
+                    browser_id=browser_id,
+                    stop_event=STOP_EVENT,
+                )
 
                 log.info(f"{log_prefix} 链接 {url} 处理完成")
                 visited_count += 1
