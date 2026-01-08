@@ -113,6 +113,23 @@ def _ensure_not_stopped():
         raise KeyboardInterrupt("收到停止信号")
 
 
+def _wait_until(driver, condition, timeout: float = 10.0, poll: float = 0.2):
+    end_time = time.time() + max(0.0, float(timeout))
+    last_exc: Exception | None = None
+    while time.time() < end_time:
+        _ensure_not_stopped()
+        try:
+            res = condition(driver)
+            if res:
+                return res
+        except Exception as e:
+            last_exc = e
+        _sleep_interruptible(poll)
+    if last_exc:
+        raise last_exc
+    raise TimeoutError("wait until timeout")
+
+
 def _send_ws_message(message_dict):
     try:
         import json as _json
@@ -274,12 +291,28 @@ def _stop_ws_client():
             except Exception:
                 pass
         if ws_client:
-            ws_client.stop_requested = True
             loop = getattr(ws_client, "event_loop", None) or ws_loop
             if loop and loop.is_running():
                 import asyncio
 
-                asyncio.run_coroutine_threadsafe(ws_client.close(), loop)
+                async def _shutdown():
+                    try:
+                        if not getattr(ws_client, "stop_requested", False) and hasattr(
+                            ws_client, "_wait_for_message_sent"
+                        ):
+                            try:
+                                await ws_client._wait_for_message_sent(
+                                    max_wait_time=1.5
+                                )
+                            except Exception:
+                                pass
+                    finally:
+                        try:
+                            await ws_client.close()
+                        except Exception:
+                            pass
+
+                asyncio.run_coroutine_threadsafe(_shutdown(), loop)
         if ws_thread and ws_thread.is_alive():
             try:
                 ws_thread.join(timeout=5.0)
@@ -311,9 +344,9 @@ def rand_sleep(min_s, max_s):
     try:
         a, b = float(min_s), float(max_s)
         lo, hi = (a, b) if a <= b else (b, a)
-        time.sleep(random.uniform(lo, hi))
+        _sleep_interruptible(random.uniform(lo, hi) * 1.5)
     except Exception:
-        time.sleep(0.5)
+        _sleep_interruptible(0.5 * 1.5)
 
 
 def parse_video_comments(raw: str):
@@ -364,28 +397,24 @@ def clear_input(element):
 
 
 def scroll_element_sync(driver, element, delta_y=400, sleep_time=2):
-    import time
-
     try:
         from selenium.webdriver.common.action_chains import ActionChains
         from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
 
         scroll_origin = ScrollOrigin.from_element(element)
         ActionChains(driver).scroll_from_origin(scroll_origin, 0, delta_y).perform()
-        time.sleep(sleep_time)
+        _sleep_interruptible(sleep_time * 1.5)
     except Exception as e:
         log.error(f"滚动失败: {e}")
 
 
 def ensure_element_centered(driver, element):
-    import time
-
     try:
         driver.execute_script(
             "arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'nearest'});",
             element,
         )
-        time.sleep(0.3)
+        _sleep_interruptible(0.3 * 1.5)
         return True
     except Exception:
         return False
@@ -400,10 +429,12 @@ def follow_user_if_needed(driver, timeout=8, sleep_after=True):
     """
 
     try:
-        follow_btn = WebDriverWait(driver, timeout).until(
+        follow_btn = _wait_until(
+            driver,
             EC.presence_of_element_located(
                 (By.CSS_SELECTOR, "button.reds-button-new.follow-button")
-            )
+            ),
+            timeout=timeout,
         )
 
         try:
@@ -420,14 +451,14 @@ def follow_user_if_needed(driver, timeout=8, sleep_after=True):
             return False
 
         # 模拟真人停顿
-        time.sleep(0.6 + random.random())
+        _sleep_interruptible((0.6 + random.random()) * 1.5)
 
         # JS 点击
         driver.execute_script("arguments[0].click();", follow_btn)
         log.info("[follow] 已点击关注")
 
         if sleep_after:
-            time.sleep(1.2 + random.random())
+            _sleep_interruptible((1.2 + random.random()) * 1.5)
 
         return True
 
@@ -438,12 +469,14 @@ def follow_user_if_needed(driver, timeout=8, sleep_after=True):
 
 def activate_video_comment(driver, timeout=10):
     try:
-        inner = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "div.inner"))
+        inner = _wait_until(
+            driver,
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "div.inner")),
+            timeout=timeout,
         )
 
         driver.execute_script("arguments[0].scrollIntoView({block:'center'});", inner)
-        time.sleep(0.3)
+        _sleep_interruptible(0.3 * 1.5)
 
         # JS 点击，避免被 span 拦
         driver.execute_script("arguments[0].click();", inner)
@@ -454,8 +487,10 @@ def activate_video_comment(driver, timeout=10):
 
 
 def wait_content_textarea(driver, timeout=10):
-    return WebDriverWait(driver, timeout).until(
-        EC.presence_of_element_located((By.ID, "content-textarea"))
+    return _wait_until(
+        driver,
+        EC.presence_of_element_located((By.ID, "content-textarea")),
+        timeout=timeout,
     )
 
 
@@ -465,17 +500,18 @@ def input_and_send(driver, text):
 
         # 强制 focus（核心）
         driver.execute_script("arguments[0].focus();", textarea)
-        time.sleep(0.2)
+        _sleep_interruptible(0.2 * 1.5)
 
         # 清空
         driver.execute_script("arguments[0].innerText = '';", textarea)
 
         # 模拟人类输入
         for ch in text:
+            _ensure_not_stopped()
             textarea.send_keys(ch)
-            time.sleep(random.uniform(0.06, 0.12))
+            _sleep_interruptible(random.uniform(0.06 * 1.5, 0.12 * 1.5))
 
-        time.sleep(0.3)
+        _sleep_interruptible(0.3 * 1.5)
 
         # 回车发送
         textarea.send_keys(Keys.ENTER)
@@ -530,10 +566,12 @@ def scroll_to_load_more_comments(
             target = None
     for i in range(count):
         if target is not None:
-            scroll_element_sync(driver, target, delta_y=delta_y, sleep_time=sleep_time)
+            scroll_element_sync(
+                driver, target, delta_y=delta_y, sleep_time=sleep_time * 1.5
+            )
         else:
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(sleep_time)
+            _sleep_interruptible(sleep_time * 1.5)
         log.info(f"第 {i + 1} 次滚动完成")
 
 
@@ -541,8 +579,10 @@ def process_single_keyword(
     driver, keyword, log_prefix="", reporter=None, browser_id=None
 ):
     wait_seconds = 10
-    WebDriverWait(driver, max(10, wait_seconds)).until(
-        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    _wait_until(
+        driver,
+        EC.presence_of_element_located((By.TAG_NAME, "body")),
+        timeout=max(10, wait_seconds),
     )
 
     # 清理浏览器句柄，确保只有小红书首页的界面
@@ -555,10 +595,12 @@ def process_single_keyword(
         log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
 
     driver.get("https://www.xiaohongshu.com/search_result/?keyword=L")
-    WebDriverWait(driver, max(10, wait_seconds)).until(
-        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    _wait_until(
+        driver,
+        EC.presence_of_element_located((By.TAG_NAME, "body")),
+        timeout=max(10, wait_seconds),
     )
-    time.sleep(1)
+    _sleep_interruptible(1)
 
     log.info(f"{log_prefix} 搜索关键词: {keyword}")
     input_el = None
@@ -586,11 +628,11 @@ def process_single_keyword(
     except Exception:
         pass
     input_el.click()
-    time.sleep(0.2)
+    _sleep_interruptible(0.2)
     from selenium.webdriver.common.action_chains import ActionChains
 
     ActionChains(driver).send_keys(keyword).perform()
-    time.sleep(0.2)
+    _sleep_interruptible(0.2)
     for css in [".search-icon", "button.search-icon", "[class*='search'] svg"]:
         try:
             btn_el = driver.find_element(By.CSS_SELECTOR, css)
@@ -611,10 +653,12 @@ def process_single_keyword(
         from selenium.webdriver.common.keys import Keys
 
         ActionChains(driver).send_keys(Keys.RETURN).perform()
-    WebDriverWait(driver, max(10, wait_seconds)).until(
-        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    _wait_until(
+        driver,
+        EC.presence_of_element_located((By.TAG_NAME, "body")),
+        timeout=max(10, wait_seconds),
     )
-    time.sleep(1)
+    _sleep_interruptible(1)
     try:
         body = driver.find_element(By.TAG_NAME, "body")
         scroll_element_sync(driver, body, 400, 1.0)
@@ -632,15 +676,23 @@ def process_single_keyword(
             items_to_visit=items_to_visit,
             reporter=reporter,
             browser_id=browser_id,
+            stop_event=STOP_EVENT,
         )
+        if reporter:
+            try:
+                reporter.increment_keywords_ok(1)
+            except Exception:
+                pass
     except Exception as e:
         log.error(f"{log_prefix} [xhs] 浏览并操作失败: {e}")
 
 
 def process_search_keywords(driver, keywords, log_prefix="", browser_id=None):
     wait_seconds = 10
-    WebDriverWait(driver, max(10, wait_seconds)).until(
-        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    _wait_until(
+        driver,
+        EC.presence_of_element_located((By.TAG_NAME, "body")),
+        timeout=max(10, wait_seconds),
     )
 
     # 清理浏览器句柄，确保只有小红书首页的界面
@@ -653,11 +705,14 @@ def process_search_keywords(driver, keywords, log_prefix="", browser_id=None):
         log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
 
     driver.get("https://www.xiaohongshu.com/search_result/?keyword=L")
-    WebDriverWait(driver, max(10, wait_seconds)).until(
-        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    _wait_until(
+        driver,
+        EC.presence_of_element_located((By.TAG_NAME, "body")),
+        timeout=max(10, wait_seconds),
     )
-    time.sleep(1)
+    _sleep_interruptible(1)
     for kw in keywords:
+        _ensure_not_stopped()
         log.info(f"{log_prefix} 搜索关键词: {kw}")
         input_el = None
         btn_el = None
@@ -684,11 +739,11 @@ def process_search_keywords(driver, keywords, log_prefix="", browser_id=None):
         except Exception:
             pass
         input_el.click()
-        time.sleep(0.2)
+        _sleep_interruptible(0.2)
         from selenium.webdriver.common.action_chains import ActionChains
 
         ActionChains(driver).send_keys(kw).perform()
-        time.sleep(0.2)
+        _sleep_interruptible(0.2)
         for css in [".search-icon", "button.search-icon", "[class*='search'] svg"]:
             try:
                 btn_el = driver.find_element(By.CSS_SELECTOR, css)
@@ -709,10 +764,12 @@ def process_search_keywords(driver, keywords, log_prefix="", browser_id=None):
             from selenium.webdriver.common.keys import Keys
 
             ActionChains(driver).send_keys(Keys.RETURN).perform()
-        WebDriverWait(driver, max(10, wait_seconds)).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        _wait_until(
+            driver,
+            EC.presence_of_element_located((By.TAG_NAME, "body")),
+            timeout=max(10, wait_seconds),
         )
-        time.sleep(1)
+        _sleep_interruptible(1)
         try:
             body = driver.find_element(By.TAG_NAME, "body")
             scroll_element_sync(driver, body, 400, 1.0)
@@ -726,7 +783,10 @@ def process_search_keywords(driver, keywords, log_prefix="", browser_id=None):
             )
             items_to_visit = rand_int_range(max_scroll_video, 2, 3)
             browse_search_results_and_operate(
-                driver, items_to_visit=items_to_visit, browser_id=browser_id
+                driver,
+                items_to_visit=items_to_visit,
+                browser_id=browser_id,
+                stop_event=STOP_EVENT,
             )
         except Exception as e:
             log.error(f"{log_prefix} [xhs] 浏览并操作失败: {e}")
@@ -793,10 +853,10 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
             log.info(f"{log_prefix} 已关闭额外窗口，保留主窗口")
 
         driver.get("https://www.xiaohongshu.com/search_result/?keyword=L")
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        _wait_until(
+            driver, EC.presence_of_element_located((By.TAG_NAME, "body")), timeout=10
         )
-        time.sleep(1)
+        _sleep_interruptible(1)
 
         # 从队列中获取关键词并处理，直到队列为空
         while True:
@@ -844,6 +904,10 @@ def run_worker(browser_id, browser_number, kw_queue, kw_lock):
             pass
         try:
             reporter.force_report()
+        except Exception:
+            pass
+        try:
+            reporter._stop_send_thread(flush_timeout=2.0)
         except Exception:
             pass
         log.info(f"{log_prefix} 浏览器已关闭，任务完成")
@@ -907,33 +971,43 @@ def main():
     license_manager.start_periodic_check()
 
     # 多线程执行
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=len(browser_ids)
-    ) as executor:
-        futures = []
-        for i, bid in enumerate(browser_ids):
-            # 提交任务到线程池
-            future = executor.submit(run_worker, bid, i + 1, kw_queue, kw_lock)
-            futures.append(future)
-            # 间隔启动浏览器，避免同时启动造成资源竞争
-            if i < len(browser_ids) - 1:
-                time.sleep(2.5)
+    futures = []
+    try:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=len(browser_ids)
+        ) as executor:
+            for i, bid in enumerate(browser_ids):
+                future = executor.submit(run_worker, bid, i + 1, kw_queue, kw_lock)
+                futures.append(future)
+                if i < len(browser_ids) - 1:
+                    _sleep_interruptible(2.5)
 
-        # 等待所有任务完成
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                future.result()  # 获取执行结果，如有异常会抛出
-            except LicenseException:
-                log.error("卡密无效，取消剩余任务")
-                STOP_EVENT.set()
-                for fut in futures:
-                    fut.cancel()
-                break
-            except Exception as e:
-                log.error(f"[并发] 线程执行出错: {e}")
-
-    license_manager.stop_periodic_check()
-    _stop_ws_client()
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()
+                except LicenseException:
+                    log.error("卡密无效，取消剩余任务")
+                    STOP_EVENT.set()
+                    for fut in futures:
+                        fut.cancel()
+                    break
+                except KeyboardInterrupt:
+                    STOP_EVENT.set()
+                    for fut in futures:
+                        fut.cancel()
+                    break
+                except Exception as e:
+                    log.error(f"[并发] 线程执行出错: {e}")
+    except KeyboardInterrupt:
+        STOP_EVENT.set()
+        for fut in futures:
+            fut.cancel()
+    finally:
+        try:
+            license_manager.stop_periodic_check()
+        except Exception:
+            pass
+        _stop_ws_client()
     log.info("\n所有浏览器任务完成，程序退出...")
 
 

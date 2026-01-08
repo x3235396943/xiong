@@ -484,7 +484,7 @@ class DyShareUtils:
         enable_search_keywords=False,
         enable_comment_reply=False,
         comment_reply_probability=0.05,
-        comment_wait_min=12,
+        comment_wait_min=7,
         comment_wait_max=12,
         visit_min=2,
         visit_max=5,

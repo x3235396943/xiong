@@ -10,6 +10,44 @@ from ..tools.config import XhsConfig, get_config
 _DEFAULT_XHS_CONFIG = XhsConfig()
 
 
+def _is_stop_requested(stop_event) -> bool:
+    try:
+        return bool(stop_event and stop_event.is_set())
+    except Exception:
+        return False
+
+
+def _ensure_not_stopped(stop_event):
+    if _is_stop_requested(stop_event):
+        raise KeyboardInterrupt("收到停止信号")
+
+
+def _sleep_interruptible(seconds: float, stop_event=None):
+    end_time = time.time() + max(0.0, float(seconds))
+    while time.time() < end_time:
+        _ensure_not_stopped(stop_event)
+        time.sleep(min(0.1, end_time - time.time()))
+
+
+def _wait_until(
+    driver, condition, timeout: float = 10.0, stop_event=None, poll: float = 0.2
+):
+    end_time = time.time() + max(0.0, float(timeout))
+    last_exc: Exception | None = None
+    while time.time() < end_time:
+        _ensure_not_stopped(stop_event)
+        try:
+            res = condition(driver)
+            if res:
+                return res
+        except Exception as e:
+            last_exc = e
+        _sleep_interruptible(poll, stop_event=stop_event)
+    if last_exc:
+        raise last_exc
+    raise TimeoutError("wait until timeout")
+
+
 def _is_empty_value(v):
     if v is None:
         return True
@@ -225,13 +263,13 @@ def rand_int_range(v, fallback_min=0, fallback_max=0):
     return random.randint(int(fallback_min), int(fallback_max))
 
 
-def rand_sleep(min_s, max_s):
+def rand_sleep(min_s, max_s, stop_event=None):
     try:
         a, b = float(min_s), float(max_s)
         lo, hi = (a, b) if a <= b else (b, a)
-        time.sleep(random.uniform(lo, hi))
+        _sleep_interruptible(random.uniform(lo, hi) * 1.5, stop_event=stop_event)
     except Exception:
-        time.sleep(0.5)
+        _sleep_interruptible(0.5 * 1.5, stop_event=stop_event)
 
 
 def parse_video_comments(raw: str):
@@ -241,21 +279,19 @@ def parse_video_comments(raw: str):
     return [x for x in parts if x]
 
 
-def ensure_element_centered(driver, element):
-    import time
-
+def ensure_element_centered(driver, element, stop_event=None):
     try:
         driver.execute_script(
             "arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'nearest'});",
             element,
         )
-        time.sleep(0.3)
+        _sleep_interruptible(0.3 * 1.5, stop_event=stop_event)
         return True
     except Exception:
         return False
 
 
-def follow_user_if_needed(driver, timeout=8, sleep_after=True):
+def follow_user_if_needed(driver, timeout=8, sleep_after=True, stop_event=None):
     """
     在小红书用户主页点击「关注」
     - 仅在未关注状态下点击
@@ -271,7 +307,7 @@ def follow_user_if_needed(driver, timeout=8, sleep_after=True):
         )
 
         try:
-            ensure_element_centered(driver, follow_btn)
+            ensure_element_centered(driver, follow_btn, stop_event=stop_event)
         except Exception:
             pass
 
@@ -284,14 +320,14 @@ def follow_user_if_needed(driver, timeout=8, sleep_after=True):
             return False
 
         # 模拟真人停顿
-        time.sleep(0.6 + random.random())
+        _sleep_interruptible((0.6 + random.random()) * 1.5, stop_event=stop_event)
 
         # JS 点击
         driver.execute_script("arguments[0].click();", follow_btn)
         print("[follow] 已点击关注")
 
         if sleep_after:
-            time.sleep(1.2 + random.random())
+            _sleep_interruptible((1.2 + random.random()) * 1.5, stop_event=stop_event)
 
         return True
 
@@ -300,14 +336,17 @@ def follow_user_if_needed(driver, timeout=8, sleep_after=True):
         return False
 
 
-def activate_video_comment(driver, timeout=10):
+def activate_video_comment(driver, timeout=10, stop_event=None):
     try:
-        inner = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "div.inner"))
+        inner = _wait_until(
+            driver,
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "div.inner")),
+            timeout=timeout,
+            stop_event=stop_event,
         )
 
         driver.execute_script("arguments[0].scrollIntoView({block:'center'});", inner)
-        time.sleep(0.3)
+        _sleep_interruptible(0.3 * 1.5, stop_event=stop_event)
 
         # JS 点击，避免被 span 拦
         driver.execute_script("arguments[0].click();", inner)
@@ -317,31 +356,37 @@ def activate_video_comment(driver, timeout=10):
         return False
 
 
-def wait_content_textarea(driver, timeout=10):
-    return WebDriverWait(driver, timeout).until(
-        EC.presence_of_element_located((By.ID, "content-textarea"))
+def wait_content_textarea(driver, timeout=10, stop_event=None):
+    return _wait_until(
+        driver,
+        EC.presence_of_element_located((By.ID, "content-textarea")),
+        timeout=timeout,
+        stop_event=stop_event,
     )
 
 
-def input_and_send(driver, text):
+def input_and_send(driver, text, stop_event=None):
     try:
         from selenium.webdriver.common.keys import Keys
 
-        textarea = wait_content_textarea(driver)
+        textarea = wait_content_textarea(driver, stop_event=stop_event)
 
         # 强制 focus（核心）
         driver.execute_script("arguments[0].focus();", textarea)
-        time.sleep(0.2)
+        _sleep_interruptible(0.2 * 1.5, stop_event=stop_event)
 
         # 清空
         driver.execute_script("arguments[0].innerText = '';", textarea)
 
         # 模拟人类输入
         for ch in text:
+            _ensure_not_stopped(stop_event)
             textarea.send_keys(ch)
-            time.sleep(random.uniform(0.06, 0.12))
+            _sleep_interruptible(
+                random.uniform(0.06 * 1.5, 0.12 * 1.5), stop_event=stop_event
+            )
 
-        time.sleep(0.3)
+        _sleep_interruptible(0.3 * 1.5, stop_event=stop_event)
 
         # 先尝试点击发送按钮
         try:
@@ -362,28 +407,30 @@ def input_and_send(driver, text):
         return False
 
 
-def send_video_comment(driver, text):
-    if activate_video_comment(driver):
-        return input_and_send(driver, text)
+def send_video_comment(driver, text, stop_event=None):
+    if activate_video_comment(driver, stop_event=stop_event):
+        return input_and_send(driver, text, stop_event=stop_event)
     return False
 
 
-def scroll_element_sync(driver, element, delta_y=400, sleep_time=2):
-    import time
-
+def scroll_element_sync(driver, element, delta_y=400, sleep_time=2, stop_event=None):
     try:
         from selenium.webdriver.common.action_chains import ActionChains
         from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
 
         scroll_origin = ScrollOrigin.from_element(element)
         ActionChains(driver).scroll_from_origin(scroll_origin, 0, delta_y).perform()
-        time.sleep(sleep_time)
+        _sleep_interruptible(sleep_time * 1.5, stop_event=stop_event)
     except Exception as e:
         print(f"滚动失败: {e}")
 
 
 def scroll_to_load_more_comments(
-    driver, count: int = 5, delta_y: int = 500, sleep_time: float = 2.0
+    driver,
+    count: int = 5,
+    delta_y: int = 500,
+    sleep_time: float = 2.0,
+    stop_event=None,
 ):
     print("尝试滚动以加载更多评论...")
     container = None
@@ -400,11 +447,18 @@ def scroll_to_load_more_comments(
         except Exception:
             target = None
     for i in range(count):
+        _ensure_not_stopped(stop_event)
         if target is not None:
-            scroll_element_sync(driver, target, delta_y=delta_y, sleep_time=sleep_time)
+            scroll_element_sync(
+                driver,
+                target,
+                delta_y=delta_y,
+                sleep_time=sleep_time * 1.5,
+                stop_event=stop_event,
+            )
         else:
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(sleep_time)
+            _sleep_interruptible(sleep_time * 1.5, stop_event=stop_event)
         print(f"第 {i + 1} 次滚动完成")
 
 
@@ -438,6 +492,7 @@ def process_comments_sequentially(
     reporter=None,  # 新增数据上报对象
     cfg=None,
     browser_id=None,  # 浏览器ID参数
+    stop_event=None,
 ):
     """
     逐条遍历处理评论区的点赞和回复操作
@@ -556,14 +611,16 @@ def process_comments_sequentially(
         log.info("开始逐条遍历处理评论...")
 
         # 等待评论区加载
-        wait = WebDriverWait(driver, 10)
-        wait.until(
+        _wait_until(
+            driver,
             EC.presence_of_element_located(
                 (
                     By.CSS_SELECTOR,
                     "div.comments-container > div.list-container > div.parent-comment",
                 )
-            )
+            ),
+            timeout=10,
+            stop_event=stop_event,
         )
 
         # 初始化变量
@@ -602,6 +659,7 @@ def process_comments_sequentially(
 
         # 循环处理评论，直到达到目标或滚动次数用完
         while scroll_done < scroll_times:
+            _ensure_not_stopped(stop_event)
             # 重新获取评论项，因为滚动后可能会加载新评论
             comment_items = driver.find_elements(
                 By.CSS_SELECTOR,
@@ -616,6 +674,7 @@ def process_comments_sequentially(
 
             # 遍历当前页面的评论
             for i, comment_item in enumerate(comment_items):
+                _ensure_not_stopped(stop_event)
                 # 检查是否已达到目标或评论数量
                 if (liked_count >= like_target and visited_count >= profile_target) or (
                     max_count is not None and processed_count >= max_count
@@ -685,13 +744,15 @@ def process_comments_sequentially(
                                 By.CSS_SELECTOR, "div.avatar > a"
                             )
                             try:
-                                ensure_element_centered(driver, avatar_link)
+                                ensure_element_centered(
+                                    driver, avatar_link, stop_event=stop_event
+                                )
                             except Exception:
                                 pass
                             # 点击头像链接
                             driver.execute_script("arguments[0].click();", avatar_link)
                             log.info("  已点击头像")
-                            time.sleep(2)
+                            _sleep_interruptible(2, stop_event=stop_event)
 
                             # 切换到新标签页
                             all_handles = driver.window_handles
@@ -701,18 +762,28 @@ def process_comments_sequentially(
                                 if not keyword_hit:
                                     visited_count += 1
                                 log.info("  已切换到用户主页")
-                                rand_sleep(profile_wait_min, profile_wait_max)
+                                rand_sleep(
+                                    profile_wait_min * 1.5,
+                                    profile_wait_max * 1.5,
+                                    stop_event=stop_event,
+                                )
                                 if _decide_follow(
                                     enable_follow,
                                     keyword_hit,
                                     follow_probability,
                                     random.randint(1, 100),
                                 ):
-                                    followed = follow_user_if_needed(driver)
+                                    followed = follow_user_if_needed(
+                                        driver, stop_event=stop_event
+                                    )
                                     if followed:
                                         if not keyword_hit:
                                             followed_count += 1
-                                        rand_sleep(follow_wait_min, follow_wait_max)
+                                        rand_sleep(
+                                            follow_wait_min * 1.5,
+                                            follow_wait_max * 1.5,
+                                            stop_event=stop_event,
+                                        )
                                         if reporter:
                                             try:
                                                 reporter.set_action("follow")
@@ -726,7 +797,7 @@ def process_comments_sequentially(
                             else:
                                 log.info("  未打开新标签页")
 
-                            time.sleep(0.5)
+                            _sleep_interruptible(0.5, stop_event=stop_event)
                         except Exception:
                             log.info("  未找到头像链接或点击失败")
                     else:
@@ -753,7 +824,9 @@ def process_comments_sequentially(
                                 "div:first-child div.interactions span.like-wrapper",
                             )
                             try:
-                                ensure_element_centered(driver, like_btn)
+                                ensure_element_centered(
+                                    driver, like_btn, stop_event=stop_event
+                                )
                             except Exception:
                                 pass
                             # 使用JavaScript点击，避免被其他元素遮挡
@@ -762,7 +835,11 @@ def process_comments_sequentially(
                             # 如果是关键字匹配的评论，则不受上限限制
                             if not keyword_hit:
                                 liked_count += 1
-                            rand_sleep(like_wait_min, like_wait_max)
+                            rand_sleep(
+                                like_wait_min * 1.5,
+                                like_wait_max * 1.5,
+                                stop_event=stop_event,
+                            )
                             # 数据上报
                             if reporter:
                                 try:
@@ -788,7 +865,11 @@ def process_comments_sequentially(
                         try:
                             # 添加评论回复前的等待时间
                             if not keyword_hit:
-                                rand_sleep(comment_wait_min, comment_wait_max)
+                                rand_sleep(
+                                    comment_wait_min * 1.5,
+                                    comment_wait_max * 1.5,
+                                    stop_event=stop_event,
+                                )
 
                             # 使用完整的CSS选择器路径在parent-comment元素下寻找回复按钮
                             reply_btn = comment_item.find_element(
@@ -796,13 +877,17 @@ def process_comments_sequentially(
                                 "div:first-child div.interactions > div.reply",
                             )
                             try:
-                                ensure_element_centered(driver, reply_btn)
+                                ensure_element_centered(
+                                    driver, reply_btn, stop_event=stop_event
+                                )
                             except Exception:
                                 pass
                             # 使用JavaScript点击，避免被其他元素遮挡
                             driver.execute_script("arguments[0].click();", reply_btn)
                             log.info("  已点击回复按钮")
-                            time.sleep(0.5)  # 您偏好的点击间隔时间
+                            _sleep_interruptible(
+                                0.5, stop_event=stop_event
+                            )  # 您偏好的点击间隔时间
                             try:
                                 # 从多个可能的回复中随机选择一个
                                 possible_replies = (
@@ -811,7 +896,6 @@ def process_comments_sequentially(
                                     else [comment_replies]
                                 )
                                 reply_text = random.choice(possible_replies)
-                                wait = WebDriverWait(driver, 5)
                                 try:
                                     editor = comment_item.find_element(
                                         By.CSS_SELECTOR,
@@ -819,20 +903,25 @@ def process_comments_sequentially(
                                     )
                                 except Exception:
                                     try:
-                                        editor = wait.until(
+                                        editor = _wait_until(
+                                            driver,
                                             EC.presence_of_element_located(
                                                 (
                                                     By.XPATH,
                                                     ".//*[contains(@placeholder,'回复') or contains(@placeholder,'评论') or @contenteditable='true']",
                                                 )
-                                            )
+                                            ),
+                                            timeout=5,
+                                            stop_event=stop_event,
                                         )
                                     except Exception:
                                         editor = None
                                 if not editor:
                                     log.info("  未找到回复输入框")
                                 else:
-                                    ensure_element_centered(driver, editor)
+                                    ensure_element_centered(
+                                        driver, editor, stop_event=stop_event
+                                    )
                                     try:
                                         editor.click()
                                     except Exception:
@@ -856,7 +945,9 @@ def process_comments_sequentially(
                                         send_btn = comment_item.find_element(
                                             By.XPATH, ".//span[contains(., '发送')]"
                                         )
-                                        ensure_element_centered(driver, send_btn)
+                                        ensure_element_centered(
+                                            driver, send_btn, stop_event=stop_event
+                                        )
                                         driver.execute_script(
                                             "arguments[0].click();", send_btn
                                         )
@@ -871,7 +962,7 @@ def process_comments_sequentially(
                                             log.info("  已按回车发送")
                                         except Exception:
                                             log.info("  按回车发送失败")
-                                    time.sleep(0.5)
+                                    _sleep_interruptible(0.5, stop_event=stop_event)
                                     # 数据上报
                                     if reporter:
                                         try:
@@ -903,7 +994,9 @@ def process_comments_sequentially(
                     log.info(f"  处理第 {processed_count + 1} 条评论时出错: {e}")
 
                 # 在处理每条评论之间添加随机间隔，模拟人工浏览
-                time.sleep(random.uniform(1.5, 2))
+                _sleep_interruptible(
+                    random.uniform(1.5 * 1.5, 2 * 1.5), stop_event=stop_event
+                )
 
                 processed_count += 1  # 增加已处理评论计数
 
@@ -913,11 +1006,13 @@ def process_comments_sequentially(
                         log.info(
                             f"已处理 {processed_count} 条评论，进行第 {scroll_done + 1} 次滚动..."
                         )
-                        scroll_to_load_more_comments(driver, count=1)
+                        scroll_to_load_more_comments(
+                            driver, count=1, stop_event=stop_event
+                        )
                         scroll_done += 1
 
                         # 滚动后添加等待时间
-                        time.sleep(2)
+                        _sleep_interruptible(2 * 1.5, stop_event=stop_event)
 
                         # 重新获取评论列表，因为滚动后可能加载了新评论
                         comment_items = driver.find_elements(
@@ -934,18 +1029,22 @@ def process_comments_sequentially(
         log.info(f"遍历处理评论区时出错: {e}")
 
 
-def visit_video_and_operate(driver, reporter=None, browser_id=None):
+def visit_video_and_operate(driver, reporter=None, browser_id=None, stop_event=None):
     from ..tools.core import log
 
     settings = get_xhs_effective_settings()
     if settings["ENABLE_VIDEO_COMMENT"] and random.randint(1, 100) <= int(
         settings["VIDEO_REPLY_RATE"]
     ):
-        rand_sleep(settings["VIDEO_REPLY_WAIT_MIN"], settings["VIDEO_REPLY_WAIT_MAX"])
+        rand_sleep(
+            settings["VIDEO_REPLY_WAIT_MIN"] * 1.5,
+            settings["VIDEO_REPLY_WAIT_MAX"] * 1.5,
+            stop_event=stop_event,
+        )
         comment_texts = parse_video_comments(settings["VIDEO_COMMENTS"])
         if comment_texts:
             selected_comment = random.choice(comment_texts)
-            if send_video_comment(driver, selected_comment):
+            if send_video_comment(driver, selected_comment, stop_event=stop_event):
                 # 视频评论数据上报
                 if reporter:
                     try:
@@ -953,9 +1052,11 @@ def visit_video_and_operate(driver, reporter=None, browser_id=None):
                         reporter.increment_video_comment(1)
                     except Exception:
                         pass
-            time.sleep(0.5)
+            _sleep_interruptible(0.5 * 1.5, stop_event=stop_event)
 
-    process_comments_sequentially(driver, reporter=reporter, browser_id=browser_id)
+    process_comments_sequentially(
+        driver, reporter=reporter, browser_id=browser_id, stop_event=stop_event
+    )
 
 
 def get_search_result_covers(driver):
@@ -966,30 +1067,44 @@ def get_search_result_covers(driver):
 
 
 def browse_search_results_and_operate(
-    driver, items_to_visit=2, reporter=None, browser_id=None
+    driver, items_to_visit=2, reporter=None, browser_id=None, stop_event=None
 ):
     covers = get_search_result_covers(driver)
     n = min(items_to_visit, len(covers))
     for i in range(n):
+        _ensure_not_stopped(stop_event)
         target = covers[i]
         driver.execute_script("arguments[0].scrollIntoView({block:'center'});", target)
-        time.sleep(0.3)
+        _sleep_interruptible(0.3 * 1.5, stop_event=stop_event)
         driver.execute_script("arguments[0].click();", target)
-        time.sleep(0.5)
+        _sleep_interruptible(0.5 * 1.5, stop_event=stop_event)
         handles = driver.window_handles
         if len(handles) > 1:
             driver.switch_to.window(handles[-1])
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        _wait_until(
+            driver,
+            EC.presence_of_element_located((By.TAG_NAME, "body")),
+            timeout=10,
+            stop_event=stop_event,
         )
-        visit_video_and_operate(driver, reporter=reporter, browser_id=browser_id)
+        if reporter:
+            try:
+                reporter.increment_video(1)
+            except Exception:
+                pass
+        visit_video_and_operate(
+            driver, reporter=reporter, browser_id=browser_id, stop_event=stop_event
+        )
         if len(driver.window_handles) > 1:
             driver.close()
             driver.switch_to.window(driver.window_handles[0])
         else:
             driver.back()
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        _wait_until(
+            driver,
+            EC.presence_of_element_located((By.TAG_NAME, "body")),
+            timeout=10,
+            stop_event=stop_event,
         )
-        time.sleep(1)
+        _sleep_interruptible(1 * 1.5, stop_event=stop_event)
         covers = get_search_result_covers(driver)

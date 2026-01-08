@@ -289,12 +289,28 @@ def _stop_ws_client():
             except Exception:
                 pass
         if ws_client:
-            ws_client.stop_requested = True
             loop = getattr(ws_client, "event_loop", None) or ws_loop
             if loop and loop.is_running():
                 import asyncio
 
-                asyncio.run_coroutine_threadsafe(ws_client.close(), loop)
+                async def _shutdown():
+                    try:
+                        if not getattr(ws_client, "stop_requested", False) and hasattr(
+                            ws_client, "_wait_for_message_sent"
+                        ):
+                            try:
+                                await ws_client._wait_for_message_sent(
+                                    max_wait_time=1.5
+                                )
+                            except Exception:
+                                pass
+                    finally:
+                        try:
+                            await ws_client.close()
+                        except Exception:
+                            pass
+
+                asyncio.run_coroutine_threadsafe(_shutdown(), loop)
         if ws_thread and ws_thread.is_alive():
             try:
                 ws_thread.join(timeout=5.0)
@@ -326,9 +342,9 @@ def rand_sleep(min_s, max_s):
     try:
         a, b = float(min_s), float(max_s)
         lo, hi = (a, b) if a <= b else (b, a)
-        time.sleep(random.uniform(lo, hi))
+        time.sleep(random.uniform(lo, hi) * 1.5)
     except Exception:
-        time.sleep(0.5)
+        time.sleep(0.5 * 1.5)
 
 
 def parse_keywords(raw):
@@ -366,7 +382,7 @@ def ensure_element_centered(driver, element):
             "arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'nearest'});",
             element,
         )
-        time.sleep(0.3)
+        time.sleep(0.3 * 1.5)
         return True
     except Exception:
         return False
@@ -425,7 +441,7 @@ def process_single_url(driver, url, log_prefix=""):
         WebDriverWait(driver, max(10, wait_seconds)).until(
             EC.presence_of_element_located((By.TAG_NAME, "body"))
         )
-        time.sleep(2)
+        time.sleep(2 * 1.5)
 
         # 使用base模块中的方法对视频进行操作处理
         visit_video_and_operate(driver)
@@ -466,7 +482,7 @@ def process_share_urls(driver, urls, log_prefix=""):
             WebDriverWait(driver, max(10, wait_seconds)).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
-            time.sleep(2)
+            time.sleep(2 * 1.5)
 
             # 使用base模块中的方法对视频进行操作处理
             visit_video_and_operate(driver)
@@ -581,7 +597,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.TAG_NAME, "body"))
                 )
-                time.sleep(2)
+                time.sleep(2 * 1.5)
 
                 # 使用base模块中的方法对视频进行操作处理
                 visit_video_and_operate(driver)
@@ -624,6 +640,10 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
             pass
         try:
             reporter.force_report()
+        except Exception:
+            pass
+        try:
+            reporter._stop_send_thread(flush_timeout=2.0)
         except Exception:
             pass
         log.info(f"{log_prefix} 浏览器已关闭，任务完成")
