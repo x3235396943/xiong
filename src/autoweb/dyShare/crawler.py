@@ -99,7 +99,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from ..tools import log
-from ..tools.config import KuSettings, get_config, env
+from ..tools.config import EnvSettings, get_config, env
 from ..tools.core import closeBrowser, openBrowser
 from ..tools.douyin_common import (
     DouyinBrowserActions,
@@ -109,7 +109,7 @@ from ..tools.douyin_common import (
 from ..tools.license import LicenseException, LicenseManager
 
 # 全局配置与卡密管理器（确保先 get_config 再使用字段）
-config: KuSettings = get_config()  # type: ignore
+config: EnvSettings = get_config()  # type: ignore
 li = LicenseManager()
 
 

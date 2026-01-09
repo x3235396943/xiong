@@ -401,7 +401,7 @@ packages:
 - pypi: ./
   name: autoweb
   version: 0.1.0
-  sha256: f2d661e0174a42b8ab66f062a935d7278c599c66e1d41a2523d90e56e29e4242
+  sha256: 8e8e99ebb5273684b8eb23f1933c70fa66b55cae3f91802cca83238c94e0180d
   requires_python: ==3.12.*
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/brotli-python-1.2.0-py312h0dfefe5_1.conda

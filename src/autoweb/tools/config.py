@@ -18,7 +18,7 @@ field_pairs = {
 }
 
 
-class ShareConfig(BaseSettings):
+class BaseConfig(BaseModel):
     LIKE_PROBABILITY: int = 10  # 点赞概率 (0-100)
     VISIT_ENABLE: int = 10  # 进入主页的概率 (0-100)
     PROFILE_FOLLOW_PROBABILITY: int = 10  # 进入主页后关注的概率 (0-100)
@@ -67,7 +67,7 @@ class ShareConfig(BaseSettings):
         return max_value
 
 
-class KuSettings(ShareConfig):
+class EnvSettings(BaseSettings):
     # 添加一个标志用于等待配置初始化
     _config_initialized: bool = False
     # 添加停止信号标志
@@ -179,15 +179,15 @@ def get_config():
     if config is None:
         # 创建一个部分初始化的配置实例，避免在环境变量缺失时报错
         try:
-            config = KuSettings()  # type: ignore
+            config = EnvSettings()  # type: ignore
         except Exception:
             # 如果初始化失败，创建一个空的配置实例
-            config = object.__new__(KuSettings)  # type: ignore
-            KuSettings.__init__(config)  # type: ignore
+            config = object.__new__(EnvSettings)  # type: ignore
+            EnvSettings.__init__(config)  # type: ignore
     return config
 
 
-class KsConfig(ShareConfig):
+class KsConfig(BaseConfig):
     # 快手相关配置参数（使用父类参数的快手特定默认值）
 
     # 搜索关键词
@@ -211,7 +211,7 @@ class KsConfig(ShareConfig):
     KS_DEFAULT_WAIT_TIME: int = 5  # 快手默认等待元素加载时间
 
 
-class XhsConfig(ShareConfig):
+class XhsConfig(BaseConfig):
     # 小红书相关配置参数（使用父类参数的快手特定默认值）
 
     # 搜索关键词
@@ -258,4 +258,4 @@ def extract_version() -> str | None:
     return None
 
 
-env = KuSettings(VERSION=extract_version())  # type: ignore
+env = EnvSettings(VERSION=extract_version())  # type: ignore
