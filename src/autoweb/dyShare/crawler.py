@@ -424,6 +424,40 @@ class DyShareUtils:
                     f"根据概率设置 ({profile_follow_probability:.1%})，跳过关注操作",
                     browser_number,
                 )
+            try:
+                if getattr(config, "ENABLE_DM", True):
+                    dm_prob = float(getattr(config, "DM_PROBABILITY", 0)) / 100.0
+                    if random.random() < dm_prob:
+                        dm_list = DouyinConfigParser.parse_dm_messages(
+                            getattr(config, "DM_MESSAGES", "") or ""
+                        )
+                        if dm_list:
+                            dm_text = random.choice(dm_list)
+                            ok = self.send_direct_message(
+                                driver,
+                                dm_text,
+                                getattr(config, "DM_WAIT_MIN", 5),
+                                getattr(config, "DM_WAIT_MAX", 12),
+                                browser_number,
+                            )
+                            if ok and reporter:
+                                reporter.set_action("letter")
+                                reporter.increment_letter(1)
+                                self.debug_log("info", "私信发送成功", browser_number)
+                        else:
+                            self.debug_log(
+                                "warning",
+                                "DM_MESSAGES 列表为空，跳过私信",
+                                browser_number,
+                            )
+                    else:
+                        self.debug_log(
+                            "info",
+                            f"根据概率设置 ({dm_prob:.1%})，跳过私信",
+                            browser_number,
+                        )
+            except Exception as e:
+                log.warning(f"{browser_info} 执行私信逻辑时出错: {e}")
         except Exception as e:
             log.error(f"{browser_info} 主页操作异常: {e}")
         finally:
@@ -464,6 +498,113 @@ class DyShareUtils:
             debug_log_func=self.debug_log,
             check_stop_func=self.check_stop_signal,
         )
+
+    def send_direct_message(
+        self, driver, message_text, wait_min=5, wait_max=12, browser_number=None
+    ):
+        browser_info = self.get_browser_info(browser_number)
+        try:
+            self.check_stop_signal()
+            try:
+                btn = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, ".K8kpIsJm"))
+                )
+            except Exception:
+                try:
+                    btn = WebDriverWait(driver, 5).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH, "//button[contains(., '私信')]")
+                        )
+                    )
+                except Exception:
+                    try:
+                        btn = WebDriverWait(driver, 5).until(
+                            EC.element_to_be_clickable(
+                                (By.XPATH, "//div[contains(@class,'K8kpIsJm')]")
+                            )
+                        )
+                    except Exception:
+                        self.debug_log("warning", "未找到私信按钮", browser_number)
+                        return False
+            self.human_like_delay(0.5, 1.0, browser_number)
+            driver.execute_script("arguments[0].click();", btn)
+            self.debug_log("info", "已点击私信按钮", browser_number)
+            self.human_like_delay(0.5, 1.5, browser_number)
+
+            try:
+                editor = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, 'div[contenteditable="true"]')
+                    )
+                )
+            except Exception:
+                try:
+                    editor = WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located(
+                            (
+                                By.CSS_SELECTOR,
+                                ".public-DraftStyleDefault-block, .dn-DraftEditor-content",
+                            )
+                        )
+                    )
+                except Exception:
+                    self.debug_log("warning", "未找到聊天输入框", browser_number)
+                    return False
+
+            try:
+                driver.execute_script("arguments[0].click();", editor)
+            except Exception:
+                pass
+            ActionChains(driver).send_keys(message_text).perform()
+            self.debug_log(
+                "info", f"输入私信内容: {message_text[:30]}...", browser_number
+            )
+            self.human_like_delay(0.3, 0.8, browser_number)
+
+            sent = False
+            try:
+                send_btn = driver.find_element(
+                    By.CSS_SELECTOR, '[class*="send-msg-btn"]'
+                )
+                try:
+                    DouyinBrowserActions.ensure_element_centered(
+                        driver, send_btn, sleep=self.safe_sleep
+                    )
+                except Exception:
+                    pass
+                driver.execute_script("arguments[0].click();", send_btn)
+                sent = True
+                self.debug_log("info", "已点击发送按钮", browser_number)
+            except Exception:
+                try:
+                    send_btn = driver.find_element(
+                        By.CSS_SELECTOR, '[data-e2e*="send"]'
+                    )
+                    driver.execute_script("arguments[0].click();", send_btn)
+                    sent = True
+                    self.debug_log("info", "已点击备用发送按钮", browser_number)
+                except Exception:
+                    pass
+
+            if not sent:
+                ActionChains(driver).send_keys(Keys.RETURN).perform()
+                sent = True
+                self.debug_log("info", "通过回车发送私信", browser_number)
+
+            wait_sec = random.uniform(wait_min, wait_max)
+            self.safe_sleep(wait_sec, browser_number=browser_number)
+            return True
+        except Exception as e:
+            msg = str(e).lower()
+            if (
+                "invalid session id" in msg
+                or "disconnected" in msg
+                or "not connected to devtools" in msg
+            ):
+                log.error(f"{browser_info} 私信流程致命错误: {e}")
+                return False
+            log.warning(f"{browser_info} 私信流程异常: {e}")
+            return False
 
     def process_comment(
         self,

@@ -560,6 +560,33 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                                     pass
                             except Exception:
                                 pass
+                        try:
+                            if getattr(cfg, "ENABLE_DM", True):
+                                dm_prob = float(getattr(cfg, "DM_PROBABILITY", 0))
+                                if random.randint(1, 100) <= dm_prob:
+                                    dm_list = DouyinConfigParser.parse_dm_messages(
+                                        getattr(cfg, "DM_MESSAGES", "") or ""
+                                    )
+                                    if dm_list:
+                                        dm_text = random.choice(dm_list)
+                                        ok = self.utils.send_direct_message(
+                                            driver,
+                                            dm_text,
+                                            getattr(cfg, "DM_WAIT_MIN", 5),
+                                            getattr(cfg, "DM_WAIT_MAX", 12),
+                                            browser_number,
+                                        )
+                                        if ok and reporter:
+                                            reporter.set_action("letter")
+                                            reporter.increment_letter(1)
+                                    else:
+                                        self.utils.debug_log(
+                                            "warning",
+                                            "DM_MESSAGES 列表为空，跳过私信",
+                                            browser_number,
+                                        )
+                        except Exception:
+                            pass
                         self.utils.safe_sleep(
                             random.randint(cfg.VISIT_MIN, cfg.VISIT_MAX),
                             browser_number=browser_number,

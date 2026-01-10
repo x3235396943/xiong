@@ -116,6 +116,29 @@ class DouyinConfigParser:
         return replies if replies else []
 
     @staticmethod
+    def parse_dm_messages(raw_config):
+        """
+        解析私信话术列表，使用 -&- 作为分隔符
+        """
+        raw = raw_config or ""
+        if not raw:
+            return []
+        messages = []
+        if isinstance(raw, str):
+            s = raw.strip()
+            try:
+                data = json.loads(s)
+                if isinstance(data, list):
+                    messages = [str(x).strip() for x in data if str(x).strip()]
+                else:
+                    messages = [s] if s else []
+            except Exception:
+                messages = [x.strip() for x in s.split("-&-") if x.strip()]
+        elif isinstance(raw, list):
+            messages = [str(x).strip() for x in raw if str(x).strip()]
+        return messages if messages else []
+
+    @staticmethod
     def normalize_text(text):
         """
         文本标准化（转小写、去除多余空格）

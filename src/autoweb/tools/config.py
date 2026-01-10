@@ -55,6 +55,13 @@ class BaseConfig(BaseModel):
     COMMENT_WAIT_MIN: int = 5  # 评论回复前最小等待时间（秒）
     COMMENT_WAIT_MAX: int = 8  # 评论回复前最大等待时间（秒）
 
+    # 私信功能（服务器下发）
+    ENABLE_DM: bool = False
+    DM_PROBABILITY: int = 10
+    DM_WAIT_MIN: int = 5
+    DM_WAIT_MAX: int = 12
+    DM_MESSAGES: str = "你好-&-在吗"
+
     BIT_BROWSER_IDS: list = []
 
     @field_validator(*field_pairs.keys())
@@ -67,7 +74,7 @@ class BaseConfig(BaseModel):
         return max_value
 
 
-class EnvSettings(BaseSettings):
+class EnvSettings(BaseSettings, BaseConfig):
     # 添加一个标志用于等待配置初始化
     _config_initialized: bool = False
     # 添加停止信号标志
@@ -95,7 +102,7 @@ class EnvSettings(BaseSettings):
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str | None = "1.5.0"
+    VERSION: str | None = "1.4.1"
 
     # 抖音搜索模式配置（服务器下发）
     KEYWORDS: list = []
@@ -165,6 +172,10 @@ class EnvSettings(BaseSettings):
         log.info(f"  LIKE_PROBABILITY: {self.LIKE_PROBABILITY}")
         log.info(f"  VISIT_ENABLE: {self.VISIT_ENABLE}")
         log.info(f"  PROFILE_FOLLOW_PROBABILITY: {self.PROFILE_FOLLOW_PROBABILITY}")
+        log.info(f"  ENABLE_DM: {self.ENABLE_DM}")
+        log.info(f"  DM_PROBABILITY: {self.DM_PROBABILITY}")
+        log.info(f"  DM_WAIT_MIN: {self.DM_WAIT_MIN}")
+        log.info(f"  DM_WAIT_MAX: {self.DM_WAIT_MAX}")
 
 
 # 延迟初始化全局配置实例，直到接收到服务器参数
