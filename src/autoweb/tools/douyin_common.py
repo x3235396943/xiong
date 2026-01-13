@@ -10,12 +10,104 @@ import json
 import re
 import sys
 from time import sleep
+from datetime import datetime, timedelta
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
 from selenium.webdriver.common.by import By
 
 from .core import log
+from .config import get_config
+
+
+_RELATIVE_TIME_MAPPING = {
+    "分钟": "minutes",
+    "小时": "hours",
+    "天": "days",
+    "周": "weeks",
+}
+
+
+def universal_parse(text):
+    now = datetime.now()
+    text = text.strip()
+
+    m = re.search(r"(\d+)\s*(分钟|小时|天|周)前", text)
+    if m:
+        val, unit = int(m.group(1)), m.group(2)
+        return now - timedelta(**{_RELATIVE_TIME_MAPPING[unit]: val})
+
+    m = re.match(r"昨天\s*(\d{1,2}):(\d{1,2})$", text)
+    if m:
+        base_date = now - timedelta(days=1)
+        h, n = m.groups()
+        return base_date.replace(hour=int(h), minute=int(n), second=0, microsecond=0)
+
+    if re.match(r"\d{4}-\d{1,2}-\d{1,2}", text):
+        return datetime.strptime(text, "%Y-%m-%d")
+
+    if re.match(r"\d{1,2}-\d{1,2}$", text):
+        return datetime.strptime(f"{now.year}-{text}", "%Y-%m-%d")
+
+    return None
+
+
+def get_comment_time_text(comment_element):
+    try:
+        el = comment_element.find_element(
+            By.CSS_SELECTOR,
+            "div:nth-child(2) > div > div:nth-child(3) > span",
+        )
+        t = el.text.strip()
+        if t:
+            return t
+    except Exception:
+        pass
+    try:
+        candidates = comment_element.find_elements(By.CSS_SELECTOR, "span")
+        for c in candidates:
+            txt = c.text.strip()
+            if not txt:
+                continue
+            if re.search(
+                r"(分钟前|小时前|天前|周前|昨天|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}-\d{1,2})",
+                txt,
+            ):
+                return txt
+    except Exception:
+        pass
+    return None
+
+
+def parse_comment_dt(comment_element):
+    t = get_comment_time_text(comment_element)
+    if not t:
+        return None
+    try:
+        dt = universal_parse(t)
+        cfg = get_config()
+        if getattr(cfg, "DEBUG", False):
+            log.debug(f"comment time parsed: raw='{t}', dt={dt}")
+        return dt
+    except Exception:
+        return None
+
+
+def within_threshold(dt):
+    cfg = get_config()
+    if not getattr(cfg, "COMMENT_THRESHOLD_ENABLE", False):
+        return True
+    if not dt:
+        return False
+    threshold = getattr(cfg, "COMMENT_THRESHOLD", None)
+    if not isinstance(threshold, datetime):
+        return False
+    ok = dt >= threshold
+    if getattr(cfg, "DEBUG", False):
+        log.debug(
+            f"comment threshold check: dt={dt}, threshold={threshold}, enable={cfg.COMMENT_THRESHOLD_ENABLE}, result={ok}"
+        )
+    return ok
 
 
 class DouyinConfigParser:

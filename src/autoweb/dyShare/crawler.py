@@ -105,6 +105,8 @@ from ..tools.douyin_common import (
     DouyinBrowserActions,
     DouyinCommentActions,
     DouyinConfigParser,
+    parse_comment_dt,
+    within_threshold,
 )
 from ..tools.license import LicenseException, LicenseManager
 
@@ -351,6 +353,7 @@ class DyShareUtils:
         visit_min=2,
         visit_max=5,
         reporter=None,
+        force_dm=False,
     ):
         handles_before = driver.window_handles
         browser_info = self.get_browser_info(browser_number)
@@ -426,12 +429,15 @@ class DyShareUtils:
                 )
             try:
                 if getattr(config, "ENABLE_DM", True):
-                    dm_prob = float(getattr(config, "DM_PROBABILITY", 0)) / 100.0
-                    if random.random() < dm_prob:
-                        dm_list = DouyinConfigParser.parse_dm_messages(
-                            getattr(config, "DM_MESSAGES", "") or ""
+                    dm_list = DouyinConfigParser.parse_dm_messages(
+                        getattr(config, "DM_MESSAGES", "") or ""
+                    )
+                    if not dm_list:
+                        self.debug_log(
+                            "warning", "DM_MESSAGES 列表为空，跳过私信", browser_number
                         )
-                        if dm_list:
+                    else:
+                        if force_dm:
                             dm_text = random.choice(dm_list)
                             ok = self.send_direct_message(
                                 driver,
@@ -445,17 +451,30 @@ class DyShareUtils:
                                 reporter.increment_letter(1)
                                 self.debug_log("info", "私信发送成功", browser_number)
                         else:
-                            self.debug_log(
-                                "warning",
-                                "DM_MESSAGES 列表为空，跳过私信",
-                                browser_number,
+                            dm_prob = (
+                                float(getattr(config, "DM_PROBABILITY", 0)) / 100.0
                             )
-                    else:
-                        self.debug_log(
-                            "info",
-                            f"根据概率设置 ({dm_prob:.1%})，跳过私信",
-                            browser_number,
-                        )
+                            if random.random() < dm_prob:
+                                dm_text = random.choice(dm_list)
+                                ok = self.send_direct_message(
+                                    driver,
+                                    dm_text,
+                                    getattr(config, "DM_WAIT_MIN", 5),
+                                    getattr(config, "DM_WAIT_MAX", 12),
+                                    browser_number,
+                                )
+                                if ok and reporter:
+                                    reporter.set_action("letter")
+                                    reporter.increment_letter(1)
+                                    self.debug_log(
+                                        "info", "私信发送成功", browser_number
+                                    )
+                            else:
+                                self.debug_log(
+                                    "info",
+                                    f"根据概率设置 ({dm_prob:.1%})，跳过私信",
+                                    browser_number,
+                                )
             except Exception as e:
                 log.warning(f"{browser_info} 执行私信逻辑时出错: {e}")
         except Exception as e:
@@ -649,6 +668,29 @@ class DyShareUtils:
         except Exception:
             return False, like_count, 0
 
+        threshold_enabled = getattr(config, "COMMENT_THRESHOLD_ENABLE", False)
+        time_matched = False
+        try:
+            dt = parse_comment_dt(target_comment)
+            if within_threshold(dt):
+                time_matched = True
+            else:
+                if threshold_enabled and config.DEBUG:
+                    self.debug_log(
+                        "info",
+                        f"评论时间未命中阈值，跳过当前评论: dt={dt}, threshold={getattr(config, 'COMMENT_THRESHOLD', None)}",
+                        browser_number,
+                    )
+                if threshold_enabled:
+                    return False, like_count, 0
+        except Exception:
+            if threshold_enabled:
+                if config.DEBUG:
+                    self.debug_log(
+                        "warning", "评论时间解析失败，跳过当前评论", browser_number
+                    )
+                return False, like_count, 0
+
         comment_text = self._extract_comment_text(target_comment)
         norm_comment = self.normalize_text(comment_text)
         keyword_matched = False
@@ -666,11 +708,14 @@ class DyShareUtils:
             except Exception:
                 pass
 
-        should_like = (
-            enable_like
-            and (like_count < target_like_count)
-            and (keyword_matched or (random.random() < like_probability))
-        )
+        if threshold_enabled and time_matched:
+            should_like = enable_like and (like_count < target_like_count)
+        else:
+            should_like = (
+                enable_like
+                and (like_count < target_like_count)
+                and (keyword_matched or (random.random() < like_probability))
+            )
         if should_like:
             try:
                 like_button = target_comment.find_element(
@@ -681,19 +726,23 @@ class DyShareUtils:
                 web_driver.execute_script("arguments[0].click();", like_button)
                 if reporter:
                     reporter.set_action("like")
-                if reporter:
-                    reporter.increment_like()
+                    if reporter:
+                        reporter.increment_like()
                 like_count += 1
                 time.sleep(random.uniform(0.5, 1.5))
             except Exception:
                 pass
 
-        should_visit = (
-            enable_follow
-            and enable_profile_visit
-            and (keyword_matched or (random.random() < visit_profile_probability))
-        )
-        force_follow = keyword_matched
+        if threshold_enabled and time_matched:
+            should_visit = enable_follow and enable_profile_visit
+            force_follow = True
+        else:
+            should_visit = (
+                enable_follow
+                and enable_profile_visit
+                and (keyword_matched or (random.random() < visit_profile_probability))
+            )
+            force_follow = keyword_matched
 
         if should_visit:
             try:
@@ -730,6 +779,7 @@ class DyShareUtils:
                         visit_min,
                         visit_max,
                         reporter,
+                        force_dm=bool(threshold_enabled and time_matched),
                     )
                     if is_followed:
                         return "followed", like_count, 0
@@ -750,11 +800,14 @@ class DyShareUtils:
 
         reply_count = 0
         COMMENT_REPLIES = self.parse_comment_replies()
-        should_reply = (
-            enable_comment_reply
-            and COMMENT_REPLIES
-            and (keyword_matched or (random.random() < comment_reply_probability))
-        )
+        if threshold_enabled and time_matched:
+            should_reply = enable_comment_reply and COMMENT_REPLIES
+        else:
+            should_reply = (
+                enable_comment_reply
+                and COMMENT_REPLIES
+                and (keyword_matched or (random.random() < comment_reply_probability))
+            )
         if should_reply:
             try:
                 wait_time_before_reply = random.uniform(
@@ -1001,6 +1054,19 @@ class DyShareUtils:
                             scroll_number += 1
                             self.scroll_comments(driver, scroll_number, browser_number)
                             self.human_like_delay(2, 3, browser_number)
+                            try:
+                                if (
+                                    getattr(config, "COMMENT_THRESHOLD_ENABLE", False)
+                                    and scroll_number >= 20
+                                ):
+                                    self.debug_log(
+                                        "info",
+                                        "评论区滚动已达上限（20次），切换到下一个链接",
+                                        browser_number,
+                                    )
+                                    break
+                            except Exception:
+                                pass
                             comments_container = WebDriverWait(driver, wait_time).until(
                                 EC.presence_of_element_located(
                                     (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
@@ -1124,14 +1190,6 @@ class DyShareUtils:
             self.debug_log("info", "所有评论处理完成", browser_number)
 
             if reporter:
-                if video_followed_count > 0:
-                    reporter.increment_follow(video_followed_count)
-                if video_liked_count > 0:
-                    reporter.increment_like(video_liked_count)
-                if video_comment_reply_count > 0:
-                    reporter.increment_comment(video_comment_reply_count)
-                if video_comment_count > 0:
-                    reporter.increment_video_comment(video_comment_count)
                 reporter.force_report()
 
             with self._stats_lock:

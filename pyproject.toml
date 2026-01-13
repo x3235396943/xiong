@@ -38,6 +38,13 @@ server = "python -m autoweb.server"
 [tool.pixi.tasks.build-web]
 cmd = "python install/build.py"
 
+[tool.pixi.environments]
+default = { solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+
+[tool.pixi.feature.test.tasks]
+test = "pytest"
+
 [tool.pyright]
 # 所有虚拟环境的父目录
 venvPath = ".pixi/envs"
@@ -53,3 +60,6 @@ include = ["src/**/*.py", "install/**/*.py"]
 [tool.ruff.lint]
 # https://beta.ruff.rs/docs/rules/
 ignore = ["F401", "F841","E402"]
+
+[dependency-groups]
+test = ["pytest"]

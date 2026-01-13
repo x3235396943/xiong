@@ -20,6 +20,8 @@ from ..tools.douyin_common import (
     DouyinConfigParser,
     DouyinBrowserActions,
     DouyinCommentActions,
+    parse_comment_dt,
+    within_threshold,
 )
 from ..tools.core import DataReporter
 
@@ -399,6 +401,12 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                             )
                             processed_videos += 1
                             try:
+                                if reporter:
+                                    reporter.set_action("video")
+                                    reporter.increment_video(1)
+                            except Exception:
+                                pass
+                            try:
                                 body = driver.find_element(By.TAG_NAME, "body")
                                 DouyinBrowserActions.scroll_element_sync(
                                     driver, body, delta_y=600, sleep_time=2
@@ -454,6 +462,7 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
         start_index = 0
         follow_index = 0
         like_index = 0
+        threshold_enabled = getattr(cfg, "COMMENT_THRESHOLD_ENABLE", False)
         max_follow = random.randint(
             cfg.MIN_FOLLOWS_PER_VIDEO, cfg.MAX_FOLLOWS_PER_VIDEO
         )
@@ -473,6 +482,16 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
             new_list = comment_list[start_index:-1]
             start_index = len(comment_list) - 1
             for comment in new_list:
+                time_matched = False
+                if threshold_enabled:
+                    try:
+                        dt = parse_comment_dt(comment)
+                        if within_threshold(dt):
+                            time_matched = True
+                        else:
+                            continue
+                    except Exception:
+                        continue
                 comment_ok = False
                 try:
                     if (
@@ -490,13 +509,17 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                                 break
                 except Exception:
                     pass
-                if cfg.ENABLE_LIKE and (
-                    comment_ok
-                    or (
-                        like_index < max_like
-                        and random.randint(1, 100) <= cfg.LIKE_PROBABILITY
+                if threshold_enabled and time_matched:
+                    should_like = cfg.ENABLE_LIKE and like_index < max_like
+                else:
+                    should_like = cfg.ENABLE_LIKE and (
+                        comment_ok
+                        or (
+                            like_index < max_like
+                            and random.randint(1, 100) <= cfg.LIKE_PROBABILITY
+                        )
                     )
-                ):
+                if should_like:
                     try:
                         like_button = comment.find_element(
                             By.XPATH,
@@ -513,9 +536,12 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                         )
                     except Exception:
                         pass
-                should_visit = cfg.ENABLE_PROFILE_VISIT and (
-                    comment_ok or random.randint(1, 100) <= cfg.VISIT_ENABLE
-                )
+                if threshold_enabled and time_matched:
+                    should_visit = cfg.ENABLE_PROFILE_VISIT and cfg.ENABLE_FOLLOW
+                else:
+                    should_visit = cfg.ENABLE_PROFILE_VISIT and (
+                        comment_ok or random.randint(1, 100) <= cfg.VISIT_ENABLE
+                    )
                 if should_visit:
                     try:
                         avatar_link = comment.find_element(
@@ -562,12 +588,13 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                                 pass
                         try:
                             if getattr(cfg, "ENABLE_DM", True):
-                                dm_prob = float(getattr(cfg, "DM_PROBABILITY", 0))
-                                if random.randint(1, 100) <= dm_prob:
-                                    dm_list = DouyinConfigParser.parse_dm_messages(
-                                        getattr(cfg, "DM_MESSAGES", "") or ""
-                                    )
-                                    if dm_list:
+                                dm_list = DouyinConfigParser.parse_dm_messages(
+                                    getattr(cfg, "DM_MESSAGES", "") or ""
+                                )
+                                if dm_list:
+                                    dm_prob = float(getattr(cfg, "DM_PROBABILITY", 0))
+                                    force_dm = threshold_enabled and time_matched
+                                    if force_dm or random.randint(1, 100) <= dm_prob:
                                         dm_text = random.choice(dm_list)
                                         ok = self.utils.send_direct_message(
                                             driver,
@@ -579,12 +606,12 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                                         if ok and reporter:
                                             reporter.set_action("letter")
                                             reporter.increment_letter(1)
-                                    else:
-                                        self.utils.debug_log(
-                                            "warning",
-                                            "DM_MESSAGES 列表为空，跳过私信",
-                                            browser_number,
-                                        )
+                                else:
+                                    self.utils.debug_log(
+                                        "warning",
+                                        "DM_MESSAGES 列表为空，跳过私信",
+                                        browser_number,
+                                    )
                         except Exception:
                             pass
                         self.utils.safe_sleep(
@@ -606,10 +633,14 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                         comment_replies = DouyinConfigParser.parse_comment_replies(
                             getattr(cfg, "COMMENT_REPLIES", "") or ""
                         )
-                        should_reply = comment_replies and (
-                            comment_ok
-                            or random.randint(1, 100) <= cfg.COMMENT_REPLY_PROBABILITY
-                        )
+                        if threshold_enabled and time_matched:
+                            should_reply = bool(comment_replies)
+                        else:
+                            should_reply = comment_replies and (
+                                comment_ok
+                                or random.randint(1, 100)
+                                <= cfg.COMMENT_REPLY_PROBABILITY
+                            )
                         if should_reply:
                             wait_time = random.randint(
                                 cfg.COMMENT_WAIT_MIN, cfg.COMMENT_WAIT_MAX
