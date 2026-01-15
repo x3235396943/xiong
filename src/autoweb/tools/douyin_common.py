@@ -32,6 +32,16 @@ def universal_parse(text):
     now = datetime.now()
     text = text.strip()
 
+    if "刚刚" in text:
+        return now - timedelta(minutes=1)
+
+    m = re.search(r"(\d+)\s*(月|年)前", text)
+    if m:
+        val, unit = int(m.group(1)), m.group(2)
+        if unit == "月":
+            return now - timedelta(days=30 * val)
+        return now - timedelta(days=365 * val)
+
     m = re.search(r"(\d+)\s*(分钟|小时|天|周)前", text)
     if m:
         val, unit = int(m.group(1)), m.group(2)
@@ -70,7 +80,7 @@ def get_comment_time_text(comment_element):
             if not txt:
                 continue
             if re.search(
-                r"(分钟前|小时前|天前|周前|昨天|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}-\d{1,2})",
+                r"(刚刚|分钟前|小时前|天前|周前|月前|年前|昨天|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}-\d{1,2})",
                 txt,
             ):
                 return txt
