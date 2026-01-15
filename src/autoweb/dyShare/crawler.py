@@ -447,8 +447,8 @@ class DyShareUtils:
                                 browser_number,
                             )
                             if ok and reporter:
-                                reporter.set_action("letter")
-                                reporter.increment_letter(1)
+                                reporter.set_action("dm")
+                                reporter.increment_dm(1)
                                 self.debug_log("info", "私信发送成功", browser_number)
                         else:
                             dm_prob = (
@@ -464,8 +464,8 @@ class DyShareUtils:
                                     browser_number,
                                 )
                                 if ok and reporter:
-                                    reporter.set_action("letter")
-                                    reporter.increment_letter(1)
+                                    reporter.set_action("dm")
+                                    reporter.increment_dm(1)
                                     self.debug_log(
                                         "info", "私信发送成功", browser_number
                                     )

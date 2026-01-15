@@ -120,7 +120,7 @@ class DataReporter:
             "comment": 0,
             "follow": 0,
             "like": 0,
-            "letter": 0,
+            "dm": 0,
             "video": 0,
             "urlFail": 0,
             "urlOk": 0,
@@ -241,7 +241,7 @@ class DataReporter:
                     "isCompleted": is_completed,
                     "like": stats["like"],
                     "video": stats["video"],
-                    "letter": stats["letter"],
+                    "dm": stats["dm"],
                     "urlIndex": stats["urlIndex"],
                     "urlOk": stats["urlOk"],
                     "urlFail": stats["urlFail"],
@@ -289,13 +289,16 @@ class DataReporter:
         if need_report:
             self._check_and_report(consume_action=True)
 
-    def increment_letter(self, count: int = 1):
+    def increment_dm(self, count: int = 1):
         with self._lock:
-            old_value = self._stats["letter"]
-            self._stats["letter"] += count
-            need_report = self._stats["letter"] > old_value
+            old_value = self._stats["dm"]
+            self._stats["dm"] += count
+            need_report = self._stats["dm"] > old_value
         if need_report:
             self._check_and_report(consume_action=True)
+
+    def increment_letter(self, count: int = 1):
+        self.increment_dm(count)
 
     def increment_url_fail(self, count: int = 1):
         with self._lock:
