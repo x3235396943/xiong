@@ -41,6 +41,10 @@ class WebsocketsWSClient:
         self.event_loop = None
         # 从URL中提取设备ID
         self.device_id = self._extract_device_id(url)
+        self.max_reconnect_attempts = 3
+        self._reconnect_requested = False
+        self._reconnect_attempt = 0
+        self._last_disconnect_reason: str | None = None
 
     def _extract_device_id(self, url: str) -> str:
         """从WebSocket URL中提取设备ID"""
@@ -232,9 +236,13 @@ class WebsocketsWSClient:
     async def run(self):
         """运行WebSocket客户端主循环"""
         self._running = True
+        self._reconnect_attempt = 0
         while self._running and not self.stop_requested:
             try:
                 await self.connect()
+                self._reconnect_attempt = 0
+                self._reconnect_requested = False
+                self._last_disconnect_reason = None
                 self.ready_event.set()
 
                 done, pending = await asyncio.wait(
@@ -252,13 +260,54 @@ class WebsocketsWSClient:
                     exc = task.exception()
                     if exc:
                         raise exc
+                if self.stop_requested or not self._running:
+                    break
+
+                if self._reconnect_requested:
+                    self._reconnect_attempt += 1
+                    if self._reconnect_attempt > self.max_reconnect_attempts:
+                        log.error(
+                            f"WebSocket 重连失败（已达最大次数 {self.max_reconnect_attempts}），准备停止程序"
+                        )
+                        self.stop_requested = True
+                        if self.stop_signal_handler:
+                            try:
+                                self.stop_signal_handler()
+                            except Exception as e:
+                                log.error(f"执行停止信号处理器时出错: {e}")
+                        break
+
+                    backoff_seconds = 2 ** (self._reconnect_attempt - 1)
+                    reason = self._last_disconnect_reason or "未知原因"
+                    log.warning(
+                        f"WebSocket 连接断开，准备重连（第 {self._reconnect_attempt}/{self.max_reconnect_attempts} 次），等待 {backoff_seconds} 秒: {reason}"
+                    )
+                    await asyncio.sleep(backoff_seconds)
+                    continue
+
                 break
             except Exception as e:
-                if self._running and not self.stop_requested:
-                    log.error(f"WebSocket运行异常: {e}")
-                    await asyncio.sleep(3)
-                else:
+                if not self._running or self.stop_requested:
                     break
+
+                self._reconnect_attempt += 1
+                if self._reconnect_attempt > self.max_reconnect_attempts:
+                    log.error(
+                        f"WebSocket 连接失败且重试已达最大次数 {self.max_reconnect_attempts}: {e}"
+                    )
+                    self.stop_requested = True
+                    if self.stop_signal_handler:
+                        try:
+                            self.stop_signal_handler()
+                        except Exception as err:
+                            log.error(f"执行停止信号处理器时出错: {err}")
+                    break
+
+                backoff_seconds = 2 ** (self._reconnect_attempt - 1)
+                log.error(
+                    f"WebSocket运行异常，准备重连（第 {self._reconnect_attempt}/{self.max_reconnect_attempts} 次），等待 {backoff_seconds} 秒: {e}"
+                )
+                await asyncio.sleep(backoff_seconds)
 
     def register_command_handler(
         self, cmd: str, handler: Callable[[Dict[str, Any]], None]
@@ -270,12 +319,17 @@ class WebsocketsWSClient:
 
     def _handle_connection_lost(self, reason: str):
         log.error(f"WebSocket 连接断开: {reason}")
-        self.stop_requested = True
-        if self.stop_signal_handler:
-            try:
-                self.stop_signal_handler()
-            except Exception as e:
-                log.error(f"执行停止信号处理器时出错: {e}")
+        self._reconnect_requested = True
+        self._last_disconnect_reason = reason
+        try:
+            if hasattr(self, "ws") and self.ws:
+                try:
+                    asyncio.create_task(self.ws.close())
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        self.ws = None
 
     def is_stop_requested(self):
         return self.stop_requested
