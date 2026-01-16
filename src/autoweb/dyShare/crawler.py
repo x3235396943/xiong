@@ -669,22 +669,18 @@ class DyShareUtils:
             return False, like_count, 0
 
         threshold_enabled = getattr(config, "COMMENT_THRESHOLD_ENABLE", False)
-        time_matched = False
-        try:
-            dt = parse_comment_dt(target_comment)
-            if within_threshold(dt):
-                time_matched = True
-            else:
-                if threshold_enabled and config.DEBUG:
-                    self.debug_log(
-                        "info",
-                        f"评论时间未命中阈值，跳过当前评论: dt={dt}, threshold={getattr(config, 'COMMENT_THRESHOLD', None)}",
-                        browser_number,
-                    )
-                if threshold_enabled:
+        if threshold_enabled:
+            try:
+                dt = parse_comment_dt(target_comment)
+                if not within_threshold(dt):
+                    if config.DEBUG:
+                        self.debug_log(
+                            "info",
+                            f"评论时间未命中阈值，跳过当前评论: dt={dt}, threshold={getattr(config, 'COMMENT_THRESHOLD', None)}",
+                            browser_number,
+                        )
                     return False, like_count, 0
-        except Exception:
-            if threshold_enabled:
+            except Exception:
                 if config.DEBUG:
                     self.debug_log(
                         "warning", "评论时间解析失败，跳过当前评论", browser_number
@@ -708,14 +704,11 @@ class DyShareUtils:
             except Exception:
                 pass
 
-        if threshold_enabled and time_matched:
-            should_like = enable_like and (like_count < target_like_count)
-        else:
-            should_like = (
-                enable_like
-                and (like_count < target_like_count)
-                and (keyword_matched or (random.random() < like_probability))
-            )
+        should_like = (
+            enable_like
+            and (like_count < target_like_count)
+            and (keyword_matched or (random.random() < like_probability))
+        )
         if should_like:
             try:
                 like_button = target_comment.find_element(
@@ -733,16 +726,12 @@ class DyShareUtils:
             except Exception:
                 pass
 
-        if threshold_enabled and time_matched:
-            should_visit = enable_follow and enable_profile_visit
-            force_follow = True
-        else:
-            should_visit = (
-                enable_follow
-                and enable_profile_visit
-                and (keyword_matched or (random.random() < visit_profile_probability))
-            )
-            force_follow = keyword_matched
+        should_visit = (
+            enable_follow
+            and enable_profile_visit
+            and (keyword_matched or (random.random() < visit_profile_probability))
+        )
+        force_follow = keyword_matched
 
         if should_visit:
             try:
@@ -779,7 +768,7 @@ class DyShareUtils:
                         visit_min,
                         visit_max,
                         reporter,
-                        force_dm=bool(threshold_enabled and time_matched),
+                        force_dm=False,
                     )
                     if is_followed:
                         return "followed", like_count, 0
@@ -800,14 +789,11 @@ class DyShareUtils:
 
         reply_count = 0
         COMMENT_REPLIES = self.parse_comment_replies()
-        if threshold_enabled and time_matched:
-            should_reply = enable_comment_reply and COMMENT_REPLIES
-        else:
-            should_reply = (
-                enable_comment_reply
-                and COMMENT_REPLIES
-                and (keyword_matched or (random.random() < comment_reply_probability))
-            )
+        should_reply = (
+            enable_comment_reply
+            and COMMENT_REPLIES
+            and (keyword_matched or (random.random() < comment_reply_probability))
+        )
         if should_reply:
             try:
                 wait_time_before_reply = random.uniform(
@@ -2011,7 +1997,6 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         if not self.ws_client:
             log.warning("WebSocket客户端未准备好，无法发送消息（ws_client 为 None）")
-            self._on_stop_signal_received()
             return
 
         if self.ws_client.stop_requested:
@@ -2020,36 +2005,25 @@ class ConcreteDyShareCrawler(BaseDyShareCrawler):
 
         if not self.ws_client._running:
             log.warning("WebSocket客户端未运行，无法发送消息")
-            self._on_stop_signal_received()
-            return
-
-        if not (hasattr(self.ws_client, "ws") and self.ws_client.ws):
-            log.warning("WebSocket连接对象不存在，无法发送消息")
-            self._on_stop_signal_received()
             return
 
         event_loop = self.ws_client.event_loop or self.ws_loop
         if event_loop is None:
             log.warning("WebSocket事件循环未准备好，无法发送消息")
-            self._on_stop_signal_received()
             return
 
         if not event_loop.is_running():
             log.warning("WebSocket事件循环未运行，无法发送消息")
-            self._on_stop_signal_received()
             return
 
         try:
             asyncio.run_coroutine_threadsafe(
-                self.ws_client.send_queue.put(
-                    json.dumps(message_dict, ensure_ascii=False)
-                ),
+                self.ws_client.send(message_dict),
                 event_loop,
             )
             log.info("✓ 消息已放入发送队列")
         except Exception as e:
             log.error(f"发送WebSocket消息失败: {e}", exc_info=True)
-            self._on_stop_signal_received()
 
     def _send_ws_message_for_reporter(self, message_dict):
         self._send_ws_message(message_dict)

@@ -109,13 +109,26 @@ def within_threshold(dt):
         return True
     if not dt:
         return False
+    now = datetime.now()
     threshold = getattr(cfg, "COMMENT_THRESHOLD", None)
-    if not isinstance(threshold, datetime):
+    threshold_dt = None
+    if isinstance(threshold, (int, float)):
+        threshold_minutes = int(threshold)
+        threshold_dt = now - timedelta(minutes=threshold_minutes)
+    elif isinstance(threshold, str):
+        s = threshold.strip()
+        m = re.match(r"^(\d+)\s*(分钟)?$", s)
+        if m:
+            threshold_minutes = int(m.group(1))
+            threshold_dt = now - timedelta(minutes=threshold_minutes)
+
+    if not isinstance(threshold_dt, datetime):
         return False
-    ok = dt >= threshold
+
+    ok = dt >= threshold_dt
     if getattr(cfg, "DEBUG", False):
         log.debug(
-            f"comment threshold check: dt={dt}, threshold={threshold}, enable={cfg.COMMENT_THRESHOLD_ENABLE}, result={ok}"
+            f"comment threshold check: dt={dt}, threshold_raw={threshold}, threshold_dt={threshold_dt}, enable={cfg.COMMENT_THRESHOLD_ENABLE}, result={ok}"
         )
     return ok
 

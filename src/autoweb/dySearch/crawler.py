@@ -482,13 +482,10 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
             new_list = comment_list[start_index:-1]
             start_index = len(comment_list) - 1
             for comment in new_list:
-                time_matched = False
                 if threshold_enabled:
                     try:
                         dt = parse_comment_dt(comment)
-                        if within_threshold(dt):
-                            time_matched = True
-                        else:
+                        if not within_threshold(dt):
                             continue
                     except Exception:
                         continue
@@ -509,16 +506,13 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                                 break
                 except Exception:
                     pass
-                if threshold_enabled and time_matched:
-                    should_like = cfg.ENABLE_LIKE and like_index < max_like
-                else:
-                    should_like = cfg.ENABLE_LIKE and (
-                        comment_ok
-                        or (
-                            like_index < max_like
-                            and random.randint(1, 100) <= cfg.LIKE_PROBABILITY
-                        )
+                should_like = cfg.ENABLE_LIKE and (
+                    comment_ok
+                    or (
+                        like_index < max_like
+                        and random.randint(1, 100) <= cfg.LIKE_PROBABILITY
                     )
+                )
                 if should_like:
                     try:
                         like_button = comment.find_element(
@@ -536,12 +530,9 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                         )
                     except Exception:
                         pass
-                if threshold_enabled and time_matched:
-                    should_visit = cfg.ENABLE_PROFILE_VISIT and cfg.ENABLE_FOLLOW
-                else:
-                    should_visit = cfg.ENABLE_PROFILE_VISIT and (
-                        comment_ok or random.randint(1, 100) <= cfg.VISIT_ENABLE
-                    )
+                should_visit = cfg.ENABLE_PROFILE_VISIT and (
+                    comment_ok or random.randint(1, 100) <= cfg.VISIT_ENABLE
+                )
                 if should_visit:
                     try:
                         avatar_link = comment.find_element(
@@ -593,8 +584,7 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                                 )
                                 if dm_list:
                                     dm_prob = float(getattr(cfg, "DM_PROBABILITY", 0))
-                                    force_dm = threshold_enabled and time_matched
-                                    if force_dm or random.randint(1, 100) <= dm_prob:
+                                    if random.randint(1, 100) <= dm_prob:
                                         dm_text = random.choice(dm_list)
                                         ok = self.utils.send_direct_message(
                                             driver,
@@ -633,14 +623,10 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                         comment_replies = DouyinConfigParser.parse_comment_replies(
                             getattr(cfg, "COMMENT_REPLIES", "") or ""
                         )
-                        if threshold_enabled and time_matched:
-                            should_reply = bool(comment_replies)
-                        else:
-                            should_reply = comment_replies and (
-                                comment_ok
-                                or random.randint(1, 100)
-                                <= cfg.COMMENT_REPLY_PROBABILITY
-                            )
+                        should_reply = comment_replies and (
+                            comment_ok
+                            or random.randint(1, 100) <= cfg.COMMENT_REPLY_PROBABILITY
+                        )
                         if should_reply:
                             wait_time = random.randint(
                                 cfg.COMMENT_WAIT_MIN, cfg.COMMENT_WAIT_MAX

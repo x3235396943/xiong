@@ -30,6 +30,7 @@ pixi-pycharm = ">=0.0.10,<0.0.11"
 playwright-python = ">=1.57.0,<2"
 ruff = ">=0.14.10,<0.15"
 pre-commit = ">=4.5.1,<5"
+pytest = ">=9.0.2,<10"
 
 [tool.pixi.tasks]
 web = "python -m autoweb.main"

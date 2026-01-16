@@ -5,7 +5,6 @@ from pydantic import field_validator, BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Dict, Any
 import time
-from datetime import datetime, timedelta
 
 
 # 定义需要验证的字段对
@@ -103,7 +102,7 @@ class EnvSettings(BaseSettings, BaseConfig):
     HEADLESS: bool = False  # 是否以无头模式运行浏览器(T or F)
     DEBUG: bool = True  # 是否输出调试信息（打印所有配置参数）
 
-    VERSION: str | None = "1.5.2"
+    VERSION: str | None = "1.5.3"
 
     # 抖音搜索模式配置（服务器下发）
     KEYWORDS: list = []
@@ -112,7 +111,7 @@ class EnvSettings(BaseSettings, BaseConfig):
 
     # 通过评论时间筛选
     COMMENT_THRESHOLD_ENABLE: bool = True
-    COMMENT_THRESHOLD: datetime = datetime.now() - timedelta(days=1)
+    COMMENT_THRESHOLD: int = 24 * 60
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
 
