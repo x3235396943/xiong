@@ -183,7 +183,7 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
             )
         except Exception:
             pass
-        self.utils.safe_sleep(1, browser_number=browser_number)
+        self.utils.safe_sleep(3, browser_number=browser_number)
         try:
             card = wait.until(
                 EC.element_to_be_clickable(
