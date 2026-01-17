@@ -214,7 +214,7 @@ class ConcreteDySearchCrawler(ConcreteDyShareCrawler):
                     "warning", "未找到可点击的视频卡片", browser_number
                 )
                 return False
-        self.utils.safe_sleep(4, browser_number=browser_number)
+        self.utils.safe_sleep(5, browser_number=browser_number)
         try:
             driver.find_element(
                 By.CSS_SELECTOR,
