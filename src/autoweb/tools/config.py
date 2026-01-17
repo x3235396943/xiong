@@ -46,7 +46,7 @@ class BaseConfig(BaseModel):
     # 等待时间参数
     LIKE_WAIT_MIN: int = 4  # 点赞后最小等待时间（秒）
     LIKE_WAIT_MAX: int = 10  # 点赞后最大等待时间（秒）
-    VISIT_MIN: int = 2  # 关注后最小等待时间（秒）
+    VISIT_MIN: int = 3  # 关注后最小等待时间（秒）
     VISIT_MAX: int = 5  # 关注后最大等待时间（秒）
 
     # 留言/回复等待时间参数
@@ -61,6 +61,10 @@ class BaseConfig(BaseModel):
     DM_WAIT_MIN: int = 5
     DM_WAIT_MAX: int = 12
     DM_MESSAGES: str = "你好-&-在吗"
+
+    # 通过评论时间筛选
+    COMMENT_THRESHOLD_ENABLE: bool = False
+    COMMENT_THRESHOLD: int = 24 * 60
 
     BIT_BROWSER_IDS: list = []
 
@@ -108,10 +112,6 @@ class EnvSettings(BaseSettings, BaseConfig):
     KEYWORDS: list = []
     MAX_SCROLL_VIDEO: list = [10, 20]
     MAX_COMMENT: list = [2, 15]
-
-    # 通过评论时间筛选
-    COMMENT_THRESHOLD_ENABLE: bool = True
-    COMMENT_THRESHOLD: int = 24 * 60
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
 

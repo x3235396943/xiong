@@ -1,5 +1,5 @@
 """
-WebSocket 客户端（websockets 版本，供 share/search_share 模式使用）
+WebSocket 客户端（websockets 版本，供 share/search 模式使用）
 """
 
 from __future__ import annotations
