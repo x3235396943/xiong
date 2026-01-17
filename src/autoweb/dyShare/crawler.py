@@ -687,6 +687,8 @@ class DyShareUtils:
         browser_number=None,
         browser_id="",
         is_old_ui=True,
+        video_followed_count=0,
+        target_follow_count=0,
         enable_follow=True,
         enable_profile_visit=True,
         enable_like=True,
@@ -761,10 +763,12 @@ class DyShareUtils:
             except Exception:
                 pass
 
-        should_like = (
-            enable_like
-            and (like_count < target_like_count)
-            and (keyword_matched or (random.random() < like_probability))
+        should_like = enable_like and (
+            keyword_matched
+            or (
+                like_count < target_like_count
+                and (keyword_matched or (random.random() < like_probability))
+            )
         )
         if should_like:
             try:
@@ -786,12 +790,9 @@ class DyShareUtils:
             except Exception:
                 pass
 
-        should_visit = (
-            enable_follow
-            and enable_profile_visit
-            and (keyword_matched or (random.random() < visit_profile_probability))
+        should_visit = enable_profile_visit and (
+            keyword_matched or (random.random() < visit_profile_probability)
         )
-        force_follow = keyword_matched
 
         if should_visit:
             try:
@@ -829,7 +830,19 @@ class DyShareUtils:
                             )
                         except Exception:
                             pass
-                    follow_prob = 1.0 if force_follow else profile_follow_probability
+                    allow_follow = enable_follow and (
+                        keyword_matched or video_followed_count < target_follow_count
+                    )
+                    if not allow_follow and not keyword_matched:
+                        self.debug_log(
+                            "info", "关注已达上限，本次仅进主页/私信", browser_number
+                        )
+                    force_follow = keyword_matched and allow_follow
+                    follow_prob = (
+                        1.0
+                        if force_follow
+                        else (profile_follow_probability if allow_follow else 0.0)
+                    )
                     is_followed = self.visit_user_profile(
                         web_driver,
                         main_window,
@@ -1187,6 +1200,8 @@ class DyShareUtils:
                         browser_number,
                         browser_id,
                         is_old_ui,
+                        video_followed_count,
+                        target_follow_count,
                         enable_follow,
                         enable_profile_visit,
                         enable_like,
