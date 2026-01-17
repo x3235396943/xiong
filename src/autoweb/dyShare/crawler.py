@@ -266,16 +266,48 @@ class DyShareUtils:
         delay = random.uniform(min_delay, max_delay)
         self.safe_sleep(delay, browser_number=browser_number)
 
-    def open_comment_section(self, driver, wait_time=10, browser_number=None):
+    def _get_comment_list_container(self, driver, is_old_ui):
+        if is_old_ui:
+            return driver.find_element(By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+        lists = driver.find_elements(By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+        if len(lists) < 2:
+            raise Exception("comment-list 数量不足 2 个")
+        return lists[1]
+
+    def _is_new_ui_comment_list_ready(self, driver):
+        try:
+            el = self._get_comment_list_container(driver, is_old_ui=False)
+            return el.is_displayed() and el.size.get("height", 0) > 0
+        except Exception:
+            return False
+
+    def open_comment_section(
+        self, driver, wait_time=10, browser_number=None, is_old_ui=None
+    ):
         self.debug_log("info", "尝试打开评论区", browser_number)
         self.check_stop_signal()
-        try:
-            _ = driver.find_element(By.CSS_SELECTOR, '[data-e2e="comment-list"]')
-            self.debug_log("info", "评论区已打开", browser_number)
-            return True
-        except Exception:
-            pass
         wait = WebDriverWait(driver, wait_time)
+        if is_old_ui is False:
+            if self._is_new_ui_comment_list_ready(driver):
+                self.debug_log("info", "评论区已打开(新界面)", browser_number)
+                return True
+            try:
+                btn = wait.until(
+                    EC.element_to_be_clickable(
+                        (By.CSS_SELECTOR, '[data-e2e="feed-comment-icon"]')
+                    )
+                )
+                self.human_like_delay(0.5, 1.0, browser_number)
+                btn.click()
+                WebDriverWait(driver, wait_time).until(
+                    lambda d: self._is_new_ui_comment_list_ready(d)
+                )
+                self.debug_log("info", "打开评论区成功(新界面)", browser_number)
+                return True
+            except Exception:
+                self.debug_log("warning", "新界面评论区按钮未找到", browser_number)
+                return False
+
         try:
             comment_button = wait.until(
                 EC.element_to_be_clickable(
@@ -284,6 +316,14 @@ class DyShareUtils:
             )
             self.human_like_delay(0.5, 1.0, browser_number)
             comment_button.click()
+            try:
+                WebDriverWait(driver, wait_time).until(
+                    EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                    )
+                )
+            except Exception:
+                pass
             self.debug_log("info", "打开评论区成功", browser_number)
             return True
         except Exception:
@@ -295,6 +335,14 @@ class DyShareUtils:
                 )
                 self.human_like_delay(0.5, 1.0, browser_number)
                 alt_btn.click()
+                try:
+                    WebDriverWait(driver, wait_time).until(
+                        EC.presence_of_element_located(
+                            (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                        )
+                    )
+                except Exception:
+                    pass
                 self.debug_log("info", "打开评论区成功(搜索页入口)", browser_number)
                 return True
             except Exception:
@@ -638,6 +686,7 @@ class DyShareUtils:
         profile_follow_probability=0.5,
         browser_number=None,
         browser_id="",
+        is_old_ui=True,
         enable_follow=True,
         enable_profile_visit=True,
         enable_like=True,
@@ -655,11 +704,19 @@ class DyShareUtils:
         self.check_stop_signal()
 
         try:
-            comments_container = WebDriverWait(web_driver, 5).until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+            if is_old_ui:
+                comments_container = WebDriverWait(web_driver, 5).until(
+                    EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                    )
                 )
-            )
+            else:
+                WebDriverWait(web_driver, wait_time).until(
+                    lambda d: self._is_new_ui_comment_list_ready(d)
+                )
+                comments_container = self._get_comment_list_container(
+                    web_driver, is_old_ui=False
+                )
             comment_items = comments_container.find_elements(By.XPATH, "./div")
             if comment_index >= len(comment_items):
                 return False, like_count, 0
@@ -716,7 +773,10 @@ class DyShareUtils:
                     ".//div[contains(@class, 'comment-item-stats-container')]/div[1]/p[1]",
                 )
                 self.human_like_delay(0.3, 0.8, browser_number)
-                web_driver.execute_script("arguments[0].click();", like_button)
+                if is_old_ui:
+                    web_driver.execute_script("arguments[0].click();", like_button)
+                else:
+                    like_button.click()
                 if reporter:
                     reporter.set_action("like")
                     if reporter:
@@ -735,9 +795,14 @@ class DyShareUtils:
 
         if should_visit:
             try:
-                comments_container = web_driver.find_element(
-                    By.CSS_SELECTOR, '[data-e2e="comment-list"]'
-                )
+                if is_old_ui:
+                    comments_container = web_driver.find_element(
+                        By.CSS_SELECTOR, '[data-e2e="comment-list"]'
+                    )
+                else:
+                    comments_container = self._get_comment_list_container(
+                        web_driver, is_old_ui=False
+                    )
                 target_comment_now = comments_container.find_elements(
                     By.XPATH, "./div"
                 )[comment_index]
@@ -748,14 +813,22 @@ class DyShareUtils:
                         By.CSS_SELECTOR, ".comment-item-avatar a"
                     )
                 except Exception:
-                    try:
-                        avatar = target_comment_now.find_element(
-                            By.CSS_SELECTOR, ".comment-item-avatar"
-                        )
-                    except Exception:
-                        pass
+                    if is_old_ui:
+                        try:
+                            avatar = target_comment_now.find_element(
+                                By.CSS_SELECTOR, ".comment-item-avatar"
+                            )
+                        except Exception:
+                            pass
 
                 if avatar:
+                    if not is_old_ui:
+                        try:
+                            DouyinBrowserActions.ensure_element_centered(
+                                web_driver, avatar, sleep=self.safe_sleep
+                            )
+                        except Exception:
+                            pass
                     follow_prob = 1.0 if force_follow else profile_follow_probability
                     is_followed = self.visit_user_profile(
                         web_driver,
@@ -801,9 +874,14 @@ class DyShareUtils:
                 )
                 self.safe_sleep(wait_time_before_reply, browser_number=browser_number)
 
-                comments_container = web_driver.find_element(
-                    By.CSS_SELECTOR, '[data-e2e="comment-list"]'
-                )
+                if is_old_ui:
+                    comments_container = web_driver.find_element(
+                        By.CSS_SELECTOR, '[data-e2e="comment-list"]'
+                    )
+                else:
+                    comments_container = self._get_comment_list_container(
+                        web_driver, is_old_ui=False
+                    )
                 target_comment_now = comments_container.find_elements(
                     By.XPATH, "./div"
                 )[comment_index]
@@ -948,8 +1026,23 @@ class DyShareUtils:
             self.debug_log("info", "处理视频评论", browser_number)
             self.debug_log("info", "打开评论区", browser_number)
 
+            is_old_ui = False
             try:
-                if not self.open_comment_section(driver, wait_time, browser_number):
+                is_old_ui = bool(
+                    driver.find_elements(
+                        By.CSS_SELECTOR, "[data-e2e='detail-video-info']"
+                    )
+                )
+            except Exception:
+                is_old_ui = False
+
+            try:
+                if not self.open_comment_section(
+                    driver,
+                    wait_time,
+                    browser_number,
+                    is_old_ui=is_old_ui,
+                ):
                     self.debug_log(
                         "error", "无法打开评论区，链接可能失效", browser_number
                     )
@@ -1013,11 +1106,19 @@ class DyShareUtils:
             comment_index = 0
 
             try:
-                comments_container = WebDriverWait(driver, wait_time).until(
-                    EC.presence_of_element_located(
-                        (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                if is_old_ui:
+                    comments_container = WebDriverWait(driver, wait_time).until(
+                        EC.presence_of_element_located(
+                            (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                        )
                     )
-                )
+                else:
+                    WebDriverWait(driver, wait_time).until(
+                        lambda d: self._is_new_ui_comment_list_ready(d)
+                    )
+                    comments_container = self._get_comment_list_container(
+                        driver, is_old_ui=False
+                    )
             except Exception as e:
                 log.error(f"{browser_info} 无法定位评论容器: {e}")
                 return False
@@ -1038,7 +1139,9 @@ class DyShareUtils:
                                 browser_number,
                             )
                             scroll_number += 1
-                            self.scroll_comments(driver, scroll_number, browser_number)
+                            self.scroll_comments(
+                                driver, is_old_ui, scroll_number, browser_number
+                            )
                             self.human_like_delay(2, 3, browser_number)
                             try:
                                 if (
@@ -1053,11 +1156,21 @@ class DyShareUtils:
                                     break
                             except Exception:
                                 pass
-                            comments_container = WebDriverWait(driver, wait_time).until(
-                                EC.presence_of_element_located(
-                                    (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                            if is_old_ui:
+                                comments_container = WebDriverWait(
+                                    driver, wait_time
+                                ).until(
+                                    EC.presence_of_element_located(
+                                        (By.CSS_SELECTOR, '[data-e2e="comment-list"]')
+                                    )
                                 )
-                            )
+                            else:
+                                WebDriverWait(driver, wait_time).until(
+                                    lambda d: self._is_new_ui_comment_list_ready(d)
+                                )
+                                comments_container = self._get_comment_list_container(
+                                    driver, is_old_ui=False
+                                )
                     except Exception:
                         pass
 
@@ -1073,6 +1186,7 @@ class DyShareUtils:
                         profile_follow_probability,
                         browser_number,
                         browser_id,
+                        is_old_ui,
                         enable_follow,
                         enable_profile_visit,
                         enable_like,
@@ -1103,9 +1217,8 @@ class DyShareUtils:
 
                     if processed_comment_count % 40 == 0:
                         try:
-                            padding = driver.find_element(
-                                By.CSS_SELECTOR,
-                                '[data-e2e="comment-list"] > div:last-child',
+                            padding = comments_container.find_element(
+                                By.XPATH, "./div[last()]"
                             ).text
                             if padding == "暂时没有更多评论":
                                 self.debug_log(
@@ -1196,19 +1309,38 @@ class DyShareUtils:
             log.error(f"{browser_info} 程序执行出错: {e}")
             return False
 
-    def scroll_comments(self, driver, scroll_number=None, browser_number=None):
+    def scroll_comments(
+        self, driver, is_old_ui, scroll_number=None, browser_number=None
+    ):
         browser_info = self.get_browser_info(browser_number)
         try:
-            body = driver.find_element(By.TAG_NAME, "body")
-            DouyinBrowserActions.scroll_element_sync(
-                driver, body, delta_y=400, sleep_time=2
-            )
-            if scroll_number is not None:
-                self.debug_log(
-                    "info",
-                    f"使用ActionChains完成滑动 (第 {scroll_number} 次)",
-                    browser_number,
+            if is_old_ui:
+                body = driver.find_element(By.TAG_NAME, "body")
+                DouyinBrowserActions.scroll_element_sync(
+                    driver, body, delta_y=400, sleep_time=2
                 )
+                if scroll_number is not None:
+                    self.debug_log(
+                        "info",
+                        f"使用ActionChains完成滑动 (第 {scroll_number} 次)",
+                        browser_number,
+                    )
+            else:
+                target_container = self._get_comment_list_container(
+                    driver, is_old_ui=False
+                )
+                ActionChains(driver).scroll_from_origin(
+                    ScrollOrigin.from_element(target_container),
+                    0,
+                    600,
+                ).perform()
+                self.safe_sleep(2, browser_number=browser_number)
+                if scroll_number is not None:
+                    self.debug_log(
+                        "info",
+                        f"新界面评论区容器内滚动完成 (第 {scroll_number} 次)",
+                        browser_number,
+                    )
         except Exception as e:
             log.error(f"{browser_info} 滚动失败: {e}")
         return False
