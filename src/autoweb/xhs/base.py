@@ -4,8 +4,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 import random
+import re
+from datetime import datetime, timedelta
 
 from ..tools.config import XhsConfig, get_config
+from ..tools.douyin_common import universal_parse
 
 _DEFAULT_XHS_CONFIG = XhsConfig()
 
@@ -245,6 +248,12 @@ def get_xhs_effective_settings(cfg=None) -> dict:
         "COMMENT_REPLIES": getattr(cfg, "COMMENT_REPLIES", None)
         if not _is_empty_value(getattr(cfg, "COMMENT_REPLIES", None))
         else d.COMMENT_REPLIES,
+        "COMMENT_THRESHOLD_ENABLE": _coerce_bool(
+            getattr(cfg, "COMMENT_THRESHOLD_ENABLE", None), d.COMMENT_THRESHOLD_ENABLE
+        ),
+        "COMMENT_THRESHOLD": _coerce_int(
+            getattr(cfg, "COMMENT_THRESHOLD", None), d.COMMENT_THRESHOLD
+        ),
         "BIT_BROWSER_IDS": _coerce_list(
             getattr(cfg, "BIT_BROWSER_IDS", None), d.BIT_BROWSER_IDS
         ),
@@ -279,10 +288,47 @@ def parse_video_comments(raw: str):
     return [x for x in parts if x]
 
 
+_XHS_TIME_TEXT_PATTERN = re.compile(
+    r"(刚刚|分钟前|小时前|天前|周前|月前|年前|昨天|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}-\d{1,2})"
+)
+
+
+def get_xhs_comment_time_text(comment_item):
+    try:
+        el = comment_item.find_element(
+            By.CSS_SELECTOR, "div:first-child .date span:first-child"
+        )
+        t = el.text.strip()
+        if t:
+            return t
+    except Exception:
+        pass
+    try:
+        spans = comment_item.find_elements(By.CSS_SELECTOR, "span")
+        for s in spans:
+            txt = s.text.strip()
+            if not txt:
+                continue
+            if _XHS_TIME_TEXT_PATTERN.search(txt):
+                return txt
+    except Exception:
+        pass
+    return None
+
+
+def parse_xhs_comment_dt(comment_item):
+    t = get_xhs_comment_time_text(comment_item)
+    if not t:
+        return None
+    try:
+        return universal_parse(t)
+    except Exception:
+        return None
+
+
 def ensure_element_centered(driver, element, stop_event=None):
     try:
         driver.execute_script(
-            "arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'nearest'});",
             element,
         )
         _sleep_interruptible(0.3 * 1.5, stop_event=stop_event)
@@ -483,6 +529,7 @@ def process_comments_sequentially(
     comment_like_count_min=None,
     comment_like_count_max=None,
     comment_scroll_minmax=None,
+    comment_scroll_limit=None,
     comment_reply_probability=None,
     comment_wait_min=None,
     comment_wait_max=None,
@@ -608,6 +655,14 @@ def process_comments_sequentially(
             if comment_filter_keywords is None
             else comment_filter_keywords
         )
+        cfg_obj = cfg or get_config()
+        threshold_enabled = bool(settings.get("COMMENT_THRESHOLD_ENABLE"))
+        threshold_minutes = int(settings.get("COMMENT_THRESHOLD") or 0)
+        threshold_dt = (
+            datetime.now() - timedelta(minutes=max(0, threshold_minutes))
+            if threshold_enabled
+            else None
+        )
         log.info("开始逐条遍历处理评论...")
 
         # 等待评论区加载
@@ -625,6 +680,11 @@ def process_comments_sequentially(
 
         # 初始化变量
         scroll_times = rand_int_range(comment_scroll_minmax, 2, 5)
+        if comment_scroll_limit is not None:
+            try:
+                scroll_times = min(scroll_times, int(comment_scroll_limit))
+            except Exception:
+                pass
         processed_count = 0  # 已处理的评论数量
         scroll_done = 0  # 已滚动次数
 
@@ -691,6 +751,60 @@ def process_comments_sequentially(
                     )
                     log_prefix = f"[浏览器 #{browser_num}] "
                 log.info(f"\n{log_prefix}处理第 {processed_count + 1} 条评论:")
+
+                if threshold_enabled:
+                    try:
+                        dt = parse_xhs_comment_dt(comment_item)
+                        if (not dt) or (threshold_dt and dt < threshold_dt):
+                            if getattr(cfg_obj, "DEBUG", False):
+                                log.info(
+                                    f"  评论时间未命中阈值，跳过: dt={dt}, threshold={threshold_minutes}"
+                                )
+                            _sleep_interruptible(
+                                random.uniform(1.5 * 1.5, 2 * 1.5),
+                                stop_event=stop_event,
+                            )
+                            processed_count += 1
+                            if processed_count % 3 == 0:
+                                if scroll_done < scroll_times:
+                                    log.info(
+                                        f"已处理 {processed_count} 条评论，进行第 {scroll_done + 1} 次滚动..."
+                                    )
+                                    scroll_to_load_more_comments(
+                                        driver, count=1, stop_event=stop_event
+                                    )
+                                    scroll_done += 1
+                                    _sleep_interruptible(2 * 1.5, stop_event=stop_event)
+                                    comment_items = driver.find_elements(
+                                        By.CSS_SELECTOR,
+                                        "div.comments-container > div.list-container > div.parent-comment",
+                                    )
+                                    log.info(f"滚动后找到 {len(comment_items)} 条评论")
+                            continue
+                    except Exception:
+                        if getattr(cfg_obj, "DEBUG", False):
+                            log.info("  评论时间解析失败，跳过当前评论")
+                        _sleep_interruptible(
+                            random.uniform(1.5 * 1.5, 2 * 1.5),
+                            stop_event=stop_event,
+                        )
+                        processed_count += 1
+                        if processed_count % 3 == 0:
+                            if scroll_done < scroll_times:
+                                log.info(
+                                    f"已处理 {processed_count} 条评论，进行第 {scroll_done + 1} 次滚动..."
+                                )
+                                scroll_to_load_more_comments(
+                                    driver, count=1, stop_event=stop_event
+                                )
+                                scroll_done += 1
+                                _sleep_interruptible(2 * 1.5, stop_event=stop_event)
+                                comment_items = driver.find_elements(
+                                    By.CSS_SELECTOR,
+                                    "div.comments-container > div.list-container > div.parent-comment",
+                                )
+                                log.info(f"滚动后找到 {len(comment_items)} 条评论")
+                        continue
 
                 try:
                     # 获取评论容器的第一个子元素
@@ -1029,7 +1143,9 @@ def process_comments_sequentially(
         log.info(f"遍历处理评论区时出错: {e}")
 
 
-def visit_video_and_operate(driver, reporter=None, browser_id=None, stop_event=None):
+def visit_video_and_operate(
+    driver, reporter=None, browser_id=None, stop_event=None, comment_scroll_limit=None
+):
     from ..tools.core import log
 
     settings = get_xhs_effective_settings()
@@ -1055,7 +1171,11 @@ def visit_video_and_operate(driver, reporter=None, browser_id=None, stop_event=N
             _sleep_interruptible(0.5 * 1.5, stop_event=stop_event)
 
     process_comments_sequentially(
-        driver, reporter=reporter, browser_id=browser_id, stop_event=stop_event
+        driver,
+        reporter=reporter,
+        browser_id=browser_id,
+        stop_event=stop_event,
+        comment_scroll_limit=comment_scroll_limit,
     )
 
 
@@ -1067,7 +1187,12 @@ def get_search_result_covers(driver):
 
 
 def browse_search_results_and_operate(
-    driver, items_to_visit=2, reporter=None, browser_id=None, stop_event=None
+    driver,
+    items_to_visit=2,
+    reporter=None,
+    browser_id=None,
+    stop_event=None,
+    comment_scroll_limit=None,
 ):
     covers = get_search_result_covers(driver)
     n = min(items_to_visit, len(covers))
@@ -1093,7 +1218,11 @@ def browse_search_results_and_operate(
             except Exception:
                 pass
         visit_video_and_operate(
-            driver, reporter=reporter, browser_id=browser_id, stop_event=stop_event
+            driver,
+            reporter=reporter,
+            browser_id=browser_id,
+            stop_event=stop_event,
+            comment_scroll_limit=comment_scroll_limit,
         )
         if len(driver.window_handles) > 1:
             driver.close()

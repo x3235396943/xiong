@@ -443,7 +443,11 @@ def process_single_url(driver, url, log_prefix="", reporter=None, browser_id=Non
 
         # 使用base模块中的方法对视频进行操作处理
         visit_video_and_operate(
-            driver, reporter=reporter, browser_id=browser_id, stop_event=STOP_EVENT
+            driver,
+            reporter=reporter,
+            browser_id=browser_id,
+            stop_event=STOP_EVENT,
+            comment_scroll_limit=20,
         )
 
         log.info(f"{log_prefix} 链接 {url} 处理完成")
@@ -486,7 +490,11 @@ def process_share_urls(driver, urls, log_prefix="", reporter=None, browser_id=No
 
             # 使用base模块中的方法对视频进行操作处理
             visit_video_and_operate(
-                driver, reporter=reporter, browser_id=browser_id, stop_event=STOP_EVENT
+                driver,
+                reporter=reporter,
+                browser_id=browser_id,
+                stop_event=STOP_EVENT,
+                comment_scroll_limit=20,
             )
 
             log.info(f"{log_prefix} 链接 {url} 处理完成")
@@ -607,6 +615,7 @@ def run_worker(browser_id, browser_number, url_queue, url_lock, total_count):
                     reporter=reporter,
                     browser_id=browser_id,
                     stop_event=STOP_EVENT,
+                    comment_scroll_limit=20,
                 )
 
                 log.info(f"{log_prefix} 链接 {url} 处理完成")
