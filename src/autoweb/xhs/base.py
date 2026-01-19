@@ -666,17 +666,21 @@ def process_comments_sequentially(
         log.info("开始逐条遍历处理评论...")
 
         # 等待评论区加载
-        _wait_until(
-            driver,
-            EC.presence_of_element_located(
-                (
-                    By.CSS_SELECTOR,
-                    "div.comments-container > div.list-container > div.parent-comment",
-                )
-            ),
-            timeout=10,
-            stop_event=stop_event,
-        )
+        try:
+            _wait_until(
+                driver,
+                EC.presence_of_element_located(
+                    (
+                        By.CSS_SELECTOR,
+                        "div.comments-container > div.list-container > div.parent-comment",
+                    )
+                ),
+                timeout=10,
+                stop_event=stop_event,
+            )
+        except Exception:
+            log.info("评论区未找到评论，跳过本视频评论处理")
+            return
 
         # 初始化变量
         scroll_times = rand_int_range(comment_scroll_minmax, 2, 5)
@@ -695,6 +699,9 @@ def process_comments_sequentially(
         )
 
         log.info(f"初始找到 {len(comment_items)} 条评论")
+        if not comment_items:
+            log.info("评论区没有评论，跳过本视频评论处理")
+            return
 
         like_target = (
             rand_int_range([comment_like_count_min, comment_like_count_max], 0, 0)
@@ -717,6 +724,8 @@ def process_comments_sequentially(
             and len(comment_filter_keywords) > 0
         )
 
+        seen_comment_keys: set[str] = set()
+
         # 循环处理评论，直到达到目标或滚动次数用完
         while scroll_done < scroll_times:
             _ensure_not_stopped(stop_event)
@@ -725,6 +734,7 @@ def process_comments_sequentially(
                 By.CSS_SELECTOR,
                 "div.comments-container > div.list-container > div.parent-comment",
             )
+            processed_this_round = 0
 
             # 检查是否已达到目标或评论数量
             if (liked_count >= like_target and visited_count >= profile_target) or (
@@ -760,6 +770,7 @@ def process_comments_sequentially(
                                 log.info(
                                     f"  评论时间未命中阈值，跳过: dt={dt}, threshold={threshold_minutes}"
                                 )
+                            processed_this_round += 1
                             _sleep_interruptible(
                                 random.uniform(1.5 * 1.5, 2 * 1.5),
                                 stop_event=stop_event,
@@ -784,6 +795,7 @@ def process_comments_sequentially(
                     except Exception:
                         if getattr(cfg_obj, "DEBUG", False):
                             log.info("  评论时间解析失败，跳过当前评论")
+                        processed_this_round += 1
                         _sleep_interruptible(
                             random.uniform(1.5 * 1.5, 2 * 1.5),
                             stop_event=stop_event,
@@ -842,6 +854,27 @@ def process_comments_sequentially(
                         log.info("  无法获取评论内容用于关键字匹配")
 
                     keyword_hit = bool(has_filter_keywords and comment_contains_keyword)
+                    time_text = ""
+                    try:
+                        time_text = get_xhs_comment_time_text(comment_item) or ""
+                    except Exception:
+                        time_text = ""
+                    avatar_href = ""
+                    try:
+                        avatar_href = (
+                            item.find_element(
+                                By.CSS_SELECTOR, "div.avatar > a"
+                            ).get_attribute("href")
+                            or ""
+                        )
+                    except Exception:
+                        avatar_href = ""
+                    key_comment_text = comment_text_for_keyword or ""
+                    comment_key = f"{avatar_href}|{time_text}|{key_comment_text[:120]}"
+                    if comment_key in seen_comment_keys:
+                        continue
+                    seen_comment_keys.add(comment_key)
+                    processed_this_round += 1
 
                     # 正常按概率执行访问头像操作，关键字命中时强制执行
                     should_visit = _decide_visit(
@@ -1134,6 +1167,9 @@ def process_comments_sequentially(
                             "div.comments-container > div.list-container > div.parent-comment",
                         )
                         log.info(f"滚动后找到 {len(comment_items)} 条评论")
+
+            if processed_this_round == 0:
+                break
 
         log.info(
             f"评论处理完成，共处理 {processed_count} 条评论，进行了 {scroll_done} 次滚动"
